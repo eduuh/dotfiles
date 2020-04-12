@@ -1,0 +1,28 @@
+[user]
+  name = Edwin Kamau Muraya 
+  email = edwinkamaumuraya0@outlook.com 
+
+[core]
+  excludesfile = ~/.gitignore
+
+[alias]
+  s = status -s
+  l = log --oneline
+  d = diff
+  ds = diff --staged
+  r = restore
+  rs = restore --staged
+  c = commit -am
+  cp = commit --patch
+  ca = commit --amend --all
+  cu = commit --amend --all --no-edit
+  u = pull
+  p = push
+  co = checkout
+
+[push]
+  default = current
+  followTags = true
+
+[fetch]
+  prune = true
