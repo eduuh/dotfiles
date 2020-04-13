@@ -1,6 +1,5 @@
 ####################################################################################################
-# readline Configuration by Chloe Adeline
-#
+# readline Configuration by Edwin Kamau
 # A Vim-like readline experience! I use the Colemak keyboard layout with HNEI arrows instead of
 # HJKL, K instead of N for searching, etc. Places where my own Colemak-Vim bindings are used mention
 # "Colemak" in the comments.

@@ -20,10 +20,20 @@ export KEYTIMEOUT=1
 
 # Use vim keys in tab complete menu:
 bindkey -M menuselect 'h' vi-backward-char
-bindkey -M menuselect 'k' vi-up-line-or-history
-bindkey -M menuselect 'l' vi-forward-char
-bindkey -M menuselect 'j' vi-down-line-or-history
+bindkey -M menuselect 'n' vi-up-line-or-history
+bindkey -M menuselect 'e' vi-forward-char
+bindkey -M menuselect 'i' vi-down-line-or-history
+bindkey -a 's' vi-insert
+bindkey -a 'S' vi-insert-bol
+bindkey -a 'u' vi-undo-change
 bindkey -v '^?' backward-delete-char
+bindkey -a 'k' vi-repeat-search
+bindkey -a 'K' vi-rev-repeat-search
+
+
+# spare
+ bindkey -a 'j' vi-forward-word-end
+ bindkey -a 'J' vi-forward-blank-word-end
 
 # Change cursor shape for different vi modes.
 function zle-keymap-select {

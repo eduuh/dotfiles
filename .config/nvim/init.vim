@@ -1,3 +1,5 @@
+" Initialzation
+set nocompatible
 if empty(glob('~/.config/nvim/autoload/plug.vim'))
   silent !curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs
     \  https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
@@ -8,6 +10,8 @@ call plug#begin('~/.config/nvim/plugged')
 
 Plug 'tpope/vim-surround'
 Plug 'tpope/vim-fugitive'
+" Plug 'sonph/onehalf', { 'rtp': 'vim/' }
+Plug 'morhetz/gruvbox'
 Plug 'tpope/vim-commentary'
 Plug 'sheerun/vim-polyglot'
 Plug 'neoclide/coc.nvim', { 'branch': 'release' }
@@ -23,7 +27,7 @@ Plug 'jparise/vim-graphql'
 Plug 'prettier/vim-prettier', {'do': 'yarn install','for': ['javascript', 'typescript', 'css', 'less', 'scss', 'json', 'graphql', 'markdown', 'vue', 'yaml', 'html'] }
 call plug#end()
 
-" Basic
+" Basicnn
 set mouse:a noswf nu rnu ls=0 shm=aIFWc tgc ts=2 sw=2 sts=2 et nofen fenc=utf-8 cb+=unnamedplus ut=300
 set wig+=*/.git,*/node_modules,*/venv,*/tmp,*.so,*.swp,*.zip,*.pyc,.DS_Store
 set list lcs=tab:··,trail:·
@@ -33,10 +37,18 @@ set list lcs=tab:··,trail:·
  noremap n j
  noremap i l
  noremap e k
- noremap k n
+ noremap k n|noremap K N
  noremap s i
- noremap j e
- noremap ; :
+ noremap j e|noremap J E 
+ " The best!
+ noremap ; :|noremap : ;
+ " _r_ = inner Text object
+ onoremap r i
+" Same redo.
+noremap U <C-r>
+" Auto-bracket
+inoremap {<CR> {<CR>}<Esc>0
+
 
 " Bold and italic in tmux
 set t_ZH=[3m
@@ -48,15 +60,6 @@ hi Comment cterm=italic gui=italic
 " Leader
 let g:mapleader = ','
 
-" eymaps
-nmap <Leader>gs :Gstatus<CR>
-nmap <Leader>gp :Gpush<CR>
-nmap <leader>rn <Plug>(coc-rename)
-nmap <Leader>gi <Plug>(coc-git-chunkinfo)
-nnoremap <silent> <space>c  :<C-u>CocCommand<CR>
-nnoremap <silent> <space>p  :<C-u>Files<CR>
-nnoremap <silent> <space>f  :<C-u>Rg<CR>
-nnoremap <silent> <space>l  :<C-u>CocList<CR>
 
 " Language tweaks
 let g:javascript_plugin_jsdoc = 1
@@ -99,3 +102,29 @@ command! -nargs=* -bang Rg call RipgrepFzf(<q-args>, <bang>0)
  set splitright
 " md means markdown
  autocmd BufNewFile,BufReadPost *.md set filetype=markdown
+
+ " Vim Display 
+ set t_Co=256             " 256 Colors.
+ set shortmess+=I         " Hide splash screen.
+ set display+=lastline    " Show partial lines.
+ set showtabline=1        " show tabs only when multiple tabs are openet
+ set laststatus=2         " Always show status bar.
+
+ syntax on                " Syntax highlighting.
+ set hlsearch             " Search highlighting.
+ set wrap                 " Wrapping on.
+ set lbr                  " Wrap at word.
+ set expandtab            " Use spaces.
+
+
+ " Editing
+ set autoindent           " keep line indentation.
+ set nowrapscan           " Don't wrap search to beginning of files.
+ set incsearch            " Icremental searching.
+ set ignorecase|set smartcase  " Ignore case when only lowercas letter are used.
+ set gdefault                  " Substitute all matches in a line.
+ set showmatch                 " When a bracket is insert at flash
+ set confirm                   " Confirm quits/save/etc
+ set background=dark
+ " colorscheme onehalfdark
+colorscheme gruvbox
