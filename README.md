@@ -4,6 +4,7 @@ My personal setup and notes for my development environments.May not be useful to
 ### Colemak and Vim
 
  * h, j, k, l - colemak h, n, e and i: movement.
+
  * n - colemak k: next search result.
  * N - colemak K: previous search result.
  * i - colemak u: go to insert mode.
