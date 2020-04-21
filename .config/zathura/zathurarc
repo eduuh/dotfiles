@@ -1,0 +1,45 @@
+map k search next
+map K search previous
+
+
+
+set recolor true
+set recolor_darkcolor #BDE090
+set recolor_lightcolor #000000
+set defaultbg_color #000000
+
+map b open
+map l goto
+map t follow
+
+
+map e scroll down
+map y scroll up
+map u scroll half-up
+map n scroll half-down
+
+map h scroll left
+map o scroll right
+
+map <C-n> scroll left
+map <C-u> scroll right
+
+map U zoom in
+map N zoom out
+
+map r reload
+map R rotate rotate-ccw
+
+
+map w toggle_index
+map f toggle_fullscreen
+
+#map z zoom height
+
+
+
+map q quit
+set scrollbars true
+
+set adjust-open width
+map <Space> adjust_window
