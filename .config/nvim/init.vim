@@ -184,7 +184,7 @@ let g:ctrlp_cmd = 'CtrlP'
 " === Markdown Settings
 " ===
 " Snippets
-source ~/.config/nvim/md-snippets.vim
+"source ~/.config/nvim/md-snippets.vim
 " auto spell
 autocmd BufRead,BufNewFile *.md setlocal spell
 
@@ -226,9 +226,6 @@ autocmd BufRead,BufNewFile *.md setlocal spell
 set termguicolors             "enable true colors support"
 let $NVIM_TUI_ENABLE_TRUE_COLOR=1
 set background=dark
- " colorscheme onehalfdark
-colorscheme deus
-"  colorscheme gruvbox
 
 " colemak remapping to neiksj
 noremap n j
@@ -258,14 +255,14 @@ inoremap {<CR> {<CR>}<Esc>0
 noremap <C-y> 5<C-y> 
 noremap <C-e> 5<C-e>
 
-" Bold and italic in tmux
+" Bold and italic inx
 set t_ZH=[3m
 set t_ZR=[23m
 " Italic comments
 hi Comment cterm=italic gui=italic
 
 " Disable the default s key
-noremap s <non>
+"noremap s <non>
 " split the screens to up (horizontal), down (horizontal), left (vertical), right (vertical)
 noremap se :set nosplitbelow<CR>:split<CR>:set splitbelow<CR>
 noremap sn :set splitbelow<CR>:split<CR>
@@ -307,7 +304,6 @@ exec "nohlsearch"
 " ===
 " Set <LEADER> as <SPACE>, ; as :
 let mapleader=" "
-noremap ` ~
 
 " folding
 noremap <silent> <LEADER>o za
@@ -319,8 +315,8 @@ noremap srv <C-w>b<C-w>H
 " Opening a terminal window
 noremap <LEADER>/ :set splitbelow<CR>:split<CR>:res +10<CR>:term<CR>
 
-" Spelling Check with <space>sc
+"Spelling Check with <space>sc
 noremap <LEADER>sc :set spell!<CR>
 
-" find and replace
+" find and replac
 noremap \s :%s//g<left><left>
