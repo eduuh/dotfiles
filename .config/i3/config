@@ -10,13 +10,13 @@
 set $inner_gaps 15
 set $outer_gaps 15
 set $term --no-startup-id $TERMINAL
-set $mod Mod4
+set $mod Control
 set $stoprec --no-startup-id dmenurecord kill
 set $shutdown sudo -A shutdown -h now
 set $reboot sudo -A reboot
 set $netrefresh --no-startup-id sudo -A systemctl restart NetworkManager
 set $hibernate sudo -A systemctl suspend
-
+font pango:Hack 12
 # #---Gaps---# #
 for_window [class="^.*"] border pixel 2
 gaps inner $inner_gaps
@@ -72,8 +72,6 @@ bindsym $mod+Shift+q		[con_id="__focused__" instance="^(?!dropdown_).*$"] exec -
 bindsym $mod+w			exec --no-startup-id $BROWSER
 bindsym $mod+Shift+w		exec $term -e nmtui
 
-bindsym $mod+e			exec $term -e neomutt && pkill -RTMIN+12 i3blocks
-bindsym $mod+Shift+e		exec --no-startup-id tutorialvids
 
 bindsym $mod+r 			exec $term -e lf
 bindsym $mod+Shift+r		exec --no-startup-id winresize
@@ -87,8 +85,7 @@ bindsym $mod+Shift+y		exec --no-startup-id i3resize left
 bindsym $mod+u			exec --no-startup-id ddspawn tmuxdd
 bindsym $mod+Shift+u		exec --no-startup-id i3resize down
 
-bindsym $mod+i 			exec $term -e htop
-bindsym $mod+Shift+i		exec --no-startup-id i3resize up
+##bindsym $mod+Shift+r		exec --no-startup-id i3resize up
 
 bindsym $mod+o			sticky toggle
 bindsym $mod+Shift+o		exec --no-startup-id i3resize right
@@ -116,23 +113,23 @@ bindsym $mod+g			workspace prev
 bindsym $mod+Shift+g		exec --no-startup-id gimp; workspace $ws5
 
 bindsym $mod+h			focus left
-bindsym $mod+Shift+h		move left 30
-bindsym $mod+Ctrl+h		move workspace to output left
+# bindsym $mod+Shift+h		move left 30
+bindsym $mod+Shift+h		move workspace to output left
 
-bindsym $mod+j			focus down
-bindsym $mod+Shift+j		move down 30
-bindsym $mod+Ctrl+j		move workspace to output down
+bindsym $mod+n			focus down
+# bindsym $mod+Shift+n		move down 30
+bindsym $mod+Shift+n		move workspace to output down
 
-bindsym $mod+k			focus up
-bindsym $mod+Shift+k		move up 30
-bindsym $mod+Ctrl+k		move workspace to output up
+bindsym $mod+e		focus up
+# bindsym $mod+Shift+e		move up 30
+bindsym $mod+Shift+e		move workspace to output up
 
-bindsym $mod+l			focus right
-bindsym $mod+Shift+l		move right 30
-bindsym $mod+Ctrl+l		move workspace to output right
+bindsym $mod+i			focus right
+# bindsym $mod+Shift+i		move right 30
+bindsym $mod+Shift+i		move workspace to output right
 
-bindsym $mod+z			gaps outer current plus 5
-bindsym $mod+Shift+z		gaps outer current minus 5
+bindsym $mod+Shift+z			gaps outer current plus 5
+bindsym $mod+z		gaps outer current minus 5
 
 bindsym $mod+x			exec --no-startup-id xset dpms force off && mpc pause && pauseallmpv && slock &
 bindsym $mod+Shift+x		exec --no-startup-id prompt "Shutdown computer?" "$shutdown"
@@ -222,7 +219,6 @@ for_window [title="mpvfloat"] border pixel 0
 no_focus [title="mpvfloat"]
 
 # #---Function Buttons---# #
-bindsym $mod+F1		exec --no-startup-id groff -mom ${XDG_DATA_HOME:-$HOME/.local/share}/larbs/readme.mom -Tpdf | zathura -
 bindsym $mod+F2		restart
 bindsym $mod+F3		exec --no-startup-id displayselect
 bindsym $mod+F4		exec --no-startup-id prompt "Hibernate computer?" "$hibernate"
@@ -239,16 +235,16 @@ bindsym $mod+Shift+F1	exec --no-startup-id toggle-welcome
 # #---Arrow Keys---# #
 bindsym $mod+Left		focus left
 bindsym $mod+Shift+Left		move left
-bindsym $mod+Ctrl+Left		move workspace to output left
+#bindsym $mod+Ctrl+Left		move workspace to output left
 bindsym $mod+Down		focus down
 bindsym $mod+Shift+Down		move down
-bindsym $mod+Ctrl+Down		move workspace to output down
+#bindsym $mod+Ctrl+Down		move workspace to output down
 bindsym $mod+Up			focus up
 bindsym $mod+Shift+Up		move up
-bindsym $mod+Ctrl+Up		move workspace to output up
+#bindsym $mod+Ctrl+Up		move workspace to output up
 bindsym $mod+Right 		focus right
 bindsym $mod+Shift+Right 	move right
-bindsym $mod+Ctrl+Right		move workspace to output right
+#bindsym $mod+Ctrl+Right		move workspace to output right
 
 # #---Media Keys---# #
 # Volume keys
@@ -357,4 +353,3 @@ bindsym XF86Documents		exec $term -e lf ~/Documents
 ##bindsym XF86Battery		exec
 ##bindsym XF86Bluetooth		exec
 bindsym XF86WLAN		exec $netrefresh
-exec_always --no-startup-id notify-send -i ~/.local/share/larbs/larbs.png 'Welcome to LARBS:' 'Press Super+F1 for the manual.' -t 10000
