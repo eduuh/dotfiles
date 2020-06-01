@@ -1,0 +1,24 @@
+set statusbar-h-padding 0
+set statusbar-v-padding 0
+set page-padding 1
+
+map u scroll half-up
+map m scroll half-down
+
+map D toggle_page_mode
+map r reload
+map R rotate
+map d recolor
+map p print
+
+map n scroll down
+map e scroll up
+map h scroll left
+map i scroll right
+
+map I zoom in
+map N zoom out
+map q quit
+
+map o open
+map g goto
