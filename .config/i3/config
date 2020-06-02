@@ -8,8 +8,8 @@
 
 # #---Basic Definitions---# #
 
-set $inner_gaps 10
-set $outer_gaps 10
+set $inner_gaps 5
+set $outer_gaps 5
 set $term --no-startup-id $TERMINAL
 set $mod Mod4
 set $stoprec --no-startup-id dmenurecord kill
@@ -42,7 +42,7 @@ for_window [instance="dropdown_dropdowncalc"] border pixel 2
 for_window [instance="dropdown_*"] move position center
 
 bar {
-	font pango:mono 11
+	font pango:mono 10
 	status_command i3blocks
 	position top
 	mode dock
@@ -120,7 +120,8 @@ bindsym $mod+Shift+0	move container to workspace $ws10
 
 ## bindsym $mod+BackSpace
 
-bindsym $mod+BackSpace	exec --no-startup-id prompt "Reboot computer?" "$reboot"
+bindsym $mod+F4 exec --no-startup-id prompt "Reboot computer?" "$reboot"
+bindsym $mod+BackSpace exec --no-startup-id prompt "Hibernate computer?" "$hibernate"
 
 bindsym $mod+space 	        floating toggle
 bindsym $mod+shift+space	focus mode_toggle
@@ -225,7 +226,6 @@ no_focus [title="mpvfloat"]
 bindsym $mod+F1		exec --no-startup-id groff -mom ${XDG_DATA_HOME:-$HOME/.local/share}/larbs/readme.mom -Tpdf | zathura -
 bindsym $mod+F2		restart
 bindsym $mod+F3		exec --no-startup-id displayselect
-bindsym $mod+F4		exec --no-startup-id prompt "Hibernate computer?" "$hibernate"
 bindsym $mod+F5		exec --no-startup-id $netrefresh
 bindsym $mod+F6		exec --no-startup-id torwrap
 bindsym $mod+F7		exec --no-startup-id td-toggle

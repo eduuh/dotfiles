@@ -60,15 +60,16 @@ noremap : ;
 
 noremap <silent> H 0
 noremap <silent> I $
+noremap S :%s//g<left><left>
 noremap U <C-r>
 onoremap r i
 " _r_ = inner Text object
 
 " Faster in-line navigation
-noremap W 5w
-noremap B 5b
 nmap ,, <C-^>
 cmap w!! w !sudo tee %
+map <F5> :setlocal spell!<CR>
+nnoremap <leader>sp :normal! mz[s1z=`z<CR>
 " }}}
 
 " Folding {{{
@@ -80,12 +81,16 @@ let &t_SR = "\<Esc>]50;CursorShape=2\x7"
 let &t_EI = "\<Esc>]50;CursorShape=0\x7"
 "}}}
 
+" Commands {{{
+command! Reload execute "source ~/.config/nvim/init.vim"
+command! Config execute ":e ~/.config/nvim/init.vim"
+" }}}
 " Tab managements {{{
  " Create a new tab with tu
 noremap tu :tabe<CR>
 " Move around tabs with tn and ti
-noremap tn :-tabnext<CR>
-noremap ti :+tabnext<CR>
+noremap tp :-tabnext<CR>
+noremap tn :+tabnext<CR>
 " Move the tabs with tmn and tmi
 noremap tmn :-tabmove<CR>
 noremap tmi :+tabmove<CR>
@@ -111,9 +116,10 @@ set noswapfile    " http://robots.thoughtbot.com/post/18739402579/global-gitigno
 " Leader Shortcuts {{{
 let mapleader="\<space>"
 " save files in the buffer
-nnoremap <leader>s :write<Enter>
+nnoremap <leader>w :write<Enter>
+nnoremap <leader>s :setlocal spell!<Enter>
 " Nerdtree Leader keymap's{{{
-nnoremap <silent> <leader>b :NERDTreeToggle<Enter>
+nnoremap <silent> <leader>n :NERDTreeToggle<Enter>
 nnoremap <silent> <leader>v :NERDTreeFind<Enter>
 nnoremap <silent> <leader>gg :let g:gitgutter_enabled = 1<Enter>
 nnoremap <leader>d :CocList diagnostics<Enter>
@@ -156,6 +162,10 @@ Plug 'tpope/vim-surround'
 Plug 'chemzqm/vim-jsx-improve'
 Plug 'dense-analysis/ale' " Linting
 " Conquer of Completion {{{
+
+"intergrate fzf with vim {{{
+Plug 'junegunn/fzf.vim'
+"}}}
 Plug 'neoclide/coc.nvim', {'tag': '*', 'branch': 'release' }
 let g:coc_global_extensions=['coc-json', 'coc-tsserver', 'coc-emmet', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-prettier' , 'coc-eslint']
 "}}}
