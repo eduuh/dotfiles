@@ -68,8 +68,6 @@ onoremap r i
 " Faster in-line navigation
 nmap ,, <C-^>
 cmap w!! w !sudo tee %
-map <F5> :setlocal spell!<CR>
-nnoremap <leader>sp :normal! mz[s1z=`z<CR>
 " }}}
 
 " Folding {{{
@@ -89,11 +87,11 @@ command! Config execute ":e ~/.config/nvim/init.vim"
  " Create a new tab with tu
 noremap tu :tabe<CR>
 " Move around tabs with tn and ti
-noremap tp :-tabnext<CR>
-noremap tn :+tabnext<CR>
+noremap tp :tabprev<Enter>
+noremap tn :tabnext<Enter>
 " Move the tabs with tmn and tmi
-noremap tmn :-tabmove<CR>
-noremap tmi :+tabmove<CR>
+noremap tmp :-tabmove<CR>
+noremap tmn :+tabmove<CR>
 "Press <space> + q to close the window below the current window.
 " }}}
 
@@ -105,7 +103,8 @@ set exrc
 set secure
 set rtp+=/usr/local/lib/python2.7/site-packages/powerline/bindings/vim
  " ctags optimization
-au FileType gitcommit,gitrebase,tags,md,yml,yaml,json,map, let g:gutentags_enabled=0
+au FileType gitcommit,gitrebase,tags,md,yml,yaml,json,map
+let g:gutentags_enabled=0
 
 
 " Trigger autoread when changing buffers or coming back to vim in terminal.
@@ -118,10 +117,13 @@ let mapleader="\<space>"
 " save files in the buffer
 nnoremap <leader>w :write<Enter>
 nnoremap <leader>s :setlocal spell!<Enter>
+" nnoremap <leader>sp :normal! mz[s1z=`z<CR>
 " Nerdtree Leader keymap's{{{
 nnoremap <silent> <leader>n :NERDTreeToggle<Enter>
 nnoremap <silent> <leader>v :NERDTreeFind<Enter>
 nnoremap <silent> <leader>gg :let g:gitgutter_enabled = 1<Enter>
+nnoremap <silent> <leader>f :FZF<Enter>
+nnoremap <silent> <leader>F : FZF ~<cr>
 nnoremap <leader>d :CocList diagnostics<Enter>
 noremap <leader>l :CocList<Enter>
 " }}}
@@ -156,7 +158,6 @@ Plug 'Xuyuanp/nerdtree-git-plugin'
 Plug 'tpope/vim-fugitive'
 Plug 'airblade/vim-gitgutter'
 " }}}
-Plug 'neoclide/coc-snippets'
 Plug 'tpope/vim-repeat'
 Plug 'tpope/vim-surround'
 Plug 'chemzqm/vim-jsx-improve'
@@ -165,9 +166,11 @@ Plug 'dense-analysis/ale' " Linting
 
 "intergrate fzf with vim {{{
 Plug 'junegunn/fzf.vim'
+Plug '~/.fzf'
 "}}}
 Plug 'neoclide/coc.nvim', {'tag': '*', 'branch': 'release' }
-let g:coc_global_extensions=['coc-json', 'coc-tsserver', 'coc-emmet', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-prettier' , 'coc-eslint']
+let g:coc_global_extensions=['coc-json', 'coc-tsserver', 'coc-emmet', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-prettier' , 'coc-eslint' , 'coc-snippets']
+
 "}}}
 
 call plug#end()
@@ -214,8 +217,12 @@ let g:airline_theme='minimalist'
 let g:airline_powerline_fonts = 1
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#formatter = 'unique_tail'
+let g:airline#extensions#tabline#show_tabs = 0
 " }}}
 
+" Fzf_Layout {{{ avoiding files from openning in neardtree config
+au BufEnter * if bufname('#') =~ 'NERD_tree' && bufname('%') !~ 'NERD_tree' && winnr('$') > 1 | b# | exe "normal! \<c-w>\<c-w>" | :blast | endif
+" }}}
 "Vim-gitgutter {{{
 let g:gitgutter_enabled = 1
 "}}}

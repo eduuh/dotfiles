@@ -86,3 +86,9 @@ source /usr/share/zsh/plugins/fast-syntax-highlighting/fast-syntax-highlighting.
 
 ZSH_THEME="af-magic"
 alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+export NVM_DIR=/home/edd/.config/nvm
+[ -s /nvm.sh ] && \. /nvm.sh  # This loads nvm
+[ -s /bash_completion ] && \. /bash_completion  # This loads nvm bash_completion
+
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
