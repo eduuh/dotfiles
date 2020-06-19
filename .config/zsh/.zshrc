@@ -92,3 +92,6 @@ export NVM_DIR=/home/edd/.config/nvm
 
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+export DENO_INSTALL="/home/edd/.deno"
+export PATH="$DENO_INSTALL/bin:$PATH"
