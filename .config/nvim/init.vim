@@ -1,32 +1,121 @@
 "|  \/  \ \ / / | \ | \ \   / /_ _|  \/  |  _ \ / ___|
-"| |\/| |\ V /  |  \| |\ \ / / | || |\/| | |_) | |
 "| |  | | | |   | |\  | \ V /  | || |  | |  _ <| |___
 "|_|  |_| |_|   |_| \_|  \_/  |___|_|  |_|_| \_\\____|
 " Author: @edwinmuraya
 
+
+" Vim Plug {{{
+if empty(glob('~/.config/nvim/autoload/plug.vim'))
+  silent !curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs
+    \  https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+endif
+
+call plug#begin('~/.config/nvim/plugged')
+
+" Layout Look n Feal {{{
+" Plug 'vim-airline/vim-airline'
+" Plug 'vim-airline/vim-airline-themes'
+" Plug 'dikiaap/minimalist' "The neovim color theme.
+
+Plug 'itchyny/lightline.vim' " A light and configurable statusline/tabline plugin for Vim
+Plug 'mhinz/vim-signify' " Show a diff using Vim's sign column.
+Plug 'sonph/onehalf', { 'rtp': 'vim/' }
+Plug 'tsiemens/vim-aftercolors' " Support for after/colors/ scripts
+
+if has('nvim')
+    Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
+  else
+    Plug 'Shougo/defx.nvim'
+    Plug 'roxma/nvim-yarp'
+    Plug 'roxma/vim-hug-neovim-rpc'
+  endif
+
+Plug 'kristijanhusak/defx-git' " Git status column for defx
+"}}}
+" Git {{{
+Plug 'tpope/vim-fugitive'
+" Plug 'airblade/vim-gitgutter'
+" }}}
+" Markdown Support{{{
+" Track the engine
+Plug 'SirVer/ultisnips' 
+Plug 'honza/vim-snippets'
+" tabular plugin is used to format tables
+Plug 'godlygeek/tabular'
+" JSON front matter highlight plugin
+Plug 'elzr/vim-json'
+Plug 'plasticboy/vim-markdown'
+" Markdown Previewing
+Plug 'iamcco/markdown-preview.nvim', { 'do': { -> mkdp#util#install() }}
+" }}}
+
+" Plugin --Editing {{{
+Plug 'tpope/vim-abolish' " easily search for, substitute, & abbreviate multiple variants of a word
+Plug 'tpope/vim-repeat'
+Plug 'tpope/vim-surround'
+"}}}
+" Syntax highlingt for most languages {{{
+Plug 'sheerun/vim-polyglot'
+" }}}
+" Javascript snippets
+Plug 'dense-analysis/ale' " Linting
+Plug 'pangloss/vim-javascript' " JS syntax highlighting and indentation
+Plug 'leafgarland/typescript-vim' " TS syntax highlighting
+Plug 'maxmellon/vim-jsx-pretty' " JSX and TSX syntax highlighting
+Plug 'prettier/vim-prettier', { 'do': 'npm install' } " JS/TS/CSS/HTML Opinionated code formatter
+" Conquer of Completion {{{
+"intergrate fzf with vim {{{ fuzzy finding of files
+Plug 'junegunn/fzf.vim'
+Plug '~/.fzf'
+"}}}
+Plug 'neoclide/coc.nvim', {'tag': '*', 'branch': 'release' }
+let g:coc_global_extensions=['coc-json', 'coc-tsserver', 'coc-emmet', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-prettier' , 'coc-eslint' , 'coc-snippets']
+
+"C# Configurations {{{
+" Plug 'OmniSharp/omnisharp-vim'
+"}}}
+"}}}
+"Latex {{{
+" A Vim Plugin for Lively Previewing LaTeX PDF Output
+" Plug 'xuhdev/vim-latex-live-preview', { 'for': 'tex' }
+"}}}
+"  Nerdtree {{{
+" Plug 'preservim/nerdtree' " file tree
+" Plug 'Xuyuanp/nerdtree-git-plugin'
+"}}}
+call plug#end()
+" }}}
 " Spaces & Tabs {{{
-set tabstop=4     " number of visual spaces per TAB
-set softtabstop=4 " number of spaces in tab when editing
+set tabstop=2     " number of visual spaces per TAB
+set softtabstop=2 " number of spaces in tab when editing
 set expandtab     " turns <TAB's> into spaces.
 set shiftwidth=2
 set autoindent
 set smartindent
 set conceallevel=2
 " change directory to the current buffer when opening files.
-set autochdir
+" set autochdir
 " }}}
 
 " UI Layout {{{
 " set number
 " set relativenumber
+set shortmess+=I         "hide splash screen 
+set display+=lastline
+set showtabline=1
+set laststatus=2
+set statusline=%<%t%h%m%r%h%w%y\ %L\,\ Col\ %-3v\ %P
+set updatetime=100       "Reduce swap-writing update time (better for vim-gutter) 
 set nocursorline
 set lazyredraw
-set showmatch
+set showmatch       " When a bracket is inserted, flash the matching one.
 set fillchars+=stl:\ ,stlnc:\
-set splitright
+set splitright | set splitbelow
 set ruler         " show the cursor position all the time
-filetype indent plugin on
-
+set confirm     " confirm quit/save"
+set wildmenu  " Tab completon on
+set wildmode=longest,full            " Tab complete longest common string, then each full match.
 " }}}
 
 " Neovim Misc {{{
@@ -44,8 +133,10 @@ endif
 " Searching {{{
 set hlsearch      " Stop highlight after searching
 set cursorline    " highlight the current line
-set gdefault
+set gdefault      " Substitute all matches in a line (i.e. :s///g) by default
 set ignorecase
+set smartcase
+set incsearch
 " }}}
 
 " Colemak Remaps {{{
@@ -78,7 +169,7 @@ nmap <silent> [c <Plug>(ale_previous_wrap)
 nmap <silent> ]c <Plug>(ale_next_wrap)
 
 " netrw browser images.
-noremap <silent> <C-b> :edit .<CR> 
+"noremap <silent> <C-b> :edit .<CR> 
 "}}}
 " }}}
 
@@ -138,8 +229,6 @@ nnoremap <silent> <C-m> :MarkdownPreview<CR>
 " nnoremap <silent> <leader>n :NERDTreeToggle<Enter>
 " nnoremap <silent> <leader>v :NERDTreeFind<Enter>
 " nnoremap <silent> <leader>gg :let g:gitgutter_enabled = 1<Enter> " has a conflict 
-nnoremap <silent> f :FZF<Enter>
-nnoremap <silent> F : FZF ~<cr>
 
 nnoremap <leader>d :CocList diagnostics<Enter>
 noremap <leader>l :CocList<Enter>
@@ -186,7 +275,7 @@ autocmd BufWritePre markdown %s/\s\+$//e  " automatically remove all trailling w
 autocmd FileType gitcommit setlocal textwidth=100 " Automatically wrap at 100 characters.
 
 " open file, but keep focus in Exproler.
-autocmd FileType netrw nmap <C-a> <cr>:wincmd W<cr>
+"autocmd FileType netrw nmap <C-a> <cr>:wincmd W<cr>
 " autocmd FileType gitcommit setlocal spell " automaticall spell check commits
 " autocmd FileType markdown setlocal spell " spell check markdown files
   augroup mygroup
@@ -196,82 +285,9 @@ autocmd FileType netrw nmap <C-a> <cr>:wincmd W<cr>
     " Update signature help on jump placeholder
     autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
 " }}}
-
-" Vim Plug {{{
-if empty(glob('~/.config/nvim/autoload/plug.vim'))
-  silent !curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs
-    \  https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
-endif
-
-call plug#begin('~/.config/nvim/plugged')
-
-" Layout Look n Feal {{{
-Plug 'vim-airline/vim-airline'
-Plug 'vim-airline/vim-airline-themes'
-Plug 'dikiaap/minimalist' "The neovim color theme.
-"}}}
-"Latex {{{
-" A Vim Plugin for Lively Previewing LaTeX PDF Output
-" Plug 'xuhdev/vim-latex-live-preview', { 'for': 'tex' }
-"}}}
-"  Nerdtree {{{
-" Plug 'preservim/nerdtree' " file tree
-" Plug 'Xuyuanp/nerdtree-git-plugin'
-"}}}
-" Git {{{
-Plug 'tpope/vim-fugitive'
-" Plug 'airblade/vim-gitgutter'
-" }}}
-" Markdown Support{{{
-" Track the engine
-Plug 'SirVer/ultisnips' 
-Plug 'honza/vim-snippets'
-" tabular plugin is used to format tables
-Plug 'godlygeek/tabular'
-" JSON front matter highlight plugin
-Plug 'elzr/vim-json'
-Plug 'plasticboy/vim-markdown'
-" Markdown Previewing
-Plug 'iamcco/markdown-preview.nvim', { 'do': { -> mkdp#util#install() }}
-
-Plug 'vim-pandoc/vim-pandoc-syntax'
-" }}}
-Plug 'tpope/vim-repeat'
-Plug 'tpope/vim-surround'
-Plug 'chemzqm/vim-jsx-improve'
-
-" Syntax highlingt for most languages {{{
-Plug 'sheerun/vim-polyglot'
-" }}}
-" Javascript snippets
-Plug 'dense-analysis/ale' " Linting
-Plug 'yuezk/vim-js' " Linting
-Plug 'maxmellon/vim-jsx-pretty' " Linting
-
-" Conquer of Completion {{{
-"intergrate fzf with vim {{{ fuzzy finding of files
-Plug 'junegunn/fzf.vim'
-Plug '~/.fzf'
-"}}}
-Plug 'neoclide/coc.nvim', {'tag': '*', 'branch': 'release' }
-let g:coc_global_extensions=['coc-json', 'coc-tsserver', 'coc-emmet', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-prettier' , 'coc-eslint' , 'coc-snippets']
-
-"C# Configurations {{{
-" Plug 'OmniSharp/omnisharp-vim'
-"}}}
-"}}}
-
-call plug#end()
-" }}}
-" colors  {{{
-syntax enable          " enables syntax procesing
-colorscheme minimalist " color theme am Using
-set background=dark
-set termguicolors
-set termencoding=utf-8
+filetype plugin indent on
 "Markdown {{{
-let g:UltiSnipsExpandTrigger="<tab>"  " use <Tab> to trigger autocompletion
+let g:UltiSnipsExpandTrigger="<C-u>"  " use <Tab> to trigger autocompletion
 let g:UltiSnipsJumpForwardTrigger="<c-n>"
 let g:UltiSnipsJumpBackwardTrigger="<c-e>"
 " disable header folding
@@ -297,135 +313,6 @@ augroup pandoc_syntax
 augroup END
 " }}}
 
-" Nerdtree {{{
-" Open nerdtree if no file is specified
-" autocmd StdinReadPre * let s:std_in=1
-" autocmd VimEnter * if argc() == 0 && !exists("s:std_in") | NERDTree | endif
-" vim latex live preview settings plugin {{{
-" autocmd Filetype tex setl updatetime=1
-" let g:livepreview_previewer = 'open -a zathura'
-" }}}
-" Close  vim it the only window left open is a NERDTree
-" autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTree") && b:NERDTree.isTabTree()) | q | endif
-
-" open nerdtree when you open a directory
-"autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists("s:std_in") | exe 'NERDTree' argv()[0] | wincmd p | ene | exe 'cd '.argv()[0] | endif
-" nerdtree-git-plugins {{{
-" }}}
-"let NERDTreeAutoDeleteBuffer = 1 " automaticall delete the buffer of the file
-
-" let g:NERDTreeIgnore = ['^\.DS_Store$', '^tags$', '\.git$[[dir]]', '\.idea$[[dir]]', '\.sass-cache$']
-"let NERDTreeMinimalUI = 1
-"let NERDTreeDirArrows = 1
-" let g:NERDTreeShowHidden = 1
-" }}}
-" Netrw {{{
-  let g:netrw_banner = 0
-  let g:netrw_liststyle = 3
-  let g:netrw_browse_split = 0
-  let g:netrw_winsize = 20
-  let g:netrw_list_hide = '.*\.png$,.*\.mp4,.*\.mp3,..*\.svg'
-  function! OpenToRight()
-    :normal v
-    let g:path=expand('%:p')
-    :q!
-    execute 'belowright vnew' g:path
-    :normal <C-w>l
-  endfunction
-
-  function! OpenBelow()
-    :normal v
-    let g:path=expand('%:p')
-    :q!
-    execute 'belowright new' g:path
-    :normal <C-w>l
-  endfunction
-
-  function! OpenTab()
-    :normal v
-    let g:path=expand('%:p')
-    :q!
-    execute 'tabedit' g:path
-    :normal <C-w>l
-  endfunction
-
-
-  function! NetrwMappings()
-      " Hack fix to make ctrl-l work properly
-      noremap <buffer> <A-l> <C-w>l
-      noremap <buffer> <C-l> <C-w>l
-      noremap <silent> <A-f> :call ToggleNetrw()<CR>
-      noremap <buffer> V :call OpenToRight()<cr>
-      noremap <buffer> H :call OpenBelow()<cr>
-      noremap <buffer> T :call OpenTab()<cr>
-      noremap <silent> <leader>n :call ToggleNetrw()<CR>
-      noremap <silent> <leader>q :exit<CR>
-  endfunction
-
-  augroup netrw_mappings
-      autocmd!
-      autocmd filetype netrw call NetrwMappings()
-  augroup END
-
-  " Allow for netrw to be toggled
-  function! ToggleNetrw()
-      if g:NetrwIsOpen
-          let i = bufnr("$")
-          while (i >= 1)
-              if (getbufvar(i, "&filetype") == "netrw")
-                  silent exe "bwipeout " . i
-              endif
-              let i-=1
-          endwhile
-          let g:NetrwIsOpen=0
-      else
-          let g:NetrwIsOpen=1
-          silent Lexplore
-      endif
-  endfunction
-
-  " Check before opening buffer on any file
-  function! NetrwOnBufferOpen()
-    if exists('b:noNetrw')
-        return
-    endif
-    call ToggleNetrw()
-  endfun
-
-  " Close Netrw if it's the only buffer open
-  autocmd WinEnter * if winnr('$') == 1 && getbufvar(winbufnr(winnr()), "&filetype") == "netrw" || &buftype == 'quickfix' |q|endif
-
-  " Make netrw act like a project Draw
-  augroup ProjectDrawer
-    autocmd!
-		" Don't open Netrw
-    autocmd VimEnter ~/.config/joplin/tmp/*,/tmp/calcurse*,~/.calcurse/notes/*,~/vimwiki/*,*/.git/COMMIT_EDITMSG let b:noNetrw=1
-   autocmd VimEnter * :call NetrwOnBufferOpen()
-   
-  augroup END
-
-let g:NetrwIsOpen=0
-
-" }}}
-" Vim-Airline {{{
-let g:airline_theme='minimalist'
-let g:airline_powerline_fonts = 1
-" let g:airline_section_b = '%{getcwd()}' " in section B of the status line display the  
-let g:airline#extensions#tabline#enabled = 1
-let g:airline#extensions#tabline#formatter = 'unique_tail'
-let g:airline#extensions#tabline#show_tabs = 0
-let g:airline#extensions#tabline#enabled = 1           " enable airline tabline                                                           
-let g:airline#extensions#tabline#show_close_button = 0 " remove 'X' at the end of the tabline                                            
-let g:airline#extensions#tabline#tabs_label = ''       " can put text here like BUFFERS to denote buffers (I clear it so nothing is shown)
-let g:airline#extensions#tabline#buffers_label = ''    " can put text here like TABS to denote tabs (I clear it so nothing is shown)      
-let g:airline#extensions#tabline#fnamemod = ':t'       " disable file paths in the tab                                                    
-let g:airline#extensions#tabline#show_tab_count = 0    " dont show tab numbers on the right                                                           
-let g:airline#extensions#tabline#show_buffers = 0      " dont show buffers in the tabline                                                 
-let g:airline#extensions#tabline#tab_min_count = 2     " minimum of 2 tabs needed to display the tabline                                  
-let g:airline#extensions#tabline#show_splits = 0       " disables the buffer name that displays on the right of the tabline               
-let g:airline#extensions#tabline#show_tab_nr = 0       " disable tab numbers                                                              
-let g:airline#extensions#tabline#show_tab_type = 0     " disables the weird ornage arrow on the tabline
-" }}}
 
 " Fzf_Layout {{{ avoiding files from openning in neardtree config
 au BufEnter * if bufname('#') =~ 'NERD_tree' && bufname('%') !~ 'NERD_tree' && winnr('$') > 1 | b# | exe "normal! \<c-w>\<c-w>" | :blast | endif
@@ -446,7 +333,7 @@ let g:ale_fix_on_save = 1
 "}}}
 
 "ominisharp {{{
-let g:OmniSharp_selector_ui = 'fzf'    " Use fzf.vim
+"let g:OmniSharp_selector_ui = 'fzf'    " Use fzf.vim
 "}}}
 
 " Coc Configuration {{{
@@ -465,3 +352,203 @@ inoremap <silent><expr> <TAB>
       \ coc#refresh()
 autocmd! CompleteDone * if pumvisible() == 0 | pclose | endif " close preview window when completion is done"
 " }}}
+
+"Defx  {{{
+nnoremap <silent> <Leader><leader> :Defx<CR>
+
+  call defx#custom#option('_', {
+      \ 'columns': 'git:indent:icon:filename',
+      \ 'winwidth': 50,
+      \ 'split': 'vertical',
+      \ 'direction': 'topleft',
+      \ 'show_ignored_files': 0,
+      \ 'buffer_name': '',
+      \ 'toggle': 1,
+      \ 'resume': 1,
+      \ 'root_marker': '‣‣‣ ',
+      \ })
+  call defx#custom#column('indent', { 'indent': '  ' })
+  call defx#custom#column('git', 'indicators', {
+      \ 'Modified'  : '‣',
+      \ 'Staged'    : '✚',
+      \ 'Untracked' : '✭',
+      \ 'Renamed'   : '➜',
+      \ 'Unmerged'  : '═',
+      \ 'Ignored'   : '☒',
+      \ 'Deleted'   : '✖',
+      \ 'Unknown'   : '?',
+      \ })
+
+" Quit if defx is the last window.
+autocmd WinEnter * if &ft == 'defx' && winnr('$') == 1 | q | endif
+
+  " defx mappings.
+autocmd FileType defx call s:defx_my_settings()
+	function! s:defx_my_settings() abort
+	  " Define mappings
+    nnoremap <silent><buffer><expr> <CR> defx#is_directory() ? defx#do_action('open_or_close_tree') : defx#do_action('open', 'wincmd p \| drop')
+    nnoremap <silent><buffer><expr> o defx#is_directory() ? defx#do_action('open_or_close_tree') : defx#do_action('open', 'wincmd p \| drop')
+	  nnoremap <silent><buffer><expr> s defx#do_action('open', 'wincmd p \| split')
+	  nnoremap <silent><buffer><expr> v defx#do_action('open', 'wincmd p \| vsplit')
+	  nnoremap <silent><buffer><expr> t defx#do_action('open', 'tabnew')
+	  nnoremap <silent><buffer><expr> O defx#do_action('open_tree_recursive')
+	  nnoremap <silent><buffer><expr> x defx#do_action('close_tree')
+	  " nnoremap <silent><buffer><expr> go defx#do_action('open', 'pedit')
+    nnoremap <silent><buffer><expr> C defx#do_action('cd', defx#get_candidate().action__path)
+	  nnoremap <silent><buffer><expr> u defx#do_action('cd', '..')
+
+	  nnoremap <silent><buffer><expr> a defx#do_action('new_file')
+	  nnoremap <silent><buffer><expr> A defx#do_action('new_multiple_files')
+	  nnoremap <silent><buffer><expr> c defx#do_action('copy')
+	  nnoremap <silent><buffer><expr> p defx#do_action('paste')
+	  nnoremap <silent><buffer><expr> m defx#do_action('move')
+	  nnoremap <silent><buffer><expr> r defx#do_action('rename')
+	  nnoremap <silent><buffer><expr> dd defx#do_action('remove')
+
+	  nnoremap <silent><buffer><expr> yy defx#do_action('yank_path')
+
+	  nnoremap <silent><buffer><expr> H defx#do_action('toggle_ignored_files')
+	  nnoremap <silent><buffer><expr> R defx#do_action('redraw')
+	  " nnoremap <silent><buffer><expr> u defx#do_action('cd', ['..'])
+	  nnoremap <silent><buffer><expr> q defx#do_action('quit')
+	endfunction
+"}}} 
+"
+" LightLine {{{
+ " Hide ex-line mode since it's displayed in lightline.
+  set noshowmode
+  let g:lightline = {}
+  let g:lightline.colorscheme = 'wombat'
+  let g:lightline.component_function = {
+        \ 'filename': 'LightlineFilename'
+      \ }
+  let g:lightline.active = {
+        \ 'left': [ ['mode'], ['filename', 'readonly', 'modified'] ],
+        \ 'right': [ ['lineinfo'], ['percent'] ],
+      \ }
+	let g:lightline.inactive = {
+        \ 'left': [ ['filename', 'readonly', 'modified'] ],
+        \ 'right': [ ['lineinfo'], [ 'percent'] ],
+      \ }
+	let g:lightline.tabline = {
+        \ 'left': [ ['tabs'] ],
+        \ 'right': [ ],
+      \ }
+  " Abbreviated mode strings
+  let g:lightline.mode_map = {
+        \ 'n' : 'N',
+        \ 'i' : 'I',
+        \ 'R' : 'R',
+        \ 'v' : 'V',
+        \ 'V' : 'VL',
+        \ "\<C-v>": 'VB',
+        \ 'c' : 'C',
+        \ 's' : 'S',
+        \ 'S' : 'SL',
+        \ "\<C-s>": 'SB',
+        \ 't': 'T',
+      \ }
+
+  " A custom Lightline filename that includes the file's parent directory.
+  function! LightlineFilename()
+      return expand('%:p:h:t') . '/' . expand('%:t')
+  endfunction
+" }}}
+
+"Prettier {{{
+let g:prettier#autoformat = 0
+  autocmd BufWritePre *.js,*.jsx,*.ts,*.tsx,*.json,*.md,*.yaml,*.scss,*.css,*.less PrettierAsync
+
+  " max line length that prettier will wrap on
+  " Prettier default: 80
+  let g:prettier#config#print_width = 100
+  " number of spaces per indentation level
+  " Prettier default: 2
+  let g:prettier#config#tab_width = 2
+  " use tabs over spaces
+  " Prettier default: false
+  let g:prettier#config#use_tabs = 'false'
+  " print semicolons
+  " Prettier default: true
+  let g:prettier#config#semi = 'true'
+  " single quotes over double quotes
+  " Prettier default: false
+  let g:prettier#config#single_quote = 'true'
+  " print spaces between brackets
+  " Prettier default: true
+  let g:prettier#config#bracket_spacing = 'true'
+  " put > on the last line instead of new line
+  " Prettier default: false
+  let g:prettier#config#jsx_bracket_same_line = 'true'
+  " avoid|always
+  " Prettier default: avoid
+  let g:prettier#config#arrow_parens = 'always'
+  " none|es5|all
+  " Prettier default: none
+  let g:prettier#config#trailing_comma = 'all'
+  " flow|babylon|typescript|css|less|scss|json|graphql|markdown
+  " Prettier default: babylon
+  let g:prettier#config#parser = 'babylon'
+  " cli-override|file-override|prefer-file
+  let g:prettier#config#config_precedence = 'prefer-file'
+  " always|never|preserve
+  let g:prettier#config#prose_wrap = 'preserve'
+  " css|strict|ignore
+  let g:prettier#config#html_whitespace_sensitivity = 'css'
+"}}}
+
+" signify {{{
+let g:signify_vcs_list = ['git']
+  " No realtime. Signify auto-saves modified buffers with realtime enabled. wtf.
+let g:signify_realtime = 0
+
+let g:signify_sign_add = '+'
+let g:signify_sign_change = '~'
+let g:signify_sign_delete = '_'
+let g:signify_sign_delete_first_line = '‾'
+" }}}
+
+"Fzf {{{
+" FZF commands
+let g:fzf_command_prefix = 'Fzf'
+nnoremap <silent> <Leader>a :FzfAg<cr>
+nnoremap <silent> <Leader>f :FzfFiles<cr>
+nnoremap <silent> <Leader>h :FzfHelptags<cr>
+nnoremap <silent> <Leader>/ :FzfBLines<cr>
+nnoremap <silent> <Leader>: :FzfHistory:<cr>
+nnoremap <silent> <Leader>; :FzfHistory:<cr>
+
+  " Extra key bindings
+  " <C-n> (down), <C-e> (up), etc are mapped via $FZF_DEFAULT_OPTS.
+let g:fzf_action = {
+  \ 'ctrl-h': 'topleft vsplit',
+  \ 'ctrl-i': 'botright vsplit',
+  \ 'H': 'aboveleft vsplit',
+  \ 'N': 'belowright split',
+  \ 'E': 'aboveleft split',
+  \ 'I': 'belowright vsplit',
+  \ 'T': 'tab split',
+  \ }
+  " Open FZF in tmux at bottom of screen.
+let g:fzf_layout = { 'down': '~40%' }
+  " Disable statusline overwriting.
+let g:fzf_nvim_statusline = 0
+  " [Buffers] Jump to the existing window if possible
+let g:fzf_buffers_jump = 1
+
+  " Hide the statusbar in the FZF pane.
+  augroup fzf
+    autocmd!
+    autocmd! FileType fzf
+    autocmd  FileType fzf set laststatus=0 noshowmode noruler
+        \| autocmd BufLeave <buffer> set laststatus=2 showmode ruler
+  augroup END
+"}}}
+
+" colors  {{{
+syntax enable          " enables syntax procesing
+set background=dark
+colorscheme onehalfdark " color theme am Using
+set termguicolors
+set termencoding=utf-8
+
