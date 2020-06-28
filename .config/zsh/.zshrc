@@ -1,12 +1,9 @@
 # Enable colors and change prompt:
-export ZSH=$HOME/.oh-my-zsh
-
-# Set name of the theme to load --- if set to "random", it will
-# load a random theme each time oh-my-zsh is loaded, in which case,
+#export ZSH=$HOME/.oh-my-zsh
 
 
 autoload -U colors && colors	# Load colors
-PS1="%B%{$fg[red]%}[%{$fg[yellow]%}%n%{$fg[green]%}@%{$fg[blue]%}%M %{$fg[magenta]%}%~%{$fg[red]%}]%{$reset_color%}$%b "
+PS1="%B%{$fg[red]%}[😎%{$fg[yellow]%}%n%{$fg[green]%} %{$fg[magenta]%}%~%{$fg[red]%}]%{$reset_color%}$%b "
 setopt autocd		# Automatically cd into typed directory.
 stty stop undef		# Disable ctrl-s to freeze terminal.
 
@@ -19,6 +16,15 @@ HISTFILE=~/.cache/zsh/history
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/zshnameddirrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/zshnameddirrc"
+
+# User configuration
+# Always work in a tmux session if tmux is installed
+# https://github.com/chrishunt/dot-files/blob/master/.zshrc
+if which tmux 2>&1 >/dev/null; then
+  if [ $TERM != "screen-256color" ] && [  $TERM != "screen" ]; then
+    tmux attach -t hack || tmux new -s hack; exit
+  fi
+fi
 
 # Basic auto/tab complete:
 autoload -U compinit
@@ -84,7 +90,6 @@ bindkey '^e' edit-command-line
 # Load syntax highlighting; should be last.
 source /usr/share/zsh/plugins/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh 2>/dev/null
 
-ZSH_THEME="af-magic"
 alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 export NVM_DIR=/home/edd/.config/nvm
 [ -s /nvm.sh ] && \. /nvm.sh  # This loads nvm
@@ -95,3 +100,4 @@ export NVM_DIR=/home/edd/.config/nvm
 
 export DENO_INSTALL="/home/edd/.deno"
 export PATH="$DENO_INSTALL/bin:$PATH"
+
