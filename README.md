@@ -1,6 +1,9 @@
 ## Dotfiles by Edwin Muraya
 My personal setup and notes for my development environments.May not be useful to alot of people but you can find something useful if you use vim and colemak keyboard layout.
 
+
+![](full-200703-2044-40.png)
+
 ### Colemak and Vim
 
  * h, j, k, l - colemak h, n, e and i: movement.
