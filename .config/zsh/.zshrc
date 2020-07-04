@@ -1,6 +1,6 @@
 # Enable colors and change prompt:
 autoload -U colors && colors	# Load colors
-PS1="%B%{$fg[red]%}[😎%{$fg[yellow]%}%n%{$fg[green]%} %{$fg[magenta]%}%~%{$fg[red]%}]%{$reset_color%}$%b "
+PS1="%B%{$fg[red]%}[%{$fg[yellow]%}%n%{$fg[green]%} %{$fg[magenta]%}%~%{$fg[red]%}]%{$reset_color%}$%b "
 setopt autocd		# Automatically cd into typed directory.
 stty stop undef		# Disable ctrl-s to freeze terminal.
 
@@ -111,10 +111,6 @@ bindkey '^e' edit-command-line
 source /usr/share/zsh/plugins/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh 2>/dev/null
 
 alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
-export NVM_DIR=/home/edd/.config/nvm
-[ -s /nvm.sh ] && \. /nvm.sh  # This loads nvm
-[ -s /bash_completion ] && \. /bash_completion  # This loads nvm bash_completion
-
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
@@ -131,10 +127,10 @@ fi
 ####################################################################################################
   [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
   # Make sure FZF uses ag (which respects .gitignore files) and ignores .git dirs itself.
-  export FZF_DEFAULT_COMMAND='ag --hidden --ignore .git -g ""'
+  #export FZF_DEFAULT_COMMAND='ag --hidden --ignore .git -g ""'
   export FZF_DEFAULT_OPTS=''
   # Match exact words (don't fuzzy match foo to fzozo)
-  export FZF_DEFAULT_OPTS=$FZF_DEFAULT_OPTS' --exact'
+  #export FZF_DEFAULT_OPTS=$FZF_DEFAULT_OPTS' --exact'
   # Up/down wraps to top/bottom of results
   export FZF_DEFAULT_OPTS=$FZF_DEFAULT_OPTS' --cycle'
   # Input on top, results below
@@ -146,4 +142,11 @@ fi
   # Use tmux panes for fzf to avoid the shell output getting pushed around.
   export FZF_TMUX=1
 
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+  alias nvm='unalias nvm node npm && . "$NVM_DIR"/nvm.sh && nvm'
+  alias node='unalias nvm node npm && . "$NVM_DIR"/nvm.sh && node'
+  alias npm='unalias nvm node npm && . "$NVM_DIR"/nvm.sh && npm'
+fi
 
