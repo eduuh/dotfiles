@@ -10,16 +10,22 @@ if empty(glob('~/.config/nvim/autoload/plug.vim'))
 endif
 
 call plug#begin('~/.config/nvim/plugged')
-
-" Layout Look n Feal {{{
+" Provides asynchronous execution.
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plug 'junegunn/fzf.vim'
+"Plug 'fcpg/vim-fahrenheit'
+Plug 'mattn/emmet-vim'
+"intergrate fzf with vim {{{ fuzzy finding of files" Layout Look n Feal {{{
 " Plug 'vim-airline/vim-airline'
 " Plug 'vim-airline/vim-airline-themes'
-" Plug 'dikiaap/minimalist' "The neovim color theme.
-
+Plug 'dikiaap/minimalist' "The neovim color theme.
+Plug 'tpope/vim-dadbod'
 Plug 'itchyny/lightline.vim' " A light and configurable statusline/tabline plugin for Vim
 Plug 'mhinz/vim-signify' " Show a diff using Vim's sign column.
 Plug 'sonph/onehalf', { 'rtp': 'vim/' }
 Plug 'tsiemens/vim-aftercolors' " Support for after/colors/ scripts
+Plug 'christoomey/vim-tmux-navigator'
+Plug 'djoshea/vim-autoread'
 
 if has('nvim')
     Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
@@ -49,7 +55,7 @@ Plug 'iamcco/markdown-preview.nvim', { 'do': { -> mkdp#util#install() }}
 " }}}
 
 " Plugin --Editing {{{
-Plug 'tpope/vim-abolish' " easily search for, substitute, & abbreviate multiple variants of a word
+" Plug 'tpope/vim-abolish' " easily search for, substitute, & abbreviate multiple variants of a word
 Plug 'tpope/vim-repeat'
 Plug 'tpope/vim-surround'
 "}}}
@@ -57,18 +63,16 @@ Plug 'tpope/vim-surround'
 Plug 'sheerun/vim-polyglot'
 " }}}
 " Javascript snippets
-Plug 'dense-analysis/ale' " Linting
 Plug 'pangloss/vim-javascript' " JS syntax highlighting and indentation
 Plug 'leafgarland/typescript-vim' " TS syntax highlighting
 Plug 'maxmellon/vim-jsx-pretty' " JSX and TSX syntax highlighting
 Plug 'prettier/vim-prettier', { 'do': 'npm install' } " JS/TS/CSS/HTML Opinionated code formatter
+Plug 'epilande/vim-es2015-snippets'
+Plug 'epilande/vim-react-snippets'
 " Conquer of Completion {{{
-"intergrate fzf with vim {{{ fuzzy finding of files
-Plug 'junegunn/fzf.vim'
-Plug '~/.fzf'
 "}}}
 Plug 'neoclide/coc.nvim', {'tag': '*', 'branch': 'release' }
-let g:coc_global_extensions=['coc-json', 'coc-tsserver', 'coc-emmet', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-prettier' , 'coc-eslint' , 'coc-snippets']
+let g:coc_global_extensions=['coc-eslint', 'coc-json', 'coc-tsserver', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-snippets', 'coc-prettier']
 
 "C# Configurations {{{
 " Plug 'OmniSharp/omnisharp-vim'
@@ -92,28 +96,23 @@ set shiftwidth=2
 set autoindent
 set smartindent
 set conceallevel=2
+set mouse=a
 " change directory to the current buffer when opening files.
 " set autochdir
 " }}}
-
 " UI Layout {{{
 " set number
 " set relativenumber
 set shortmess+=I         "hide splash screen 
-set display+=lastline
-set showtabline=1
-set laststatus=2
-set statusline=%<%t%h%m%r%h%w%y\ %L\,\ Col\ %-3v\ %P
 set updatetime=100       "Reduce swap-writing update time (better for vim-gutter) 
+" set cursorline    " highlight the current line
 set nocursorline
-set lazyredraw
-set showmatch       " When a bracket is inserted, flash the matching one.
-set fillchars+=stl:\ ,stlnc:\
 set splitright | set splitbelow
 set ruler         " show the cursor position all the time
-set confirm     " confirm quit/save"
-set wildmenu  " Tab completon on
+set wildmenu  " Show a menu when using Tab completion
 set wildmode=longest,full            " Tab complete longest common string, then each full match.
+set showcmd
+set scrolloff=5 "Show some few more line when using z-enter"
 " }}}
 
 " Neovim Misc {{{
@@ -122,7 +121,6 @@ set encoding=utf-8
 set visualbell    " stop that ANNOYING beeping
 set autowrite     " Automatically :write before running commands
 set autoread      " Reload files changed outside vim
-
 if has('unnamedplus')
   set clipboard=unnamed,unnamedplus
 endif
@@ -130,11 +128,13 @@ endif
 
 " Searching {{{
 set hlsearch      " Stop highlight after searching
-set cursorline    " highlight the current line
-set gdefault      " Substitute all matches in a line (i.e. :s///g) by default
+" set gdefault      " Substitute all matches in a line (i.e. :s///g) by default
+set nohlsearch
 set ignorecase
 set smartcase
-set incsearch
+set incsearch  "Highlig the search scheme when typing
+set lbr
+
 " }}}
 
 " Colemak Remaps {{{
@@ -143,7 +143,9 @@ noremap i l
 noremap e k
 noremap k n
 noremap K N
+" _r_   inner Text object
 noremap l i
+noremap L I
 
 " set j (same as h , cursor left) to 'end of word'
 noremap j e
@@ -156,8 +158,6 @@ noremap <silent> H 0
 noremap <silent> I $
 noremap S :%s//g<left><left>
 noremap U <C-r>
-onoremap r i
-" _r_ = inner Text object
 
 " Faster in-line navigation
 nmap ,, <C-^>
@@ -182,7 +182,7 @@ let &t_EI = "\<Esc>]50;CursorShape=0\x7"
 
 " Commands {{{
 command! Reload execute "source ~/.config/nvim/init.vim"
-command! Config execute ":e ~/.config/nvim/init.vim"
+command! C execute ":e ~/.config/nvim/init.vim"
 " }}}
 " Tab managements {{{
  " Create a new tab with tu
@@ -216,11 +216,15 @@ set noswapfile    " http://robots.thoughtbot.com/post/18739402579/global-gitigno
 
 " Leader Shortcuts {{{
 let mapleader="\<space>"
+let g:user_emmet_leader_key=','
 " save files in the buffer
 nnoremap <leader>w :write<Enter>
 nnoremap <leader>s :setlocal spell!<Enter>
+nnoremap <leader>q :q<Enter>
+tmap <leader>q <C-d>
+nnoremap <leader>t :split term://zsh<CR>
 " Use D to show documentation in preview window
-nnoremap <silent> <leader> D :call <SID>show_documentation()<CR>
+nnoremap <silent> <leader>D :call <SID>show_documentation()<CR>
 nnoremap <silent> <C-m> :MarkdownPreview<CR>
 " nnoremap <leader>sp :normal! mz[s1z=`z<CR>
 " Nerdtree Leader keymap's{{{
@@ -252,11 +256,11 @@ inoremap <silent><expr> <c-space> coc#refresh()
 nmap <silent> [g <Plug>(coc-diagnostic-prev)
 nmap <silent> ]g <Plug>(coc-diagnostic-next)
 
-nnoremap <leader>b :Buffers<Enter>
-nnoremap <leader>h :History<Enter>
 " }}}
 " }}}
-
+" Emmet{{{
+" redefine trigger key
+" }}}
 " Functions {{{
 function! s:show_documentation()
     if (index(['vim','help'], &filetype) >= 0)
@@ -272,6 +276,7 @@ function! s:show_documentation()
 autocmd BufWritePre markdown %s/\s\+$//e  " automatically remove all trailling whitespaces(allfiles).
 autocmd FileType gitcommit setlocal textwidth=100 " Automatically wrap at 100 characters.
 
+autocmd BufWritePost ~/.local/src/dwmblocks/config.h !cd ~/.local/src/dwmblocks/; sudo make install && { killall -q dwmblocks;setsid dwmblocks & }
 " open file, but keep focus in Exproler.
 "autocmd FileType netrw nmap <C-a> <cr>:wincmd W<cr>
 " autocmd FileType gitcommit setlocal spell " automaticall spell check commits
@@ -282,11 +287,28 @@ autocmd FileType gitcommit setlocal textwidth=100 " Automatically wrap at 100 ch
     autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
     " Update signature help on jump placeholder
     autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
+  augroup END
+
+  augroup terminal_settings
+    autocmd!
+
+    autocmd BufWinEnter,WinEnter term://* startinsert
+    autocmd BufLeave term://* stopinsert
+
+" Ignore various filetypes as those will close terminal automatically
+ " Ignore fzf, ranger, coc
+autocmd TermClose term://*
+      \ if (expand('<afile>') !~ "fzf") && (expand('<afile>') !~ "ranger") && (expand('<afile>') !~ "coc") |
+      \   call nvim_input('<CR>')  |
+      \ endif
+augroup END
+
+
 " }}}
 filetype plugin indent on
 "Markdown {{{
-let g:UltiSnipsExpandTrigger="<C-u>"  " use <Tab> to trigger autocompletion
-let g:UltiSnipsJumpForwardTrigger="<c-n>"
+let g:UltiSnipsExpandTrigger="<c-l>"  " use <Tab> to trigger autocompletion
+let g:UltiSnipsJumpForwardTrigger="<c->"
 let g:UltiSnipsJumpBackwardTrigger="<c-e>"
 " disable header folding
 let g:vim_markdown_folding_disabled = 1
@@ -356,7 +378,7 @@ nnoremap <silent> <Leader><leader> :Defx<CR>
 
   call defx#custom#option('_', {
       \ 'columns': 'git:indent:icon:filename',
-      \ 'winwidth': 50,
+      \ 'winwidth':30,
       \ 'split': 'vertical',
       \ 'direction': 'topleft',
       \ 'show_ignored_files': 0,
@@ -415,8 +437,9 @@ autocmd FileType defx call s:defx_my_settings()
 " LightLine {{{
  " Hide ex-line mode since it's displayed in lightline.
   set noshowmode
-  let g:lightline = {}
-  let g:lightline.colorscheme = 'wombat'
+  let g:lightline = {
+      \ 'colorscheme': 'wombat',
+      \ }
   let g:lightline.component_function = {
         \ 'filename': 'LightlineFilename'
       \ }
@@ -432,20 +455,6 @@ autocmd FileType defx call s:defx_my_settings()
         \ 'left': [ ['tabs'] ],
         \ 'right': [ ],
       \ }
-  " Abbreviated mode strings
-  let g:lightline.mode_map = {
-        \ 'n' : 'N',
-        \ 'i' : 'I',
-        \ 'R' : 'R',
-        \ 'v' : 'V',
-        \ 'V' : 'VL',
-        \ "\<C-v>": 'VB',
-        \ 'c' : 'C',
-        \ 's' : 'S',
-        \ 'S' : 'SL',
-        \ "\<C-s>": 'SB',
-        \ 't': 'T',
-      \ }
 
   " A custom Lightline filename that includes the file's parent directory.
   function! LightlineFilename()
@@ -455,45 +464,8 @@ autocmd FileType defx call s:defx_my_settings()
 
 "Prettier {{{
 let g:prettier#autoformat = 0
-autocmd BufWritePre *.js,*.jsx,*.ts,*.tsx,*.json,*.md,*.yaml,*.scss,*.css,*.less PrettierAsync
+autocmd BufWritePre *.js,*.jsx,*.ts,*.tsx,*.json,*.yaml,*.scss,*.css,*.less PrettierAsync
 
-  " max line length that prettier will wrap on
-  " Prettier default: 80
-let g:prettier#config#print_width = 100
-  " number of spaces per indentation level
-  " Prettier default: 2
-let g:prettier#config#tab_width = 2
-  " use tabs over spaces
-  " Prettier default: false
-let g:prettier#config#use_tabs = 'false'
-  " print semicolons
-  " Prettier default: true
-let g:prettier#config#semi = 'true'
-  " single quotes over double quotes
-  " Prettier default: false
-let g:prettier#config#single_quote = 'true'
-  " print spaces between brackets
-  " Prettier default: true
-let g:prettier#config#bracket_spacing = 'true'
-  " put > on the last line instead of new line
-  " Prettier default: false
-let g:prettier#config#jsx_bracket_same_line = 'true'
-  " avoid|always
-  " Prettier default: avoid
-let g:prettier#config#arrow_parens = 'always'
-  " none|es5|all
-  " Prettier default: none
-let g:prettier#config#trailing_comma = 'all'
-  " flow|babylon|typescript|css|less|scss|json|graphql|markdown
-  " Prettier default: babylon
-let g:prettier#config#parser = 'babylon'
-  " cli-override|file-override|prefer-file
-let g:prettier#config#config_precedence = 'prefer-file'
-  " always|never|preserve
-let g:prettier#config#prose_wrap = 'preserve'
-  " css|strict|ignore
-let g:prettier#config#html_whitespace_sensitivity = 'css'
-"}}}
 
 " signify {{{
 let g:signify_vcs_list = ['git']
@@ -511,11 +483,12 @@ let g:signify_sign_delete_first_line = '‾'
 let g:fzf_command_prefix = 'Fzf'
 nnoremap <silent> <Leader>a :FzfAg<cr>
 nnoremap <silent> <Leader>f :FzfFiles<cr>
+nnoremap <silent> <Leader>o :All<cr>
 nnoremap <silent> <Leader>h :FzfHelptags<cr>
 nnoremap <silent> <Leader>/ :FzfBLines<cr>
-nnoremap <silent> <Leader>: :FzfHistory:<cr>
+nnoremap <silent> <Leader>h :FzfHistory:<cr>
 nnoremap <silent> <Leader>; :FzfHistory:<cr>
-
+nnoremap <silent> <leader>b :FzfBuffers<cr>
   " Extra key bindings
   " <C-n> (down), <C-e> (up), etc are mapped via $FZF_DEFAULT_OPTS.
 let g:fzf_action = {
@@ -541,12 +514,19 @@ let g:fzf_buffers_jump = 1
     autocmd  FileType fzf set laststatus=0 noshowmode noruler
         \| autocmd BufLeave <buffer> set laststatus=2 showmode ruler
   augroup END
+
+command! -bang -nargs=*  All
+  \ call fzf#run(fzf#wrap({'source': 'rg --files --hidden --no-ignore-vcs --glob "!{node_modules/*,.git/*}"', 'down': '40%', 'options': '--expect=ctrl-t,ctrl-x,ctrl-v --multi --reverse' }))
 "}}}
 
+
+" don't allow colorschemes to set a background color
+highlight Normal ctermbg=NONE
+highlight nonText ctermbg=NONE
+
 " colors  {{{
-syntax enable          " enables syntax procesing
+syntax on          " enables syntax procesing
 set background=dark
-colorscheme onehalfdark " color theme am Using
+colo minimalist
 set termguicolors
 set termencoding=utf-8
-
