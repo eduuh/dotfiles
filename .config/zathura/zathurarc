@@ -13,11 +13,31 @@ set smooth-scroll "true"
 set scroll-full-overlap 0.01
 set scroll-step 100
 
-set zoom-min 10
+set zoom-min 5
 set guioptions ""
 
-map u scroll half-up
-map m scroll half-down
+map n scroll down
+map e scroll up
+map h scroll left
+map i scroll right
+
+map N scroll half-down
+map E scroll half-up
+
+map k search forward
+map K search backward
+
+# For TOC navigation
+map [index] o toggle_index
+
+# hjkl →  hnei
+map [index] n navigate_index down
+map [index] e navigate_index up
+map [index] h navigate_index collapse
+map [index] i navigate_index expand
+
+map [index] H navigate_index collapse-all
+map [index] I navigate_index expand-all
 
 map D toggle_page_mode
 map r reload
@@ -25,10 +45,6 @@ map R rotate
 map d recolor
 map p print
 
-map n scroll down
-map e scroll up
-map h scroll left
-map i scroll right
 
 map I zoom in
 map N zoom out
@@ -79,3 +95,11 @@ set scroll-step 50
 unmap f
 map f toggle_fullscreen
 map [fullscreen] f toggle_fullscreen
+
+##############
+# References #
+##############
+# https://github.com/pwmt/zathura/blob/develop/doc/man/zathurarc.5.rst
+# https://github.com/igwan/dotfiles/blob/66d9eee0ffe4e4f67dedbbc5a28167559cbfa056/zathura/.config/zathura/zathurarc
+# https://github.com/deterenkelt/dotfiles/blob/9674e4c974f0c2cb52302c36bcae7f3cfa4aa3d5/.config/zathura/zathurarc
+# https://wiki.archlinux.org/index.php/Zathura
