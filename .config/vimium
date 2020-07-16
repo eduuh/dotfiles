@@ -1,0 +1,13 @@
+# Insert your preferred key mappings here.
+mapkey n j
+mapkey N J
+mapkey e k
+mapkey E K
+mapkey i l
+mapkey I L
+mapkey k n
+mapkey K N
+mapkey l i
+mapkey L I
+mapkey j e
+mapkey J E
