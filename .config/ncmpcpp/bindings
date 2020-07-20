@@ -407,9 +407,9 @@ def_key "+"
 def_key "="
     volume_up
 
-def_key "j"
+def_key "n"
     scroll_down
-def_key "k"
+def_key "e"
     scroll_up
 
 def_key "ctrl-u"
@@ -432,19 +432,19 @@ def_key "l"
 def_key "."
     show_lyrics
 
-def_key "n"
+def_key "k"
     next_found_item
-def_key "N"
+def_key "K"
     previous_found_item
 
 # not used but bound
-def_key "J"
+def_key "N"
     move_sort_order_down
-def_key "K"
+def_key "E"
     move_sort_order_up
-def_key "h"
+def_key "H"
   jump_to_parent_directory
-def_key "l"
+def_key "s"
   enter_directory
 def_key "l"
   run_action
