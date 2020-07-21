@@ -1,11 +1,11 @@
-## Dotfiles by Edwin Muraya
+## Dotfiles by eduuh for 💻
 
-My personal setup and notes for my development environments.May not be useful to alot of people but you can find something useful if you use vim and colemak keyboard layout.
+My personal configs and notes for most programs is use in my development workflows *and most importantly colemak keybord remaps**. I always try to be consistent on my colemak remaping across programs.
 
-These tend to change reqularly. I am always tweaking these, Trying to perfect it to be better as i continual learning. I Hope that I do that
+My configs tend to change reqularly. I am always tweaking these, Trying to perfect it to be better as i continue to learning new stuff. I Hope that what I do. 😍
 
 
-### Colemak and Vim
+### Colemak and Vim and friends
 
  * **h, j, k, l** - colemak h, n, e and i: movement.
  * **k**: next search result.
@@ -26,6 +26,16 @@ Includes customizations for the following tools.
 6. **less** - pager and file viewer
 7. **Vimium**. Addd the remaps in (.config/vimium) to brave vimium extension.) options tab in Custom key mapping.
 8. **mpd and ncmpcpp** - Music player (client server approach)
+
+
+##### Less Pager and file viewer (Note)
+
+I added some colemak keybindings in the (~/.lesskey) in the home directory. **Less** uses **lesskey** command/program to change the keybindings.
+
+1. In an open terminal I run (lesskey) command manually which in turn compiled my **.lesskey** config to **.less** config files. (both files are checked out)
+
+
+
 
 
 

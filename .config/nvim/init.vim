@@ -13,14 +13,15 @@ call plug#begin('~/.config/nvim/plugged')
 " Provides asynchronous execution.
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
+
 "Plug 'fcpg/vim-fahrenheit'
 Plug 'mattn/emmet-vim'
 "intergrate fzf with vim {{{ fuzzy finding of files" Layout Look n Feal {{{
-" Plug 'vim-airline/vim-airline'
-" Plug 'vim-airline/vim-airline-themes'
+Plug 'vim-airline/vim-airline'
+Plug 'vim-airline/vim-airline-themes'
 Plug 'dikiaap/minimalist' "The neovim color theme.
 Plug 'tpope/vim-dadbod'
-Plug 'itchyny/lightline.vim' " A light and configurable statusline/tabline plugin for Vim
+" Plug 'itchyny/lightline.vim' " A light and configurable statusline/tabline plugin for Vim
 Plug 'mhinz/vim-signify' " Show a diff using Vim's sign column.
 Plug 'sonph/onehalf', { 'rtp': 'vim/' }
 Plug 'tsiemens/vim-aftercolors' " Support for after/colors/ scripts
@@ -40,6 +41,7 @@ Plug 'kristijanhusak/defx-git' " Git status column for defx
 " Git {{{
 Plug 'tpope/vim-fugitive'
 " Plug 'airblade/vim-gitgutter'
+ Plug 'airblade/vim-rooter'
 " }}}
 " Markdown Support{{{
 " Track the engine
@@ -74,10 +76,6 @@ Plug 'epilande/vim-react-snippets'
 Plug 'neoclide/coc.nvim', {'tag': '*', 'branch': 'release' }
 let g:coc_global_extensions=['coc-eslint', 'coc-json', 'coc-tsserver', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-snippets', 'coc-prettier']
 
-"C# Configurations {{{
-" Plug 'OmniSharp/omnisharp-vim'
-"}}}
-"}}}
 "Latex {{{
 " A Vim Plugin for Lively Previewing LaTeX PDF Output
 " Plug 'xuhdev/vim-latex-live-preview', { 'for': 'tex' }
@@ -124,6 +122,20 @@ set autoread      " Reload files changed outside vim
 if has('unnamedplus')
   set clipboard=unnamed,unnamedplus
 endif
+
+" Better tabbing
+vnoremap < <gv
+vnoremap > >gv
+
+
+" Easy CAPS
+inoremap <c-u> <ESC>viwUi
+nnoremap <c-u> viwU<Esc>
+" Use alt + hjkl hnei to resize windows
+nnoremap <M-n>    :resize -2<CR>
+nnoremap <M-e>    :resize +2<CR>
+nnoremap <M-i>    :vertical resize -2<CR>
+nnoremap <M-h>    :vertical resize +2<CR>
 " }}}
 
 " Searching {{{
@@ -144,8 +156,8 @@ noremap e k
 noremap k n
 noremap K N
 " _r_   inner Text object
-noremap l i
-noremap L I
+noremap s i
+noremap S I
 
 " set j (same as h , cursor left) to 'end of word'
 noremap j e
@@ -156,7 +168,7 @@ noremap : ;
 
 noremap <silent> H 0
 noremap <silent> I $
-noremap S :%s//g<left><left>
+noremap <leader>S :%s//g<left><left>
 noremap U <C-r>
 
 " Faster in-line navigation
@@ -165,6 +177,8 @@ cmap w!! w !sudo tee %
 " Remapping for Ale {{{
 nmap <silent> [c <Plug>(ale_previous_wrap)
 nmap <silent> ]c <Plug>(ale_next_wrap)
+
+
 
 " netrw browser images.
 "noremap <silent> <C-b> :edit .<CR> 
@@ -218,7 +232,7 @@ set noswapfile    " http://robots.thoughtbot.com/post/18739402579/global-gitigno
 let mapleader="\<space>"
 let g:user_emmet_leader_key=','
 " save files in the buffer
-nnoremap <leader>w :write<Enter>
+"nnoremap <leader>w :write<Enter>
 nnoremap <leader>s :setlocal spell!<Enter>
 nnoremap <leader>q :q<Enter>
 tmap <leader>q <C-d>
@@ -239,8 +253,13 @@ nmap <silent> gd <Plug>(coc-definition)
 nmap <silent> gy <Plug>(coc-type-definition)
 nmap <silent> gi <Plug>(coc-implementation)
 nmap <silent> gr <Plug>(coc-references) 
-  " Remap for rename current word
+" Remap for rename current word
 nmap re <Plug>(coc-rename)
+
+nmap <leader>gh :diffget //3<CR>
+nmap <leader>gu :diffget //2<CR>
+nmap <leader>gs :G<CR>
+
   " Remap for format selected region
 xmap <leader>f  <Plug>(coc-format-selected)
 nmap <leader>f  <Plug>(coc-format-selected)
@@ -275,7 +294,8 @@ function! s:show_documentation()
   " restricting to some file use c,cpp,java instead of *
 autocmd BufWritePre markdown %s/\s\+$//e  " automatically remove all trailling whitespaces(allfiles).
 autocmd FileType gitcommit setlocal textwidth=100 " Automatically wrap at 100 characters.
-
+" auto save file buffer when text change
+autocmd TextChanged,TextChangedI <buffer> silent write
 autocmd BufWritePost ~/.local/src/dwmblocks/config.h !cd ~/.local/src/dwmblocks/; sudo make install && { killall -q dwmblocks;setsid dwmblocks & }
 " open file, but keep focus in Exproler.
 "autocmd FileType netrw nmap <C-a> <cr>:wincmd W<cr>
@@ -434,33 +454,8 @@ autocmd FileType defx call s:defx_my_settings()
 	endfunction
 "}}} 
 "
-" LightLine {{{
- " Hide ex-line mode since it's displayed in lightline.
-  set noshowmode
-  let g:lightline = {
-      \ 'colorscheme': 'wombat',
-      \ }
-  let g:lightline.component_function = {
-        \ 'filename': 'LightlineFilename'
-      \ }
-  let g:lightline.active = {
-        \ 'left': [ ['mode'], ['filename', 'readonly', 'modified'] ],
-        \ 'right': [ ['lineinfo'], ['percent'] ],
-      \ }
-	let g:lightline.inactive = {
-        \ 'left': [ ['filename', 'readonly', 'modified'] ],
-        \ 'right': [ ['lineinfo'], [ 'percent'] ],
-      \ }
-	let g:lightline.tabline = {
-        \ 'left': [ ['tabs'] ],
-        \ 'right': [ ],
-      \ }
-
-  " A custom Lightline filename that includes the file's parent directory.
-  function! LightlineFilename()
-      return expand('%:p:h:t') . '/' . expand('%:t')
-  endfunction
-" }}}
+"
+set noshowmode
 
 "Prettier {{{
 let g:prettier#autoformat = 0
@@ -519,6 +514,16 @@ command! -bang -nargs=*  All
   \ call fzf#run(fzf#wrap({'source': 'rg --files --hidden --no-ignore-vcs --glob "!{node_modules/*,.git/*}"', 'down': '40%', 'options': '--expect=ctrl-t,ctrl-x,ctrl-v --multi --reverse' }))
 "}}}
 
+" Vim Airline {{{
+let g:airline#extensions#tabline#enabled = 1
+let g:airline#extensions#tabline#buffer_nr_show = 1
+let g:airline#extensions#tabline#formatter = 'jsformatter'
+let g:airline_theme='minimalist'
+" Just show the filename (no path) in the tab
+let g:airline#extensions#tabline#fnamemod = ':t'
+
+
+" }}}
 
 " don't allow colorschemes to set a background color
 highlight Normal ctermbg=NONE

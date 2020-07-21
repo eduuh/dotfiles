@@ -8,9 +8,9 @@ HISTFILE=~/.cache/zsh/history
 # }}}
 ##Aliases{{{
 alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
-export ZSH="/home/eduuh/.config/.oh-my-zsh"
-ZSH_THEME="ys"
-plugins=(docker npm npx)
+#export ZSH="/home/eduuh/.config/.oh-my-zsh"
+#ZSH_THEME="spaceship" # ys
+#plugins=(docker npm npx)
 # Load aliases and shortcuts if existent.
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc"
@@ -20,9 +20,13 @@ plugins=(docker npm npx)
 # https://github.com/chrishunt/dot-files/blob/master/.zshrc
 if [ -z "$TMUX" ]
 then
-    tmux attach -t TMUX || tmux new -s DEV
+    tmux attach -t DEV || tmux new -s DEV
 fi
 
+function tmuxdettach {
+    tmux  detach
+    tmux new -s TMUX
+}
 ## Colemak bindings {{{
 bindkey -M vicmd "h" backward-char
 bindkey -M vicmd "n" down-line-or-history
@@ -71,7 +75,7 @@ alias fzfi='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git
 alias vifi='nvim $(fzfi)'
 
 #}}}
-source $ZSH/oh-my-zsh.sh
+#source $ZSH/oh-my-zsh.sh
 
 # Enable colors and change prompt:
 autoload -U colors && colors	# Load colors
@@ -79,9 +83,40 @@ autoload -U colors && colors	# Load colors
 # vi mode {{{
 bindkey -v
 export KEYTIMEOUT=1
+
+# ci", ci', ci`, di", etc
+autoload -U select-quoted
+zle -N select-quoted
+for m in visual viopp; do
+  for c in {a,i}{\',\",\`}; do
+    bindkey -M $m $c select-quoted
+  done
+done
+
+# ci{, ci(, ci<, di{, etc
+autoload -U select-bracketed
+zle -N select-bracketed
+for m in visual viopp; do
+  for c in {a,i}${(s..)^:-'()[]{}<>bB'}; do
+    bindkey -M $m $c select-bracketed
+  done
+done
 ##}}}
 
+# Basic auto/tab complete: {{{
+autoload -U compinit
+zstyle ':completion:*' menu select
+# Auto complete with case insenstivity
+zstyle ':completion:*' matcher-list '' 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
+zmodload zsh/complist
+compinit
+_comp_options+=(globdots)		# Include hidden files.
+#}}}
 
+# Load syntax highlighting; should be last.
+source /usr/share/zsh/plugins/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh 2>/dev/null
+
+eval "$(starship init zsh)"
 # Change Cursor Shape for Diffrent vi Modes{{{
 function zle-keymap-select {
   if [[ ${KEYMAP} == vicmd ]] ||
@@ -104,13 +139,3 @@ echo -ne '\e[5 q' # Use beam shape cursor on startup.
 preexec() { echo -ne '\e[5 q' ;} # Use beam shape cursor for each new prompt.
 #}}}
 
-# Basic auto/tab complete: {{{
-autoload -U compinit
-zstyle ':completion:*' menu select
-zmodload zsh/complist
-compinit
-_comp_options+=(globdots)		# Include hidden files.
-#}}}
-
-# Load syntax highlighting; should be last.
-source /usr/share/zsh/plugins/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh 2>/dev/null
