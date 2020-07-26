@@ -53,3 +53,13 @@ Includes customizations for the following tools.
 I added some colemak keybindings in the (~/.lesskey) in the home directory. **Less** uses **lesskey** command/program to change the keybindings.
 
 1. In an open terminal I run (lesskey) command manually which in turn compiled my **.lesskey** config to **.less** config files. (both files are checked out)
+
+#### Displays
+
+![](./dwm.png)
+![dwm](./dwm.png)
+![zsh](./zsh.png)
+![ncpmpcpp](./ncpm.png)
+
+![](./dwm.png)
+![](./dwm.png)
