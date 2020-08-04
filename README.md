@@ -56,10 +56,8 @@ I added some colemak keybindings in the (~/.lesskey) in the home directory. **Le
 
 #### Displays
 
-![](./dwm.png)
 ![dwm](./dwm.png)
 ![zsh](./zsh.png)
 ![ncpmpcpp](./ncpm.png)
 
-![](./dwm.png)
-![](./dwm.png)
+
