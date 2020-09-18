@@ -1,26 +1,40 @@
+" Vim Plug {{{
+let mapleader=" "
+if empty(glob('~/.config/nvim/autoload/plug.vim'))
+  silent !curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs
+    \  https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+endif
+" }}}
 call plug#begin('~/.config/nvim/plugged')
 " Provides asynchronous execution.
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
+Plug 'junegunn/goyo.vim'
 " nvim ui{{{
 Plug 'vim-airline/vim-airline'
+Plug 'vim-syntastic/syntastic'
 Plug 'vim-airline/vim-airline-themes'
 Plug 'dikiaap/minimalist' "The neovim color theme.
 Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
 Plug 'kristijanhusak/defx-git' " Git status column for defx
+"Plug 'altercation/vim-colors-solarized'
+Plug 'arcticicestudio/nord-vim'
+Plug '907th/vim-auto-save'
+Plug 'preservim/nerdcommenter'
 "}}}
-
 "intergrate fzf with vim {{{ fuzzy finding of files" Layout Look n Feal {{{
 " Plug 'itchyny/lightline.vim' " A light and configurable statusline/tabline plugin for Vim
 Plug 'christoomey/vim-tmux-navigator'
 Plug 'djoshea/vim-autoread'
-Plug 'tpope/vim-fugitive'
+"Plug 'tpope/vim-fugitive'
 Plug 'tpope/vim-repeat'
 Plug 'tpope/vim-surround'
+"Plug 'OmniSharp/omnisharp-vim'
 "}}}
 " Git {{{
 " Plug 'airblade/vim-gitgutter'
- Plug 'airblade/vim-rooter'
+ "Plug 'airblade/vim-rooter'
 " }}}
 " Markdown Support{{{
 " Track the engine
@@ -41,17 +55,19 @@ Plug 'sheerun/vim-polyglot'
 Plug 'pangloss/vim-javascript' " JS syntax highlighting and indentation
 Plug 'leafgarland/typescript-vim' " TS syntax highlighting
 Plug 'maxmellon/vim-jsx-pretty' " JSX and TSX syntax highlighting
-Plug 'prettier/vim-prettier', { 'do': 'npm install' } " JS/TS/CSS/HTML Opinionated code formatter
 Plug 'epilande/vim-es2015-snippets'
 Plug 'epilande/vim-react-snippets'
 " Conquer of Completion {{{
 "}}}
 Plug 'neoclide/coc.nvim', {'tag': '*', 'branch': 'release' }
-let g:coc_global_extensions=['coc-eslint', 'coc-json', 'coc-tsserver', 'coc-html' , 'coc-css' , 'coc-pairs' , 'coc-jest', 'coc-snippets', 'coc-prettier', 'coc-markdownlint']
+let g:coc_global_extensions=['coc-eslint', 'coc-json', 'coc-tsserver', 'coc-omnisharp', 'coc-docker',  'coc-html' , 'coc-css' ,  'coc-jest', 'coc-snippets', 'coc-markdownlint']
+
+
 call plug#end()
 
-
-
+" AutoSave Settings {{{
+let g:auto_save =1 "enable Autosave on Vim startupx
+" }}}
 " Functions {{{
 function! s:show_documentation()
     if (index(['vim','help'], &filetype) >= 0)
@@ -74,49 +90,6 @@ augroup end
 command! -nargs=0 Format :call CocAction('format')
 " }}}
 
-" Prettier
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-let g:prettier#autoformat = 0
-autocmd BufWritePre *.js,*.jsx,*.ts,*.tsx,*.json,*.md,*.yaml,*.scss,*.css,*.less PrettierAsync
-
-" max line length that prettier will wrap on
-" Prettier default: 80
-let g:prettier#config#print_width = 100
-" number of spaces per indentation level
-" Prettier default: 2
-let g:prettier#config#tab_width = 2
-" use tabs over spaces
-" Prettier default: false
-let g:prettier#config#use_tabs = 'false'
-" print semicolons
-" Prettier default: true
-let g:prettier#config#semi = 'true'
-" single quotes over double quotes
-" Prettier default: false
-let g:prettier#config#single_quote = 'true'
-" print spaces between brackets
-" Prettier default: true
-let g:prettier#config#bracket_spacing = 'true'
-" put > on the last line instead of new line
-" Prettier default: false
-let g:prettier#config#jsx_bracket_same_line = 'true'
-" avoid|always
-" Prettier default: avoid
-let g:prettier#config#arrow_parens = 'always'
-" none|es5|all`
-" Prettier default: none
-let g:prettier#config#trailing_comma = 'all'
-" flow|babylon|typescript|css|less|scss|json|graphql|markdown
-" Prettier default: babylon
-let g:prettier#config#parser = 'babylon'
-" cli-override|file-override|prefer-file
-let g:prettier#config#config_precedence = 'prefer-file'
-" always|never|preserve
-let g:prettier#config#prose_wrap = 'preserve'
-" css|strict|ignore
-"
-let g:prettier#config#html_whitespace_sensitivity = 'css'
-"Defx  {{{
 nnoremap <silent> <Leader><leader> :Defx<CR>
   call defx#custom#option('_', {
       \ 'columns': 'git:indent:icon:filename',
@@ -175,6 +148,32 @@ autocmd FileType defx call s:defx_my_settings()
 	  nnoremap <silent><buffer><expr> q defx#do_action('quit')
 	endfunction
 "}}} 
+"OmniSharp {{{
+" Use Roslyin and also better performance than HTTP
+let g:OmniSharp_server_stdio = 1
+let g:omnicomplete_fetch_full_documentation = 1
+
+
+" Timeout in seconds to wait for a response from the server
+let g:OmniSharp_timeout = 30
+
+
+let g:OmniSharp_popup_options = {
+\ 'highlight': 'Normal',
+\ 'padding': [1],
+\ 'border': [1]
+\}
+
+let g:syntastic_cs_checkers = ['code_checker']
+set statusline+=%#warningmsg#
+set statusline+=%{SyntasticStatuslineFlag()}
+set statusline+=%*
+
+"let g:syntastic_always_populate_loc_list = 1
+"let g:syntastic_auto_loc_list = 1
+"let g:syntastic_check_on_open = 1
+"let g:syntastic_check_on_wq = 0
+"}}}
 
 " signify {{{
 let g:signify_vcs_list = ['git']
@@ -186,10 +185,6 @@ let g:signify_sign_change = '~'
 let g:signify_sign_delete = '_'
 let g:signify_sign_delete_first_line = '‾'
 " }}}
-" Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
-let g:UltiSnipsExpandTrigger="<tab>"
-let g:UltiSnipsJumpForwardTrigger="<c-b>"
-let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 "Fzf {{{
 " FZF commands
 let g:fzf_command_prefix = 'Fzf'
@@ -226,19 +221,27 @@ command! -bang -nargs=*  All
 "}}}
 
 " Vim Airline {{{
+"
+
 let g:airline#extensions#tabline#enabled = 1
-let g:airline#extensions#tabline#buffer_nr_show = 1
-let g:airline#extensions#tabline#formatter = 'jsformatter'
+let g:airline#extensions#tabline#buffer_nr_show = 0
 let g:airline_theme='minimalist'
+let g:airline#extensions#tabline#show_tab_nr = 0
+let g:airline#extensions#coc#enabled = 1
+let g:airline_powerline_fonts=1
+
 " Just show the filename (no path) in the tab
 let g:airline#extensions#tabline#fnamemod = ':t'
+let g:airline#parts#ffenc#skip_expected_string='utf-8[unix]'
 " }}}
-
+let g:UltiSnipsExpandTrigger="<c-j>"
+let g:UltiSnipsJumpForwardTrigger="<c-b>"
+let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 " fzf
-nnoremap <C-p> :FzfFiles<CR>
+nnoremap <C-p> :FzfGFiles<CR>
 nnoremap <leader>b :FzfBuffers<CR>
-nnoremap <leader>gs :FzfGFiles<CR>
-nnoremap <A-f> :FzfBLines<CR>
+nnoremap <leader>gs :FzfFiles<CR> 
+nnoremap gl :FzfBLines<CR>
 nnoremap <C-f> :FzfRg!<CR>
 
 
@@ -266,21 +269,12 @@ function! s:check_back_space() abort
 endfunction
 
 " Use <c-space> to trigger completion.
-if has('nvim')
-  inoremap <silent><expr> <c-@> coc#refresh()
-else
-  inoremap <silent><expr> <c-space> coc#refresh()
-endif
+"
+inoremap <silent><expr> <C-;> coc#refresh()
 
-" Use <cr> to confirm completion, `<C-g>u` means break undo chain at current
-" position. Coc only does snippet and additional edit on confirm.
-" <cr> could be remapped by other vim plugin, try `:verbose imap <CR>`.
-if exists('*complete_info')
-  inoremap <expr> <cr> complete_info()["selected"] != "-1" ? "\<C-y>" : "\<C-g>u\<CR>"
-else
-  inoremap <expr> <cr> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
-endif
-
+" To make <cr> select the first completion item and confirm the completion
+" when item has been selected.
+inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm() : "\<C-g>u\<CR>"
 " Use `[g` and `]g` to navigate diagnostics
 " Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
 nmap <silent> [g <Plug>(coc-diagnostic-prev)
@@ -292,8 +286,15 @@ nmap <silent> gy <Plug>(coc-type-definition)
 nmap <silent> gi <Plug>(coc-implementation)
 nmap <silent> gr <Plug>(coc-references)
 
+xmap <leader>a  <Plug>(coc-codeaction-selected)
+nmap <leader>a  <Plug>(coc-codeaction-selected)
+
+" Remap keys for applying codeAction to the current buffer.
+nmap <leader>ac  <Plug>(coc-codeaction)
+" Apply AutoFix to problem on the current line.
+nmap <leader>cf  <Plug>(coc-fix-current)
 " Use K to show documentation in preview window.
-nnoremap <silent> K :call <SID>show_documentation()<CR>
+nnoremap <silent><leader>s :call <SID>show_documentation()<CR>
 
 function! s:show_documentation()
   if (index(['vim','help'], &filetype) >= 0)
@@ -323,13 +324,6 @@ augroup end
 
 " Applying codeAction to the selected region.
 " Example: `<leader>aap` for current paragraph
-xmap <leader>a  <Plug>(coc-codeaction-selected)
-nmap <leader>a  <Plug>(coc-codeaction-selected)
-
-" Remap keys for applying codeAction to the current buffer.
-nmap <leader>ac  <Plug>(coc-codeaction)
-" Apply AutoFix to problem on the current line.
-nmap <leader>qf  <Plug>(coc-fix-current)
 
 " Map function and class text objects
 " NOTE: Requires 'textDocument.documentSymbol' support from the language server.
@@ -341,6 +335,7 @@ xmap ic <Plug>(coc-classobj-i)
 omap ic <Plug>(coc-classobj-i)
 xmap ac <Plug>(coc-classobj-a)
 omap ac <Plug>(coc-classobj-a)
+
 
 " Use CTRL-S for selections ranges.
 " Requires 'textDocument/selectionRange' support of LS, ex: coc-tsserver
@@ -356,22 +351,37 @@ command! -nargs=? Fold :call     CocAction('fold', <f-args>)
 " Add `:OR` command for organize imports of the current buffer.
 command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
 
+
+
+function! StatusDiagnostic() abort
+  let info = get(b:, 'coc_diagnostic_info', {})
+  if empty(info) | return '' | endif
+  let msgs = []
+  if get(info, 'error', 0)
+    call add(msgs, 'E' . info['error'])
+  endif
+  if get(info, 'warning', 0)
+    call add(msgs, 'W' . info['warning'])
+  endif
+  return join(msgs, ' ') . ' ' . get(g:, 'coc_status', '')
+endfunction
+
+
 " Add (Neo)Vim's native statusline support.
 " NOTE: Please see `:h coc-status` for integrations with external plugins that
 " provide custom statusline: lightline.vim, vim-airline.
-set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
-
+set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}%{StatusDiagnostic()}
 " Mappings for CoCList
 " Show all diagnostics.
-nnoremap <silent><nowait> <space>a  :<C-u>CocList diagnostics<cr>
+nnoremap <silent><nowait> <space>d  :<C-u>CocList diagnostics<cr>
 " Manage extensions.
 nnoremap <silent><nowait> <space>e  :<C-u>CocList extensions<cr>
 " Show commands.
 nnoremap <silent><nowait> <space>c  :<C-u>CocList commands<cr>
-" Find symbol of current document.
+" Find symbol of current document.~/.config/nvim/plugins.vim
 nnoremap <silent><nowait> <space>o  :<C-u>CocList outline<cr>
 " Search workspace symbols.
-nnoremap <silent><nowait> <space>s  :<C-u>CocList -I symbols<cr>
+nnoremap <silent><nowait> <space>S  :<C-u>CocList -I symbols<cr>
 " Do default action for next item.
 nnoremap <silent><nowait> <space>j  :<C-u>CocNext<CR>
 " Do default action for previous item.
@@ -383,4 +393,4 @@ nnoremap <silent><nowait> <space>p  :<C-u>CocListResume<CR>
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 set background=dark
-colorscheme minimalist
+colorscheme nord

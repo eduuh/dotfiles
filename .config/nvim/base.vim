@@ -1,90 +1,43 @@
-" Spaces & Tabs {{{
-set tabstop=2     " number of visual spaces per TAB
-set softtabstop=2 " number of spaces in tab when editing
-set expandtab     " turns <TAB's> into spaces.
-set shiftwidth=2
-set autoindent
-set smartindent
-set conceallevel=2
-set mouse=a
-" change directory to the current buffer when opening files.
-" set autochdir
 
-" }}}
-" UI Layout {{{
-" set number
-" set relativenumber
-set shortmess+=I         "hide splash screen 
-set updatetime=100       "Reduce swap-writing update time (better for vim-gutter) 
-" set cursorline    " highlight the current line
-set nocursorline
-set splitright | set splitbelow
-set ruler         " show the cursor position all the time
-set wildmenu  " Show a menu when using Tab completion
-set wildmode=longest,full            " Tab complete longest common string, then each full match.
-set showcmd
-set scrolloff=5 "Show some few more line when using z-enter"
-" }}}
-
-" Neovim Misc {{{
-scriptencoding utf-8
-set encoding=utf-8
-set visualbell    " stop that ANNOYING beeping
-set autowrite     " Automatically :write before running commands
-set autoread      " Reload files changed outside vim
-set autowriteall  " save the buffer content fhe some specific commands are executed"
-if has('unnamedplus')
-  set clipboard=unnamed,unnamedplus
-endif
-
-
-" Searching {{{
-set hlsearch      " Stop highlight after searching
-" set gdefault      " Substitute all matches in a line (i.e. :s///g) by default
-set nohlsearch
-set ignorecase
-set smartcase
-set incsearch  "Highlig the search scheme when typing
-set lbr
-
-
-" Folding {{{
-set wrapmargin=0
-set nofoldenable
-set foldmethod=manual
-" }}}
-set noshowmode
-
-
-" colors  {{{
-syntax on          " enables syntax procesing
-set termguicolors
-set termencoding=utf-8
-
-set backspace=2   " Backspace deletes like most programs in insert mode
-set noswapfile    " http://robots.thoughtbot.com/post/18739402579/global-gitignore#comment-458413287
-
-
-filetype plugin indent on
-"nnoremap <leader>w :write<Enter>
-nnoremap <leader>s :setlocal spell!<cr>
-nnoremap <leader>q :q<cr>
-tmap <leader>q <C-d>
-nnoremap <leader>t :split term://bash<CR>
-
-autocmd BufWritePre markdown %s/\s\+$//e  " automatically remove all trailling whitespaces(allfiles).
-
-"Reference for later usage.
-" autocmd BufWritePost ~/media/data/dm/dwmblocks/config.h !cd ~/.local/src/dwmblocks/; sudo make install && { killall -q dwmblocks;setsid dwmblocks & }
-
-augroup terminal_settings
-autocmd!
-autocmd BufWinEnter,WinEnter term://* startinsert
-autocmd BufLeave term://* stopinsert
-" Ignore various filetypes as those will close terminal automatically
-" Ignore fzf, ranger, coc
-autocmd TermClose term://*
-  \ if (expand('<afile>') !~ "fzf") && (expand('<afile>') !~ "ranger") && (expand('<afile>') !~ "coc") |
-  \   call nvim_input('<CR>')  |
-  \ endif
-augroup END
+"Plug 'prettier/vim-prettier', { 'do': 'npm install' } " JS/TS/CSS/HTML Opinionated code formatter
+" Prettier
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+let g:prettier#autoformat = 0
+autocmd BufWritePre *.js,*.jsx,*.ts,*.tsx,*.json,*.md,*.yaml,*.scss,*.css,*.less PrettierAsync
+" max line length that prettier will wrap on
+" Prettier default: 80
+let g:prettier#config#print_width = 100
+" number of spaces per indentation level
+" Prettier default: 2
+let g:prettier#config#tab_width = 2
+" use tabs over spaces
+" Prettier default: false
+let g:prettier#config#use_tabs = 'false'
+" print semicolons
+" Prettier default: true
+let g:prettier#config#semi = 'true'
+" single quotes over double quotes
+" Prettier default: false
+let g:prettier#config#single_quote = 'true'
+" print spaces between brackets
+" Prettier default: true
+let g:prettier#config#bracket_spacing = 'true'
+" put > on the last line instead of new line
+" Prettier default: false
+let g:prettier#config#jsx_bracket_same_line = 'true'
+" avoid|always
+" Prettier default: avoid
+let g:prettier#config#arrow_parens = 'always'
+" none|es5|all`
+" Prettier default: none
+let g:prettier#config#trailing_comma = 'all'
+" flow|babylon|typescript|css|less|scss|json|graphql|markdown
+" Prettier default: babylon
+let g:prettier#config#parser = 'babylon'
+" cli-override|file-override|prefer-file
+let g:prettier#config#config_precedence = 'prefer-file'
+" always|never|preserve
+let g:prettier#config#prose_wrap = 'preserve'
+" css|strict|ignore
+let g:prettier#config#html_whitespace_sensitivity = 'css'
+"Defx  {{{

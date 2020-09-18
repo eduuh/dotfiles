@@ -1,21 +1,84 @@
-"|  \/  \ \ / / | \ | \ \   / /_ _|  \/  |  _ \ / ___|
-"| |  | | | |   | |\  | \ V /  | || |  | |  _ <| |___
-"|_|  |_| |_|   |_| \_|  \_/  |___|_|  |_|_| \_\\____|
 " Author: @edwinmuraya
-" Vim Plug {{{
-"
-let mapleader=" "
-if empty(glob('~/.config/nvim/autoload/plug.vim'))
-  silent !curl -fLo ~/.config/nvim/autoload/plug.vim --create-dirs
-    \  https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
-endif
-
+" Spaces & Tabs {{{
+set tabstop=2     " number of visual spaces per TAB
+set softtabstop=2 " number of spaces in tab when editing
+set expandtab     " turns <TAB's> into spaces.
+set shiftwidth=2
+set autoindent
+set smartindent
+set conceallevel=2
+set mouse=a
+set linebreak
+" change directory to the current buffer when opening files.
+" set autochdir
 " }}}
+" UI Layout {{{
+" set number
+" set relativenumber
+set updatetime=100       "Reduce swap-writing update time (better for vim-gutter) 
+" set cursorline    " highlight the current line
+set nocursorline
+set splitright | set splitbelow
+set ruler         " show the cursor position all the time
+set wildmenu  " Show a menu when using Tab completion
+set wildmode=longest,full            " Tab complete longest common string, then each full match.
+set showcmd
+set scrolloff=5 "Show some few more line when using z-enter"
+" }}}
+" Neovim Misc {{{
+scriptencoding utf-8
+set encoding=utf-8
+set visualbell    " stop that ANNOYING beeping
+set autowrite     " Automatically :write before running commands
+set autoread      " Reload files changed outside vim
+set autowriteall  " save the buffer content fhe some specific commands are executed"
+if has('unnamedplus')
+  set clipboard=unnamed,unnamedplus
+endif
+" Searching {{{
+set hlsearch      " Stop highlight after searching
+" set gdefault      " Substitute all matches in a line (i.e. :s///g) by default
+set nohlsearch
+set ignorecase
+set smartcase
+set incsearch  "Highlig the search scheme when typing
+" Folding {{{
+set wrapmargin=0
+set nofoldenable
+set foldmethod=manual
+" }}}
+" colors  {{{
+syntax on          " enables syntax procesing
+set backspace=2   " Backspace deletes like most programs in insert mode
+set noswapfile    " http://robots.thoughtbot.com/post/18739402579/global-gitignore#comment-458413287
+filetype plugin indent on
+"nnoremap <leader>w :write<Enter>
+nnoremap <leader>s :setlocal spell! spelllang=en_us<cr>
+"nnoremap <leader>q :q<cr>
+"tmap <leader>q <C-d>
+nnoremap <leader>t :split term://bash<CR>
+autocmd BufWritePre markdown %s/\s\+$//e  " automatically remove all trailling whitespaces(allfiles).
+"Reference for later usage.
+" autocmd BufWritePost ~/media/data/dm/dwmblocks/config.h !cd ~/.local/src/dwmblocks/; sudo make install && { killall -q dwmblocks;setsid dwmblocks & }
+augroup terminal_settings
+autocmd!
+autocmd BufWinEnter,WinEnter term://* startinsert
+autocmd BufLeave term://* stopinsert
+" Ignore various filetypes as those will close terminal automatically
+" Ignore fzf, ranger, coc
+autocmd TermClose term://*
+  \ if (expand('<afile>') !~ "fzf") && (expand('<afile>') !~ "ranger") && (expand('<afile>') !~ "coc") |
+  \   call nvim_input('<CR>')  |
+  \ endif
+augroup END
 
 " -------------------------Load files --------------------------"
-source ~/.config/nvim/base.vim
-source ~/.config/nvim/mappings.vim
+"
 source ~/.config/nvim/plugins.vim
+source ~/.config/nvim/mappings.vim
 
 
+set noshowmode
+set shortmess+=F  " to get rid of the file name displayed in the command line bar
+set shortmess+=I         "hide splash screen 
+ 

@@ -2,7 +2,7 @@
 *.alpha: 1
 
 !! Set a default font and font size as below:
-*.font: monospace:size=13
+*.font: monospace:size=11
 
 /* name		dark	light */
 /* black	0	8 */
@@ -21,7 +21,7 @@ Xft.hintstyle:  hintfull
 
 Xft.antialias: 1
 Xft.rgba: rgb
-/* !! gruvbox: */
+* !! gruvbox: */
 *.color0: #1d2021
 *.color1: #cc241d
 *.color2: #98971a

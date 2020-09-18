@@ -4,3 +4,9 @@
 *.swp
 *.swo
 .sourcemaps
+
+node_modules/
+.git/
+
+bin/
+obj/

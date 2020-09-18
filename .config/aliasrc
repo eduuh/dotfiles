@@ -3,6 +3,7 @@
 # Verbosity and settings that you pretty much just always are going to want.
 alias \
 	cp="cp -iv" \
+  rm="rm -i"  \
 	mv="mv -iv" \
 	rm="rm -vI" \
 	mkd="mkdir -pv" \

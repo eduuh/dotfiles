@@ -8,6 +8,7 @@ HISTFILE=~/.cache/zsh/history
 # }}}
 ##Aliases{{{
 alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+alias repos='cd /media/data/repos/'
 #export ZSH="/home/eduuh/.config/.oh-my-zsh"
 #ZSH_THEME="spaceship" # ys
 #plugins=(docker npm npx)
@@ -18,15 +19,15 @@ alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 #}}}
 # Always work in a tmux session if tmux is installed
 # https://github.com/chrishunt/dot-files/blob/master/.zshrc
-if [ -z "$TMUX" ]
-then
-    tmux attach -t DEV || tmux new -s DEV
-fi
+#if [ -z "$TMUX" ]
+#then
+    #tmux attach -t DEV || tmux new -s DEV
+#fi
 
-function tmuxdettach {
-    tmux  detach
-    tmux new -s TMUX
-}
+#function tmuxdettach {
+    #tmux  detach
+    #tmux new -s TMUX
+#}
 ## Colemak bindings {{{
 bindkey -M vicmd "h" backward-char
 bindkey -M vicmd "n" down-line-or-history
@@ -50,7 +51,6 @@ bindkey -M viins '^R' history-incremental-pattern-search-forward
 bindkey -M viins '^r' history-incremental-pattern-search-backward      
 
 bindkey -s '^f' 'cd "$(dirname "$(fzf)")"\n'
-bindkey -s '^o' 'tmuxdettach\n'
 #}}}
 
 #PAth Detalis {{{
