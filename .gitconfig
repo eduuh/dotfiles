@@ -4,7 +4,6 @@
 [core]
   excludesfile = ~/.gitignore_global
   precomposeunicode = true
-  sparseCheckout = true
 
 [user]
 	email = edwinkamaumuraya0@outlook.com
@@ -29,3 +28,5 @@
 
 [pager]
 	branch = false
+	log = false
+
