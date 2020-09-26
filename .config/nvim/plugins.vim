@@ -9,6 +9,7 @@ endif
 call plug#begin('~/.config/nvim/plugged')
 " Provides asynchronous execution.
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plug 'mhinz/vim-startify'
 Plug 'junegunn/fzf.vim'
 Plug 'junegunn/goyo.vim'
 " nvim ui{{{
@@ -22,6 +23,7 @@ Plug 'kristijanhusak/defx-git' " Git status column for defx
 Plug 'arcticicestudio/nord-vim'
 Plug '907th/vim-auto-save'
 Plug 'preservim/nerdcommenter'
+Plug 'glacambre/firenvim', { 'do': { _ -> firenvim#install(0) } }
 "}}}
 "intergrate fzf with vim {{{ fuzzy finding of files" Layout Look n Feal {{{
 " Plug 'itchyny/lightline.vim' " A light and configurable statusline/tabline plugin for Vim
@@ -335,6 +337,20 @@ xmap ic <Plug>(coc-classobj-i)
 omap ic <Plug>(coc-classobj-i)
 xmap ac <Plug>(coc-classobj-a)
 omap ac <Plug>(coc-classobj-a)
+" {{{{ Startify 
+let g:startify_session_dir = '~/.config/nvim/session'
+let g:startify_session_autoload = 1
+let g:startify_session_delete_buffers = 1
+let g:startify_session_persistence = 1
+let g:startify_enable_special = 0  "Get ride of empty buffer and quit
+let g:startify_lists = [
+          \ { 'type': 'files',     'header': ['   Files']            },
+          \ { 'type': 'dir',       'header': ['   Current Directory '. getcwd()] },
+          \ { 'type': 'sessions',  'header': ['   Sessions']       },
+          \ { 'type': 'bookmarks', 'header': ['   Bookmarks']      },
+          \ ]
+"}}}}
+
 
 
 " Use CTRL-S for selections ranges.

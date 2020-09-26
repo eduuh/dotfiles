@@ -35,6 +35,11 @@ set autowriteall  " save the buffer content fhe some specific commands are execu
 if has('unnamedplus')
   set clipboard=unnamed,unnamedplus
 endif
+
+" tell it to use an undo file
+set undofile
+" set a directory to store the undo history
+set undodir=/home/eduuh/.config/nvim/undo
 " Searching {{{
 set hlsearch      " Stop highlight after searching
 " set gdefault      " Substitute all matches in a line (i.e. :s///g) by default
