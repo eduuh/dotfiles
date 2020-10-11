@@ -54,10 +54,9 @@ I added some colemak keybindings in the (~/.lesskey) in the home directory. **Le
 
 1. In an open terminal I run (lesskey) command manually which in turn compiled my **.lesskey** config to **.less** config files. (both files are checked out)
 
-#### Displays
+#### Install Nvim in One command
 
-![dwm](./dwm.png)
-![zsh](./zsh.png)
-![ncpmpcpp](./ncpm.png)
+
+This command will install this configurations.
 
 

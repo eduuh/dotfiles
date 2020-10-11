@@ -9,6 +9,8 @@ HISTFILE=~/.cache/zsh/history
 ##Aliases{{{
 alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 alias repos='cd /media/data/repos/'
+alias media='cd /media/data'
+
 #export ZSH="/home/eduuh/.config/.oh-my-zsh"
 #ZSH_THEME="spaceship" # ys
 #plugins=(docker npm npx)
