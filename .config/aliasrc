@@ -16,7 +16,11 @@ alias \
 	ls="ls -hN --color=auto --group-directories-first" \
 	grep="grep --color=auto" \
 	diff="diff --color=auto" \
-	ccat="highlight --out-format=ansi"
+	ccat="highlight --out-format=ansi" \
+  dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME' \
+  repos='cd /media/data/repos/' \
+  media='cd /media/data' \
+  blog='cd /media/data/repos/blog'
 
 # These common commands are just too long! Abbreviate them.
 alias \

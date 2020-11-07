@@ -7,9 +7,6 @@ SAVEHIST=10000
 HISTFILE=~/.cache/zsh/history
 # }}}
 ##Aliases{{{
-alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
-alias repos='cd /media/data/repos/'
-alias media='cd /media/data'
 
 #export ZSH="/home/eduuh/.config/.oh-my-zsh"
 #ZSH_THEME="spaceship" # ys
@@ -19,12 +16,12 @@ alias media='cd /media/data'
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/zshnameddirrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/zshnameddirrc"
 #}}}
-# Always work in a tmux session if tmux is installed
-# https://github.com/chrishunt/dot-files/blob/master/.zshrc
-#if [ -z "$TMUX" ]
-#then
-    #tmux attach -t DEV || tmux new -s DEV
-#fi
+ #Always work in a tmux session if tmux is installed
+ #https://github.com/chrishunt/dot-files/blob/master/.zshrc
+if [ -z "$TMUX" ]
+then
+    tmux attach -t DEV || tmux new -s DEV
+fi
 
 #function tmuxdettach {
     #tmux  detach
@@ -56,8 +53,9 @@ bindkey -s '^f' 'cd "$(dirname "$(fzf)")"\n'
 #}}}
 
 #PAth Detalis {{{
+#/home/eduuh/.gem/ruby/2.7.0/bin
 export DENO_INSTALL="/home/edd/.deno"
-export PATH="$DENO_INSTALL/bin:$PATH"
+export PATH="$DENO_INSTALL/bin:/home/eduuh/.gem/ruby/2.7.0/bin:$PATH"
 #}}}
 #
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
