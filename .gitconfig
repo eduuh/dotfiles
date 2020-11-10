@@ -4,6 +4,7 @@
 [core]
   excludesfile = ~/.gitignore_global
   precomposeunicode = true
+	editor = nvim
 
 [user]
 	email = edwinkamaumuraya0@outlook.com
@@ -13,15 +14,6 @@
   ui = auto
 
 [alias]
-  a = add 
-  b = branch
-  co = checkout
-  ci = commit
-  cia = commit -a
-  ciam = commit -a -m
-  d = diff
-  h = help
-  s = status -s
   tre = log --graph --decorate --pretty=oneline --abbrev-commit
   tr = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %Cgreen(%cr) %C(bold blue)<%an>%Creset %s' --abbrev-commit
   l = log --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %Cgreen(%cr) %C(bold blue)<%an>%Creset %s' --decorate --abbrev-commit
@@ -29,4 +21,5 @@
 [pager]
 	branch = false
 	log = false
+  config=false
 
