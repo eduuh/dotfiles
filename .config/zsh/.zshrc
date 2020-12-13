@@ -23,6 +23,11 @@ then
     tmux attach -t DEV || tmux new -s DEV
 fi
 
+mkcd() {
+  mkdir "$1"
+  cd "$1"
+}
+
 #function tmuxdettach {
     #tmux  detach
     #tmux new -s TMUX
@@ -56,6 +61,7 @@ bindkey -s '^f' 'cd "$(dirname "$(fzf)")"\n'
 #/home/eduuh/.gem/ruby/2.7.0/bin
 export DENO_INSTALL="/home/edd/.deno"
 export PATH="$DENO_INSTALL/bin:/home/eduuh/.gem/ruby/2.7.0/bin:$PATH"
+export PATH="$PATH:/home/eduuh/.dotnet/tools"
 #}}}
 #
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
@@ -68,7 +74,7 @@ fi
 
 ## Fzf installation {{{
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --no-ignore-vcs'
+export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --no-ignore-vcs .git'
 export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 export FZF_DEFAULT_OPTS='--height 96% --reverse --preview "cat {}"'
 alias fzfi='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git}" | fzf'

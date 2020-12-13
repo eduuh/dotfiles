@@ -1,9 +1,9 @@
 hash -d h=~/ 
-hash -d d=~/Documents 
-hash -d D=~/Downloads 
-hash -d m=~/Music 
+hash -d d=~/Downloads
+hash -d D=~/Documents 
+hash -d m=/media/data/music
 hash -d pp=~/Pictures 
-hash -d vv=~/Videos 
+hash -d vv=/media/data/music/video
 hash -d cf=${XDG_CONFIG_HOME:-$HOME/.config} 
 hash -d cac=${XDG_CACHE_HOME:-$HOME/.cache} 
 hash -d sc=~/.local/bin 
