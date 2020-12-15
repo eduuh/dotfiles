@@ -16,7 +16,7 @@
  <h1 align="center">Edwin Muraya</h1>
 
 <div align="center">
-  <strong>(Neo)Vim of the Future</strong>
+  <strong>There's no place like $HOME</strong>
 </div>
 <div align="center">
   A powerful, minimalist development environment with cutting-edge features
@@ -38,25 +38,49 @@ My configs tend to change reqularly. I am always tweaking these, Trying to perfe
 
 ### Tools
 
-Includes customizations for the following tools.
+```
 
-1. **zsh** - shell flavored with prezto
-2. **tmux** - session management and shell multiplexing
-3. **Neovim** - text editing
-4. **git** - version control
-5. **less** - pager and file viewer
-6. **Vimium**. Addd the remaps in (.config/vimium) to brave vimium extension.) options tab in Custom key mapping.
-7. **mpd and ncmpcpp** - Music player (client server approach)
+Software = {
+
+    > Distro:         Arch Linux
+
+    > Shell:          ZSH
+
+    > Terminal:       St
+
+    > Window manager: DWM
+
+    > Hotkey manager: DWM
+
+    > Compositor:     picom
+
+    > Status bar:     Dwm Blocks
+
+    > Editor:         neovim
+
+    > Browser:        quteBrowser
+
+    > Image viewer:   imv
+
+    > Pdf viewer:     zathura
+
+    > Video player:   mpv
+
+    > File manager:   ranger / lf
+
+    > Aur helper:     yay
+
+    > Color scheme:   Solarized dark
+
+    > Teminal Sessions: Tmux
+    > Music:            mpd and ncmpcpp
+
+}
+
+```
 
 ##### Less Pager and file viewer (Note)
 
 I added some colemak keybindings in the (~/.lesskey) in the home directory. **Less** uses **lesskey** command/program to change the keybindings.
 
 1. In an open terminal I run (lesskey) command manually which in turn compiled my **.lesskey** config to **.less** config files. (both files are checked out)
-
-#### Install Nvim in One command
-
-
-This command will install this configurations.
-
-

@@ -18,10 +18,10 @@ HISTFILE=~/.cache/zsh/history
 #}}}
  #Always work in a tmux session if tmux is installed
  #https://github.com/chrishunt/dot-files/blob/master/.zshrc
-if [ -z "$TMUX" ]
-then
-    tmux attach -t DEV || tmux new -s DEV
-fi
+#if [ -z "$TMUX" ]
+#then
+    #tmux attach -t DEV || tmux new -s DEV
+#fi
 
 mkcd() {
   mkdir "$1"
