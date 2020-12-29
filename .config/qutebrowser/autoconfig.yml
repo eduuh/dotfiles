@@ -6,14 +6,5 @@
 
 config_version: 2
 settings:
-  bindings.commands:
-    global:
-      normal:
-        ;: 'set-cmd-text :'
-        K: search-prev
-        e: scroll up
-        i: scroll right
-        k: search next
-        l: enter-mode insert
-        n: scroll down
-        set-cmd-text: ':'
+  zoom.default:
+    global: '125'

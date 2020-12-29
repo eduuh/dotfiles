@@ -119,6 +119,9 @@ config.set('content.javascript.enabled', True, 'chrome://*/*')
 # Type: Bool
 config.set('content.javascript.enabled', True, 'qute://*/*')
 
+### DEFAULT fonts
+c.fonts.default_family = '"SauceCodePro Nerd Font"'
+
 # Bindings for normal mode
 config.bind(';', 'set-cmd-text :')
 config.bind('K', 'search-prev')
@@ -129,5 +132,40 @@ config.bind('l', 'enter-mode insert')
 config.bind('n', 'scroll down')
 config.bind('set-cmd-text', ':')
 
-c.url.searchengines = {'DEFAULT': 'https://duckduckgo.com/?q={}', 'am': 'https://www.amazon.com/s?k={}', 'aw': 'https://wiki.archlinux.org/?search={}', 'goog': 'https://www.google.com/search?q={}', 'hoog': 'https://hoogle.haskell.org/?hoogle={}', 're': 'https://www.reddit.com/r/{}', 'ub': 'https://www.urbandictionary.com/define.php?term={}', 'wiki': 'https://en.wikipedia.org/wiki/{}', 'yt': 'https://www.youtube.com/results?search_query={}'}
+config.unbind("O")
+config.unbind("T")
+config.unbind("th")
+config.unbind("tl")
+config.bind("O", "set-cmd-text :open {url:pretty}")
+config.bind("T", "set-cmd-text :open -t {url:pretty}")
+config.bind("t", "set-cmd-text -s :open -t")
+
+c.aliases = {
+    "w": "session-save",
+    "wq": "quit --save",
+    "mpv": "spawn -d mpv --force-window=immediate {url}",
+    "nicehash": "spawn --userscript nicehash",
+    "pass": "spawn -d pass -c",
+}
+# Always restore open sites when qutebrowser is reopened.
+c.auto_save.session = True
+# Validate SSL handshakes.
+# Valid values:
+#   - true
+#   - false
+#   - ask
+c.content.ssl_strict = True
+
+c.url.start_pages = "https://www.bing.com/"
+
+c.url.searchengines = {'DEFAULT': 'https://bing.com/search?q={}', 'aw': 'https://wiki.archlinux.org/?search={}', 'goog': 'https://www.google.com/search?q={}',  're': 'https://www.reddit.com/r/{}',  'wiki': 'https://en.wikipedia.org/wiki/{}', 'yt': 'https://www.youtube.com/results?search_query={}'}
+
+### stylesheets 
+
+config.bind(',ap', 'config-cycle content.user_stylesheets ./solarized-everything-css/css/apprentice/apprentice-all-sites.css ""')
+config.bind(',dr', 'config-cycle content.user_stylesheets ./solarized-everything-css/css/darculized/darculized-all-sites.css ""')
+config.bind(',gr', 'config-cycle content.user_stylesheets ./solarized-everything-css/css/gruvbox/gruvbox-all-sites.css ""')
+config.bind(',sd', 'config-cycle content.user_stylesheets ./solarized-everything-css/css/solarized-dark/solarized-dark-all-sites.css ""')
+config.bind(',sl', 'config-cycle content.user_stylesheets ./solarized-everything-css/css/solarized-light/solarized-light-all-sites.css ""')
+
 
