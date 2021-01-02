@@ -7,11 +7,19 @@ SAVEHIST=10000
 HISTFILE=~/.cache/zsh/history
 # }}}
 ##Aliases{{{
+function expand_alias(){
+       zle _expand_alias
+       zle self-insert
+}
+zle -N expand_alias
+bindkey -M main ' ' expand_alias
 
-#export ZSH="/home/eduuh/.config/.oh-my-zsh"
-#ZSH_THEME="spaceship" # ys
-#plugins=(docker npm npx)
-# Load aliases and shortcuts if existent.
+export ZSH="/home/eduuh/.oh-my-zsh"
+
+plugins=(
+  git
+)
+#ZSH_THEME="robbyrussell"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/zshnameddirrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/zshnameddirrc"
@@ -74,9 +82,6 @@ fi
 
 ## Fzf installation {{{
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --no-ignore-vcs .git'
-export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
-export FZF_DEFAULT_OPTS='--height 96% --reverse --preview "cat {}"'
 alias fzfi='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git}" | fzf'
 alias vifi='nvim $(fzfi)'
 

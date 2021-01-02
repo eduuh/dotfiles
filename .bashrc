@@ -32,3 +32,4 @@ fi
 
 eval "$(starship init bash)"
 
+alias bd=". bd -si"

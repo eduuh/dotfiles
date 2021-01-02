@@ -3,13 +3,17 @@
 # Verbosity and settings that you pretty much just always are going to want.
 alias \
 	cp="cp -iv" \
-  rm="rm -i"  \
+    rm="rm -i"  \
 	mv="mv -iv" \
 	rm="rm -vI" \
 	mkd="mkdir -pv" \
 	yt="youtube-dl --add-metadata -i" \
 	yta="yt -x -f bestaudio/best" \
-	ffmpeg="ffmpeg -hide_banner"
+	ffmpeg="ffmpeg -hide_banner"  \
+	bd=". bd -si" \
+
+
+
 
 # Colorize commands when possible.
 alias \
@@ -17,10 +21,13 @@ alias \
 	grep="grep --color=auto" \
 	diff="diff --color=auto" \
 	ccat="highlight --out-format=ansi" \
-  dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME' \
-  repos='cd /media/data/repos/' \
-  media='cd /media/data' \
-  blog='cd /media/data/repos/blog'
+	dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME' \
+	repos='cd /media/data/repos/' \
+	media='cd /media/data' \
+	blog='cd /media/data/repos/blog' \
+	js="cd proglearning/languages/javascript" \
+	al="nvim ~/.config/aliasrc"
+    books="cd /media/data/books/"
 
 # These common commands are just too long! Abbreviate them.
 alias \
@@ -36,8 +43,23 @@ alias \
 	xi="sudo xbps-install" \
 	xr="sudo xbps-remove -R" \
 	xq="xbps-query" \
-	z="zathura"
 
 alias \
-	ref="shortcuts >/dev/null; source ${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc ; source ${XDG_CONFIG_HOME:-$HOME/.config}"/
-	weath="less -S ${XDG_DATA_HOME:-$HOME/.local/share}/weatherreport" 
+	tns="tmux new -s " \
+
+
+alias \
+    gtre="git log --graph --decorate --pretty=oneline --abbrev-commit" \
+	gtr="git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %Cgreen(%cr) %C(bold blue)<%an>%Creset %s' --abbrev-commit" \
+	ghist="git log --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %Cgreen(%cr) %C(bold blue)<%an>%Creset %s' --decorate --abbrev-commit" \
+	ga="git status --short | peco | awk '{print $2}' | xargs git add" \
+    gdf="git log | peco | awk '{print $2}' | xargs -I {} git diff {}^ {}" \
+	glog="git log --graph --name-status --pretty=format:\"%C(red)%h %C(reset)(%cd) %C(green)%an %Creset%s %C(yellow)%d%Creset\" --date=relative" \
+	gopen="!hub browse" \
+    gbm="git branch --merged" \
+    gbn="git branch --no-merged" \
+
+
+
+
+
