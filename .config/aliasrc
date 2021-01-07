@@ -26,9 +26,9 @@ alias \
 	media='cd /media/data' \
 	blog='cd /media/data/repos/blog' \
 	js="cd proglearning/languages/javascript" \
-	al="nvim ~/.config/aliasrc"
-    books="cd /media/data/books/"
-
+	al="nvim ~/.config/aliasrc" \
+    books="cd /media/data/books/"  \
+    cdotnet="curl -X GET "http://localhost:5000/WeatherForecast" -H  "accept: text/plain""
 # These common commands are just too long! Abbreviate them.
 alias \
 	ka="killall" \

@@ -82,6 +82,8 @@ fi
 
 ## Fzf installation {{{
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+export FZF_DEFAULT_COMMAND='fd --type f --follow --exclude .git'
+
 alias fzfi='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git}" | fzf'
 alias vifi='nvim $(fzfi)'
 

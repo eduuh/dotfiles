@@ -97,11 +97,3 @@ source $ZSH/oh-my-zsh.sh
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
-fpath=($fpath "/home/eduuh/.zfunctions")
-
-  # Set Spaceship ZSH as a prompt
-  autoload -U promptinit; promptinit
-  prompt spaceship
-source /home/eduuh/.config/zsh/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh
-source /home/eduuh/.config/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
-source /home/eduuh/.zsh/history.zsh
