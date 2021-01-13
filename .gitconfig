@@ -2,9 +2,11 @@
   path = ~/.gitconfig-local
 
 [core]
-  excludesfile = ~/.gitignore_global
-  precomposeunicode = true
+  excludesfile = ~/.gitignore
   editor = nvim
+
+[push]
+  default= simple
 
 [user]
 	email = edwinkamaumuraya0@outlook.com
@@ -12,14 +14,18 @@
 
 [color]
   ui = auto
-
-[alias]
-  tre = log --graph --decorate --pretty=oneline --abbrev-commit
-  tr = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %Cgreen(%cr) %C(bold blue)<%an>%Creset %s' --abbrev-commit
-  l = log --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %Cgreen(%cr) %C(bold blue)<%an>%Creset %s' --decorate --abbrev-commit
+  diff=auto
+  branch=auto
+  interactive=auto
+  grep=auto
 
 [pager]
 	branch = false
 	log = false
   config=false
 
+[diff]
+  tool=nvimdiff
+[difftool "nvimdiff"]
+   cmd = nvim -d \"$LOCAL\" \"$REMOTE\"
+   path = 

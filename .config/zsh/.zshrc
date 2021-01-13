@@ -5,14 +5,15 @@ stty stop undef		# Disable ctrl-s to freeze terminal.
 HISTSIZE=10000
 SAVEHIST=10000
 HISTFILE=~/.cache/zsh/history
-# }}}
+
+#bindkey '^H' backward-kill-word
 ##Aliases{{{
 function expand_alias(){
        zle _expand_alias
        zle self-insert
 }
 zle -N expand_alias
-bindkey -M main ' ' expand_alias
+bindkey -M main . expand_alias
 
 export ZSH="/home/eduuh/.oh-my-zsh"
 
@@ -23,6 +24,7 @@ plugins=(
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/shortcutrc"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/aliasrc"
 [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/zshnameddirrc" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/zshnameddirrc"
+
 #}}}
  #Always work in a tmux session if tmux is installed
  #https://github.com/chrishunt/dot-files/blob/master/.zshrc
@@ -82,7 +84,7 @@ fi
 
 ## Fzf installation {{{
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git,obj,bin}"'
+export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git,obj,bin}"| '
 
 alias fzfi='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git}" | fzf'
 alias vifi='nvim $(fzfi)'
@@ -152,5 +154,7 @@ echo -ne '\e[5 q' # Use beam shape cursor on startup.
 preexec() { echo -ne '\e[5 q' ;} # Use beam shape cursor for each new prompt.
 #}}}
 
-source $HOME/.zsh/history.zsh
+alias kubectl='microk8s.kubectl'
 source $HOME/.config/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
+source /home/eduuh/.zsh/history.zsh
+
