@@ -67,6 +67,13 @@ bindkey -M viins '^r' history-incremental-pattern-search-backward
 bindkey -s '^f' 'cd "$(dirname "$(fzf)")"\n'
 #}}}
 
+vi-append-x-selection () { RBUFFER=$(xsel -o -p </dev/null)$RBUFFER; }
+zle -N vi-append-x-selection
+bindkey -a 'y' vi-append-x-selection
+vi-yank-x-selection () { print -rn -- $CUTBUFFER | xsel -i -p; }
+zle -N vi-yank-x-selection
+bindkey -a 'p' vi-yank-x-selection
+
 #PAth Detalis {{{
 #/home/eduuh/.gem/ruby/2.7.0/bin
 export DENO_INSTALL="/home/edd/.deno"
@@ -84,7 +91,7 @@ fi
 
 ## Fzf installation {{{
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git,obj,bin}"| '
+export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git,obj,bin}"'
 
 alias fzfi='rg --files --hidden --follow --no-ignore-vcs -g "!{node_modules,.git}" | fzf'
 alias vifi='nvim $(fzfi)'
