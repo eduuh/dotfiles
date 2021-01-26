@@ -138,7 +138,7 @@ _comp_options+=(globdots)		# Include hidden files.
 # Load syntax highlighting; should be last.
 source /usr/share/zsh/plugins/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh 2>/dev/null
 
-eval "$(starship init zsh)"
+#eval "$(starship init zsh)"
 # Change Cursor Shape for Diffrent vi Modes{{{
 function zle-keymap-select {
   if [[ ${KEYMAP} == vicmd ]] ||
@@ -165,3 +165,30 @@ alias kubectl='microk8s.kubectl'
 source $HOME/.config/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /home/eduuh/.zsh/history.zsh
 
+## custom
+PROMPT='%(?.%F{green}√.%F{red}?%?)%f %B%F{240}%1~%f%b %# '
+#RPROMPT='%*'
+
+function tn() (
+    if [ -n "$1" ]
+      then
+         tmux switch -t $1
+      else
+         echo "no session name"
+     fi
+  )
+
+
+function solo {
+  unset GIT_COMMITTER_NAME
+  unset GIT_COMMITTER_EMAIL
+}
+
+function pair_with_ {
+  export GIT_COMMITTER_NAME=$1
+  export GIT_COMMITTER_EMAIL=$2
+}
+
+function pair_with_hum {
+    pair_with_ "Humphryshikunzi" "humphry.shikunzi@outlook.com"
+}
