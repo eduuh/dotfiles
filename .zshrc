@@ -1,19 +1,46 @@
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
-
-# Path to your oh-my-zsh installation.
 export ZSH="/home/eduuh/.oh-my-zsh"
-
-# Set name of the theme to load --- if set to "random", it will
-# load a random theme each time oh-my-zsh is loaded, in which case,
-# to know which specific one was loaded, run: echo $RANDOM_THEME
-# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
 ZSH_THEME="robbyrussell"
 
-# Set list of themes to pick from when loading at random
-# Setting this variable when ZSH_THEME=random will cause zsh to load
-# a theme from this variable instead of looking in $ZSH/themes/
-# If set to an empty array, this variable will have no effect.
+bindkey -M vicmd "h" backward-char
+bindkey -M vicmd "n" down-line-or-history
+bindkey -M vicmd "e" up-line-or-history
+bindkey -M vicmd "i" forward-char
+bindkey -M vicmd "s" vi-insert
+bindkey -M vicmd "S" vi-insert-bol
+bindkey -M vicmd "k" vi-repeat-search
+bindkey -M vicmd "K" vi-rev-repeat-search
+bindkey -M vicmd "l" beginning-of-line
+bindkey -M vicmd "L" end-of-line
+bindkey -M vicmd "j" vi-forward-word-end
+bindkey -M vicmd "J" vi-forward-blank-word-end
+# Sane Undo, Redo, Backspace, Delete.
+bindkey -M vicmd "u" undo
+bindkey -M vicmd "U" redo
+bindkey -M vicmd "^?" backward-delete-char
+bindkey -M vicmd "^[[3~" delete-char
+# Keep ctrl+r searching
+bindkey -M viins '^R' history-incremental-pattern-search-forward
+bindkey -M viins '^r' history-incremental-pattern-search-backward      
+
+bindkey -s '^f' 'cd "$(dirname "$(fzf)")"\n'
+#}}}
+
+vi-append-x-selection () { RBUFFER=$(xsel -o -p </dev/null)$RBUFFER; }
+zle -N vi-append-x-selection
+bindkey -a 'y' vi-append-x-selection
+vi-yank-x-selection () { print -rn -- $CUTBUFFER | xsel -i -p; }
+zle -N vi-yank-x-selection
+bindkey -a 'p' vi-yank-x-selection
+
+
+#bindkey '^H' backward-kill-word
+##Aliases{{{
+function expand_alias(){
+       zle _expand_alias
+       zle self-insert
+}
+zle -N expand_alias
+bindkey -M main . expand_alias
 # ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
 
 # Uncomment the following line to use case-sensitive completion.
@@ -45,6 +72,8 @@ ZSH_THEME="robbyrussell"
 # ENABLE_CORRECTION="true"
 
 # Uncomment the following line to display red dots whilst waiting for completion.
+# Caution: this setting can cause issues with multiline prompts (zsh 5.7.1 and newer seem to work)
+# See https://github.com/ohmyzsh/ohmyzsh/issues/5765
 # COMPLETION_WAITING_DOTS="true"
 
 # Uncomment the following line if you want to disable marking untracked files
@@ -72,28 +101,4 @@ plugins=(git)
 
 source $ZSH/oh-my-zsh.sh
 
-# User configuration
 
-# export MANPATH="/usr/local/man:$MANPATH"
-
-# You may need to manually set your language environment
-# export LANG=en_US.UTF-8
-
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
-
-# Compilation flags
-# export ARCHFLAGS="-arch x86_64"
-
-# Set personal aliases, overriding those provided by oh-my-zsh libs,
-# plugins, and themes. Aliases can be placed here, though oh-my-zsh
-# users are encouraged to define aliases within the ZSH_CUSTOM folder.
-# For a full list of active aliases, run `alias`.
-#
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"

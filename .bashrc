@@ -19,6 +19,7 @@ set -o vi
 export DENO_INSTALL="/home/edd/.deno"
 export PATH="$DENO_INSTALL/bin:/home/eduuh/.gem/ruby/2.7.0/bin:$PATH"
 export PATH="$PATH:/home/eduuh/.dotnet/tools"
+export PATH="$PATH:/home/eduuh/.local/bin"
 #}}}
 
 #
@@ -33,3 +34,6 @@ fi
 eval "$(starship init bash)"
 
 alias bd=". bd -si"
+export MESA_LOADER_DRIVER_OVERRIDE=i965
+
+
