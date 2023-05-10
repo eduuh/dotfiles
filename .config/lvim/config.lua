@@ -14,10 +14,9 @@ lvim.leader = "space"
 -- add your own keymapping
 lvim.keys.normal_mode["<C-s>"] = ":w<cr>"
 
-lvim.builtin.which_key.mappings["W"] = { "<cmd>noautocmd w<cr>", "Save without formatting" }
 lvim.builtin.which_key.mappings["f"] = {
   function()
-    require("lvim.core.telescope.custom-finders").find_project_files { previewer = false }
+    require("lvim.core.telescope.custom-finders").find_project_files { previewer = true }
   end,
   "Find File",
 }
@@ -42,7 +41,7 @@ lvim.builtin.telescope.defaults.file_ignore_patterns = {
 
 lvim.builtin.telescope.pickers.find_files = {
   hidden = false,
-  path_display = "absolute"
+  path_display = { "abslute" }
 }
 
 -- -- Change theme settings
@@ -54,5 +53,16 @@ lvim.builtin.terminal.active = true
 lvim.builtin.nvimtree.setup.view.side = "left"
 lvim.builtin.nvimtree.setup.renderer.icons.show.git = false
 
--- Automatically install missing parsers when entering buffer
+--
 lvim.builtin.treesitter.auto_install = true
+
+-- Disables the project mode: will be using folder mode.
+lvim.builtin.project.active = false
+lvim.builtin.lir.active = false
+
+-- terminal
+lvim.builtin["terminal"].execs = {
+  { nil, "<leader>ta", "Horizontal Terminal", "horizontal", 0.3 },
+  { nil, "<leader>tb", "Vertical Terminal",   "vertical",   0.4 },
+  { nil, "<leader>tc", "Float Terminal",      "float",      nil },
+}
