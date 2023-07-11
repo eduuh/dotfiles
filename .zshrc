@@ -22,6 +22,8 @@ fi
 
 ## Set up aliases
 alias dotfiles='git --git-dir="$HOME/.harmonize" --work-tree="$HOME"'
+# run this command
+# config config --local status.showUntrackedFiles no
 
 # vi mode
 bindkey -v
