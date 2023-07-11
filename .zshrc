@@ -10,7 +10,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   export ZSH="$HOME/.oh-my-zsh"
 
   # Add wisely, as too many plugins slow down shell startup.
-  plugins=(git zsh-autosuggestions zsh-syntax-highlighting web-search)
+  plugins=(git)
 
   source $ZSH/oh-my-zsh.sh
 
@@ -21,7 +21,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 ## Set up aliases
-alias dotfiles='git --git-dir="$HOME/.harmonize" --work-tree="$HOME"'
+alias config='git --git-dir="$HOME/.cfg" --work-tree="$HOME"'
 # run this command
 # config config --local status.showUntrackedFiles no
 
