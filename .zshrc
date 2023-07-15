@@ -1,5 +1,3 @@
-## Set up aliases
-alias config='git --git-dir="$HOME/.cfg" --work-tree="$HOME"'
 # run this command
 # config config --local status.showUntrackedFiles no
 bindkey -v
