@@ -6,3 +6,5 @@
 [user]
 	name = eduuh
 	email = edwinkamaumuraya0@outlook.com
+[core]
+	editor = nvim

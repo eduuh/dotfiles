@@ -9,7 +9,8 @@ bindkey -M menuselect 'k' vi-up-line-or-history
 bindkey -M menuselect 'j' vi-down-line-or-history
 bindkey -M menuselect 'l' vi-forward-char
 
-
+## Environment variables
+export GIT_EDITOR=nvim
 export PATH=$PATH:~/.bin
 export PATH=/Users/edwinmuraya/.local/bin:$PATH
 
