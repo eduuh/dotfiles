@@ -1,0 +1,4 @@
+[submodule "/Users/edwinmuraya/.config/nvim"]
+	path = ~/.config/nvim
+	url = https://github.com/eduuh/NvChad
+	branch = eduuh/config
