@@ -1,0 +1,10 @@
+## Edit Date 2023-07-15
+
+- [Github Link](https://github.com/rest-nvim/rest.nvim)
+- Dependecies: jq, curl, tidy (format html output)
+
+## To run rest.nvim you should map the following commands:
+
+<Plug>RestNvim, run the request under the cursor
+<Plug>RestNvimPreview, preview the request cURL command
+<Plug>RestNvimLast, re-run the last request
