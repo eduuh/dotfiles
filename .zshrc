@@ -9,8 +9,6 @@ bindkey -M menuselect 'l' vi-forward-char
 
 ## Environment variables
 export GIT_EDITOR=nvim
-export PATH=$PATH:~/.bin
-export PATH=/Users/edwinmuraya/.local/bin:$PATH
 
 _not_inside_tmux() { [[ -z "$TMUX" ]] }
 
