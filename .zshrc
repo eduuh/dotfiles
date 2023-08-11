@@ -8,7 +8,12 @@ bindkey -M menuselect 'j' vi-down-line-or-history
 bindkey -M menuselect 'l' vi-forward-char
 
 ## Environment variables
+alias config='/usr/bin/git --git-dir=$HOME/.cfg/.git --work-tree=$HOME'
 export GIT_EDITOR=nvim
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
 
 _not_inside_tmux() { [[ -z "$TMUX" ]] }
 
@@ -19,8 +24,8 @@ ensure_tmux_is_running() {
 }
 
 ensure_tmux_is_running
-
-eval "$(starship init zsh)"
-
 # Reference
 # https://thevaluable.dev/zsh-completion-guide-examples/
+#
+
+eval "$(starship init zsh)"
