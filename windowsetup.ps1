@@ -1,7 +1,7 @@
 #set up the bare repository on windows
 #checkout the repository
-git clone --bare https://github.com/eduuh/windows.dotfiles "$HOME/.dotfiles"
-dotfiles config --local status.showUntrackedFiles no
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUse
+irm get.scoop.sh | iex
 
 scoop install neovim
 scoop bucket add main
@@ -17,6 +17,7 @@ pip install pynvim
 scoop install fd
 scoop install Cascadia-Code
 scoop install nodejs
+scoop install starship
 
 # Lsp configurations setup
 npm install --global prettier-eslint-cli
@@ -25,8 +26,4 @@ npm install -g typescript typescript-language-server
 npm i -g vscode-langservers-extracted
 npm install --save-dev prettier prettier-plugin-solidity
 
-
-rm -r C:\Users\edwinmuraya\AppData\Local\
-cp -r .config\nvim  C:\Users\edwinmuraya\AppData\Local\
-
-# refer here https://github.com/ChristianChiarulli/nvim/blob/master/lua/user/lsp/settings/tsserver.lua
+git clone --force https://github.com/eduuh/Nvim_config C:\Users\edwinmuraya\AppData\Local\.config\nvim
