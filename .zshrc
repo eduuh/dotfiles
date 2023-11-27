@@ -7,6 +7,7 @@ bindkey -M menuselect 'k' vi-up-line-or-history
 bindkey -M menuselect 'j' vi-down-line-or-history
 bindkey -M menuselect 'l' vi-forward-char
 
+export PATH=”$HOME/.emacs.d/bin:$HOME/.bin:$PATH”
 ## Environment variables
 export GIT_EDITOR=nvim
 
@@ -19,6 +20,8 @@ ensure_tmux_is_running() {
 }
 
 ensure_tmux_is_running
+
+alias nav='cd "$(find . -type d | fzf)"'
 
 eval "$(starship init zsh)"
 
