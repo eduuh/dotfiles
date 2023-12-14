@@ -23,7 +23,17 @@ ensure_tmux_is_running
 
 alias nav='cd "$(find . -type d | fzf)"'
 
-eval "$(starship init zsh)"
+#eval "$(starship init zsh)"
 
-# Reference
-# https://thevaluable.dev/zsh-completion-guide-examples/
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+#plugins=(git)
+
+source $ZSH/oh-my-zsh.sh
+unset NODE_OPTIONS
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+nvm use 18
