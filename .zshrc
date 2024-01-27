@@ -22,12 +22,13 @@ ensure_tmux_is_running() {
 ensure_tmux_is_running
 
 alias nav='cd "$(find . -type d | fzf)"'
+alias gdel='git branch | grep -v "main" | xargs git branch -D'
 
 #eval "$(starship init zsh)"
 
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="robbyrussell"
-#plugins=(git)
+plugins=() # git
 
 source $ZSH/oh-my-zsh.sh
 unset NODE_OPTIONS
@@ -36,4 +37,10 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-nvm use 18
+# Generated for envman. Do not edit.
+[ -s "$HOME/.config/envman/load.sh" ] && source "$HOME/.config/envman/load.sh"
+
+export PATH="${PATH}:/Users/edwinmurayawork/.azureauth/0.8.4"
+
+
+unset NODE_OPTIONS
