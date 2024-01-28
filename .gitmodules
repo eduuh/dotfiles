@@ -5,3 +5,9 @@
 [submodule ".config/nvim"]
 	path = .config/nvim
 	url = git@github.com:eduuh/NvChad.git
+[submodule "/Users/edwinmurayawork/.config/nvim"]
+	path = /Users/edwinmurayawork/.config/nvim
+	url = https://github.com/eduuh/Nvchad.git
+[submodule "/Users/edwinmurayawork/projects/byte_safari"]
+	path = /Users/edwinmurayawork/projects/byte_safari
+	url = git@github.com:eduuh/byte_safari.git
