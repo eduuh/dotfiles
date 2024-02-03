@@ -26,10 +26,6 @@ alias gdel='git branch | grep -v "main" | xargs git branch -D'
 
 #eval "$(starship init zsh)"
 
-export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="robbyrussell"
-plugins=() # git
-
 source $ZSH/oh-my-zsh.sh
 unset NODE_OPTIONS
 
@@ -42,5 +38,8 @@ export NVM_DIR="$HOME/.nvm"
 
 export PATH="${PATH}:/Users/edwinmurayawork/.azureauth/0.8.4"
 
-
 unset NODE_OPTIONS
+
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=() # git
