@@ -37,6 +37,7 @@ softwares=(
   node
   deno
   bun
+  hugo
 )
 
 
@@ -66,10 +67,3 @@ for font in "${fonts_list[@]}"
 do
   brew install --cask "$font"
 done
-
-
-git config --local status.showUntrackedFiles no
-git config --global core.editor "nvim"
-git config oh-my-zsh.hide-info 1 --global
-
-git clone --force https://github.com/eduuh/Nvim_config ~/.config/nvim
