@@ -71,3 +71,5 @@ done
 git config --local status.showUntrackedFiles no
 git config --global core.editor "nvim"
 git config oh-my-zsh.hide-info 1 --global
+
+git clone --force https://github.com/eduuh/Nvim_config ~/.config/nvim

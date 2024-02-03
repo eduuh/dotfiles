@@ -19,7 +19,7 @@ scoop install Cascadia-Code
 scoop install nodejs
 scoop install starship
 
-# Lsp configurations setup
+# Lsp configurations helix setup
 npm install --global prettier-eslint-cli
 npm install --global  @typescript-eslint/eslint-plugin
 npm install -g typescript typescript-language-server
