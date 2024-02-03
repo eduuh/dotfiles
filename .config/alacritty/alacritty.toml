@@ -28,7 +28,7 @@ background = "#1e2127"
 foreground = "#D8DEE9"
 
 [font]
-size = 18.0
+size = 17.0
 normal.family = "Agave Nerd Font"
 
 [font.offset]
