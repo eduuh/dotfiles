@@ -37,6 +37,8 @@ export NVM_DIR="$HOME/.nvm"
 
 export PATH="${PATH}:/Users/edwinmurayawork/.azureauth/0.8.4"
 
+export PATH="${PATH}:~/projects/byte_safari/tools/bash/"
+
 unset NODE_OPTIONS
 
 export ZSH="$HOME/.oh-my-zsh"

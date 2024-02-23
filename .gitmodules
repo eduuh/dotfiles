@@ -11,3 +11,6 @@
 [submodule "/Users/edwinmurayawork/projects/byte_safari"]
 	path = /Users/edwinmurayawork/projects/byte_safari
 	url = git@github.com:eduuh/byte_safari.git
+[submodule "/Users/edwinmuraya/projects/neorg"]
+	path = /Users/edwinmuraya/projects/neorg
+	url = git@github.com:nvim-neorg/neorg.git
