@@ -24,8 +24,6 @@ ensure_tmux_is_running
 alias nav='cd "$(find . -type d | fzf)"'
 alias gdel='git branch | grep -v "main" | xargs git branch -D'
 
-#eval "$(starship init zsh)"
-
 unset NODE_OPTIONS
 
 export NVM_DIR="$HOME/.nvm"
@@ -58,7 +56,9 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-setopt PROMPT_SUBST
-# PROMPT='%F{green}%f %F{blue}%~%f %F{red}%f$ '
-# PROMPT='%F{green}%f %F{blue}%1~%f %F{red}%f$ '
-PROMPT='%F{blue}%1~$ '
+# setopt PROMPT_SUBST
+# # PROMPT='%F{green}%f %F{blue}%~%f %F{red}%f$ '
+# # PROMPT='%F{green}%f %F{blue}%1~%f %F{red}%f$ '
+# PROMPT='%F{blue}%1~$ '
+
+eval "$(starship init zsh)"

@@ -1,0 +1,11 @@
+[package]
+disabled = true
+
+[git_branch]
+disabled = true
+
+[nodejs]
+disabled = true
+
+[golang]
+disabled = true
