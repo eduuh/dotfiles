@@ -91,4 +91,17 @@ ensure_tmux_is_running
 
 export PATH="$PATH:/home/eduuh/.dotnet/tools"
 
+export BUN_INSTALL="/home/eduuh/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
 eval "$(starship init zsh)"
+
+# bun completions
+[ -s "/home/eduuh/.bun/_bun" ] && source "/home/eduuh/.bun/_bun"
+
+export DENO_INSTALL="/home/eduuh/.deno"
+export PATH="$DENO_INSTALL/bin:$PATH"
+export NVM_DIR="$HOME/.config/nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
