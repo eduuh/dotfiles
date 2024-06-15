@@ -19,11 +19,4 @@ scoop install Cascadia-Code
 scoop install nodejs
 scoop install starship
 
-# Lsp configurations helix setup
-npm install --global prettier-eslint-cli
-npm install --global  @typescript-eslint/eslint-plugin
-npm install -g typescript typescript-language-server
-npm i -g vscode-langservers-extracted
-npm install --save-dev prettier prettier-plugin-solidity
-
-git clone --force https://github.com/eduuh/Nvim_config C:\Users\edwinmuraya\AppData\Local\.config\nvim
+git clone --force https://github.com/eduuh/nvim C:\Users\edwinmuraya\AppData\Local\.config\nvim
