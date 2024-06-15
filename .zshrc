@@ -39,12 +39,6 @@ export PATH="${PATH}:~/projects/byte_safari/tools/bash/"
 
 unset NODE_OPTIONS
 
-# export ZSH="$HOME/.oh-my-zsh"
-# ZSH_THEME="robbyrussell"
-# plugins=()
-#
-# source $ZSH/oh-my-zsh.sh
-# bun completions
 
 [ -s "/Users/edwinmuraya/.bun/_bun" ] && source "/Users/edwinmuraya/.bun/_bun"
 
@@ -56,9 +50,5 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-# setopt PROMPT_SUBST
-# # PROMPT='%F{green}%f %F{blue}%~%f %F{red}%f$ '
-# # PROMPT='%F{green}%f %F{blue}%1~%f %F{red}%f$ '
-# PROMPT='%F{blue}%1~$ '
 
 eval "$(starship init zsh)"
