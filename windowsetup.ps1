@@ -1,29 +1,69 @@
-#set up the bare repository on windows
-#checkout the repository
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUse
-irm get.scoop.sh | iex
+# Set the script execution policy for the current user
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
 
-scoop install neovim
-scoop bucket add main
-scoop install ripgrep
-scoop install fzf
-scoop bucket add nerd-fonts
-scoop install FiraCode-NF
+# Install Scoop (a command-line installer for Windows)
+Write-Host "Installing Scoop..."
+if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+    irm get.scoop.sh | iex
+} else {
+    Write-Host "Scoop is already installed."
+}
 
-scoop install gcc
-scoop bucket add versions
-scoop install python310
-pip install pynvim
-scoop install fd
-scoop install Cascadia-Code
-scoop install nodejs
-scoop install starship
+# Function to install Scoop apps if not already installed
+function Install-ScoopApp {
+    param (
+        [string]$appName,
+        [string]$bucket = $null
+    )
+    if ($bucket) {
+        scoop bucket add $bucket -ErrorAction SilentlyContinue
+    }
+    if (-not (scoop which $appName)) {
+        Write-Host "Installing $appName..."
+        scoop install $appName
+    } else {
+        Write-Host "$appName is already installed."
+    }
+}
 
-# Lsp configurations helix setup
-npm install --global prettier-eslint-cli
-npm install --global  @typescript-eslint/eslint-plugin
-npm install -g typescript typescript-language-server
-npm i -g vscode-langservers-extracted
-npm install --save-dev prettier prettier-plugin-solidity
+# Install essential tools and configurations
+Install-ScoopApp -appName "neovim"
+Install-ScoopApp -appName "ripgrep"
+Install-ScoopApp -appName "fzf"
+Install-ScoopApp -appName "gcc"
+Install-ScoopApp -appName "fd"
+Install-ScoopApp -appName "Cascadia-Code"
+Install-ScoopApp -appName "nodejs"
+Install-ScoopApp -appName "starship"
 
-git clone --force https://github.com/eduuh/Nvim_config C:\Users\edwinmuraya\AppData\Local\.config\nvim
+# Install specific tools from other Scoop buckets
+Install-ScoopApp -appName "FiraCode-NF" -bucket "nerd-fonts"
+Install-ScoopApp -appName "python310" -bucket "versions"
+
+# Install Python package for Neovim
+Write-Host "Installing pynvim..."
+python.exe -m pip install --upgrade pip
+pip install pynvim --user
+
+# Install global npm packages for LSP configurations
+Write-Host "Installing global npm packages..."
+$npmPackages = @(
+    "prettier-eslint-cli",
+    "@typescript-eslint/eslint-plugin",
+    "typescript",
+    "typescript-language-server",
+    "vscode-langservers-extracted",
+    "prettier",
+    "prettier-plugin-solidity"
+)
+
+foreach ($package in $npmPackages) {
+    if (-not (npm list -g --depth=0 | Select-String -Pattern $package)) {
+        Write-Host "Installing $package..."
+        npm install --global $package
+    } else {
+        Write-Host "$package is already installed."
+    }
+}
+
+Write-Host "Setup completed successfully!"
