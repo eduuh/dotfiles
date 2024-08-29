@@ -1,7 +1,9 @@
+[credential]
+	helper = /mnt/c/Program\\ Files/Git/mingw64/bin/git-credential-manager.exe
+[credential "https://dev.azure.com"]
+	useHttpPath = true
+[http]
+	postBuffer = 524288000
 [user]
-	email = eduuh.muraya@outlook.com
-	name =  eduuh
-[init]
-	defaultBranch = main
-[core]
-	editor = nvim
+	name = eduuh
+	email = 31909722+eduuh@users.noreply.github.com

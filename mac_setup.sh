@@ -63,9 +63,14 @@ brew tap homebrew/cask-fonts
 for font in "${fonts_list[@]}"; do
   brew install --cask "$font"
 done
-ssh-keygen -t ed25519 -C "eduuh.muraya@outlook.com"
-eval "$(ssh-agent -s)"
-gh auth login
 
-gh auth refresh -h github.com -s admin:public_key
-gh ssh-key add ~/.ssh/id_ed25519.pub
+brew install pyenv
+python3 -m venv ~/.local/state/python3
+source ~/.local/state/python3/bin/activate
+pip install --upgrade pip
+pip install pynvim
+pip install requests
+
+
+brew tap julien-cpsn/atac
+brew install atac
