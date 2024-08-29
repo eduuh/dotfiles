@@ -1,6 +1,8 @@
 #!/bin/bash
 
+sudo apt-get update -y
 sudo apt-get install gh -y
+sudo apt-get install zsh -y
 # Generate SSH key if it doesn't exist
 if [ ! -f ~/.ssh/id_rsa ]; then
     ssh-keygen -t rsa -b 4096 -C "31909722+eduuh@users.noreply.github.com" -N "" -f ~/.ssh/id_rsa
