@@ -39,6 +39,8 @@ softwares=(
   bun
   hugo
   lazygit
+  bat
+  zoxide
 )
 
 for software in "${softwares[@]}"; do
