@@ -1,14 +1,9 @@
+[credential]
+	helper = /mnt/c/Program\\ Files/Git/mingw64/bin/git-credential-manager.exe
+[credential "https://dev.azure.com"]
+	useHttpPath = true
+[http]
+	postBuffer = 524288000
 [user]
-	email = eduuh.muraya@outlook.com
-	name =  eduuh
-	signingkey = ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDh7YD0nqeIja1PJQfUgIpCXkghe03Ucy8/yypbwUoNpa+W5mVa5ayCv775c/KH9kLk2srvCsETB7mpEBwGf08afy6RdvAlaGk7IckM28tnm2/LPonUe0TMhL4ucmnhENsWmuomPwZk75/v0YkeqEhfsuuiobp5/R+xOo67hfNzprvNi8SBxxvmtj3phv/zyBOMVikPQyH8qPFSwIRdA8QsFuITb3JAAx3D+3d/kwjjMBy8myYUCjYUN/pvpE6BZFmUQip+sVL10liQHhe3PHuWrLnyM7iSAtbM8s5oMLPbw9sqTdeNQyT8g+6k53ebi7LC2gE2EBtx//NBNLMSJpGahArKCPWvJAECNOT5lP9sUSq0prGGgyC7ckKYuvwufJqazoChJMH2GtVpjbznJD/8b51IBmWQA82+BD+84Ewvqe9Gu0E4VgVEdXQUbBfgLoIuN5oHK7f8ap+42O1fksxWvqDfSpgSUIyNo0JsOq5B77cfNs9vKL4zlEhTjZgFhB0g/fCu2DNTLr4PqdZJXcW/ZTPdhpGVNBtYmLC2X0ssZyC3jHrDIyUqGSja11W5xm//qDlZ6wpCXZ+/pYaaZ57BsamUJi269ajXl00rchueadqh63irGXcpllyFulXoeXi9Q3q4USBV5JM1MQqMFxaXOkjTVHHSGMi9DXdpuck89w==
-[init]
-	defaultBranch = main
-[gpg]
-	format = ssh
-[gpg "ssh"]
-	program = /Applications/1Password.app/Contents/MacOS/op-ssh-sign
-[commit]
-	gpgsign = true
-[core]
-	editor = nvim
+	name = eduuh
+	email = 31909722+eduuh@users.noreply.github.com
