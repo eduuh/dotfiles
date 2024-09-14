@@ -76,3 +76,6 @@ pip install requests
 
 brew tap julien-cpsn/atac
 brew install atac
+
+# Allow third party running
+sudo spctl --master-disable
