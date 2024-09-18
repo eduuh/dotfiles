@@ -22,7 +22,7 @@ sudo apt-get update -y && sudo apt-get upgrade -y
 packages=(
     git stow make cmake fzf ripgrep tmux zsh python3.10-venv
     manpages-dev man-db manpages-posix-dev libsecret-1-dev
-    gnome-keyring default-jre python3 libgbm-dev
+    gnome-keyring default-jre python3 libgbm-dev unzip tar
 )
 
 for pkg in "${packages[@]}"; do
@@ -171,5 +171,10 @@ else
     echo "ttyper is already installed."
 fi
 
+echo "install lazy git"
+LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
+tar xf lazygit.tar.gz lazygit
+sudo install lazygit /usr/local/bin
 
 echo "Setup completed successfully!"
