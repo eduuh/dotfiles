@@ -38,7 +38,7 @@ Install-ScoopApp -appName "starship"
 
 # Install specific tools from other Scoop buckets
 Install-ScoopApp -appName "FiraCode-NF" -bucket "nerd-fonts"
-Install-ScoopApp -appName "python310" -bucket "versions"
+Install-ScoopApp -appName "python3" -bucket "versions"
 
 # Install Python package for Neovim
 Write-Host "Installing pynvim..."

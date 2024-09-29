@@ -22,7 +22,7 @@ sudo apt-get update -y && sudo apt-get upgrade -y
 packages=(
     git stow make cmake fzf ripgrep tmux zsh python3.10-venv
     manpages-dev man-db manpages-posix-dev libsecret-1-dev
-    gnome-keyring default-jre python3 libgbm-dev
+    gnome-keyring default-jre python3 libgbm-dev unzip
 )
 
 for pkg in "${packages[@]}"; do
