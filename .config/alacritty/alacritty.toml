@@ -28,8 +28,8 @@ background = "#1e2127"
 foreground = "#D8DEE9"
 
 [font]
-size = 20
-normal.family = "Agave Nerd Font"
+size = 16
+normal.family = "Fira Code"
 
 [font.offset]
 x = 0
@@ -68,11 +68,6 @@ mods = "Control"
 [[keyboard.bindings]]
 action = "DecreaseFontSize"
 key = "ArrowDown"
-mods = "Control"
-
-[[keyboard.bindings]]
-action = "SpawnNewInstance"
-key = "N"
 mods = "Control"
 
 [scrolling]
