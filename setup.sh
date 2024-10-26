@@ -51,25 +51,26 @@ install_neovim_ubuntu() {
 # Arch Linux package installation function
 install_packages_arch() {
     echo "Updating package list and upgrading installed packages..."
-    sudo pacman -Syu --noconfirm
+    yay -Syu --noconfirm
 
-    install_yay
-
+    # Define packages to install
     local packages=(
-        git stow make cmake fzf ripgrep tmux zsh python python-virtualenv
-        man-db man-pages libsecret gnome-keyring jdk-openjdk unzip lazygit clang
+        git stow make cmake fzf ripgrep tmux zsh python python-vi
+        man-db man-pages libsecret gnome-keyring jdk-openjdk unzip brave-bin acpi qmk-git
     )
 
+    # Loop through each package and install if not already present
     for pkg in "${packages[@]}"; do
-        if ! pacman -Qi "$pkg" &> /dev/null; then
+        if ! yay -Qi "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
-            sudo pacman -S --noconfirm "$pkg"
+            yay -S --noconfirm "$pkg"
         else
             echo "$pkg is already installed."
         fi
     done
 
     install_neovim_arch
+    install_tmux_tpm
 }
 
 # Install yay on Arch Linux
@@ -84,6 +85,23 @@ install_yay() {
         rm -rf /tmp/yay
     else
         echo "yay is already installed."
+    fi
+}
+
+install_tmux_tpm() {
+    echo "Checking if TPM is already installed..."
+    local target_dir="$HOME/.tmux/plugins/tpm"
+    if [ -d "$target_dir" ]; then
+        echo "TPM is already installed at $target_dir."
+        return 0
+    fi
+
+    echo "Cloning TPM repository..."
+    if git clone https://github.com/tmux-plugins/tpm "$target_dir"; then
+        echo "TPM has been successfully installed at $target_dir."
+    else
+        echo "Error: Failed to clone the TPM repository."
+        return 1
     fi
 }
 
