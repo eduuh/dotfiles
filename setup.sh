@@ -57,7 +57,7 @@ install_packages_arch() {
 
     local packages=(
         git stow make cmake fzf ripgrep tmux zsh python python-virtualenv
-        man-db man-pages libsecret gnome-keyring jdk-openjdk unzip
+        man-db man-pages libsecret gnome-keyring jdk-openjdk unzip lazygit clang
     )
 
     for pkg in "${packages[@]}"; do

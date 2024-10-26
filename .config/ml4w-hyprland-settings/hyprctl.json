@@ -1,0 +1,14 @@
+[
+    {
+        "key": "decoration:blur:size",
+        "value": 1
+    },
+    {
+        "key": "decoration:blur:enabled",
+        "value": true
+    },
+    {
+        "key": "general:extend_border_grab_area",
+        "value": 10
+    }
+]
