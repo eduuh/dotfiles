@@ -55,7 +55,7 @@ install_packages_arch() {
 
     # Define packages to install
     local packages=(
-        git stow make cmake fzf ripgrep tmux zsh python python-vi
+      git stow make cmake fzf ripgrep tmux zsh python python-vi
         man-db man-pages libsecret gnome-keyring jdk-openjdk unzip brave-bin acpi qmk-git obsidian
     )
 
@@ -135,6 +135,5 @@ main() {
     esac
 }
 
-# Run the main function
 main
 
