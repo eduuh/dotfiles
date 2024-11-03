@@ -41,6 +41,7 @@ softwares=(
   lazygit
   bat
   zoxide
+  deno
 )
 
 for software in "${softwares[@]}"; do

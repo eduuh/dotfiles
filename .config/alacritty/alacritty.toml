@@ -58,17 +58,12 @@ mods = "Control"
 
 [[keyboard.bindings]]
 action = "IncreaseFontSize"
-key = "ArrowUp"
+key = "+"
 mods = "Control"
 
 [[keyboard.bindings]]
 action = "DecreaseFontSize"
-key = "S"
-mods = "Control"
-
-[[keyboard.bindings]]
-action = "DecreaseFontSize"
-key = "ArrowDown"
+key = "-"
 mods = "Control"
 
 [scrolling]
