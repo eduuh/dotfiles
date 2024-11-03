@@ -56,7 +56,7 @@ install_packages_arch() {
     # Define packages to install
     local packages=(
       git stow make cmake fzf ripgrep tmux zsh python python-vi
-        man-db man-pages libsecret gnome-keyring jdk-openjdk unzip brave-bin acpi qmk-git obsidian deno
+        man-db man-pages libsecret gnome-keyring jdk-openjdk unzip brave-bin acpi qmk-git obsidian deno mermaid-cli d2 plantuml
     )
 
     # Loop through each package and install if not already present
