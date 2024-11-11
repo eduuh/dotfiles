@@ -147,13 +147,17 @@ install_homebrew_mac() {
     brew update
     brew upgrade
 
-    install_common_software "brew" "brew install"
+    for software in "${common_software[@]}"; do
+        echo "Installing $software..."
+        brew install "$software"
+    done
 
     # Additional software for macOS
+    #sudo chown -R $(whoami) /usr/local/bin
     local mac_software=(
         coreutils moreutils findutils bash bash-completion2 wget
         openssh screen git-lfs lua pv p7zip pigz rename ssh-copy-id
-        vbindiff zopfli gnu-sed rust node deno bun hugo lazygit bat zoxide
+        vbindiff zopfli gnu-sed rust node deno hugo lazygit bat zoxide fish kitty sha256sum
     )
 
     for software in "${mac_software[@]}"; do
@@ -189,6 +193,8 @@ install_homebrew_mac() {
 
     # Enable third-party application support
     sudo spctl --master-disable
+
+    curl -fsSL https://bun.sh/install | bash
 }
 
 # Main function to handle OS detection and installation
