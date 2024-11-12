@@ -1,5 +1,6 @@
-# run this command
-# config config --local status.showUntrackedFiles no
+export GIT_EDITOR=nvim
+
+# Key bindings
 bindkey -v
 zmodload zsh/complist
 bindkey -M menuselect 'h' vi-backward-char
@@ -7,20 +8,7 @@ bindkey -M menuselect 'k' vi-up-line-or-history
 bindkey -M menuselect 'j' vi-down-line-or-history
 bindkey -M menuselect 'l' vi-forward-char
 
-export PATH=”$HOME/.emacs.d/bin:$HOME/.bin:$PATH”
-## Environment variables
-export GIT_EDITOR=nvim
-
-_not_inside_tmux() { [[ -z "$TMUX" ]] }
-
-ensure_tmux_is_running() {
-  if _not_inside_tmux; then
-    tat
-  fi
-}
-
-ensure_tmux_is_running
-
+# Aliases
 alias nav='cd "$(find . -type d | fzf)"'
 alias gdel='git branch | grep -v "main" | xargs git branch -D'
 alias cat='bat'
@@ -28,53 +16,54 @@ alias ls='ls -la --color'
 alias cd='z'
 alias zz='z -'
 
+# Unset NODE_OPTIONS to avoid conflicts
 unset NODE_OPTIONS
 
+# NVM (Node Version Manager) setup
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 
-# Generated for envman. Do not edit.
-[ -s "$HOME/.config/envman/load.sh" ] && source "$HOME/.config/envman/load.sh"
-
-export PATH="${PATH}:/Users/edwinmurayawork/.azureauth/0.8.4"
-
-export PATH="${PATH}:~/projects/byte_safari/tools/bash/"
-
-unset NODE_OPTIONS
-
-
-[ -s "/Users/edwinmuraya/.bun/_bun" ] && source "/Users/edwinmuraya/.bun/_bun"
-
-# bun
+# Bun setup
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+# Azure auth path (if applicable)
+export PATH="${PATH}:/Users/edwinmurayawork/.azureauth/0.8.4"
 
+# Byte Safari tools path (if applicable)
+export PATH="${PATH}:~/projects/byte_safari/tools/bash/"
 
+# Envman setup (if applicable)
+[ -s "$HOME/.config/envman/load.sh" ] && source "$HOME/.config/envman/load.sh"
+
+# Zoxide setup (for fast directory navigation)
 eval "$(zoxide init zsh)"
-export PATH="/opt/homebrew/opt/arm-none-eabi-gcc@8/bin:$PATH"
 
-# Check if running on macOS
+# Cross-platform configuration (for macOS)
 if [[ "$(uname)" == "Darwin" ]]; then
-  # pnpm setup
+  # PNPM setup
   export PNPM_HOME="/Users/edwinmuraya/Library/pnpm"
-  case ":$PATH:" in
-    *":$PNPM_HOME:"*) ;;
-    *) export PATH="$PNPM_HOME:$PATH" ;;
-  esac
-  # pnpm end
+  [[ ":$PATH:" != *":$PNPM_HOME:"* ]] && export PATH="$PNPM_HOME:$PATH"
+  
+  # NVM setup for macOS (ensure it's loaded from Homebrew)
+  if [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then
+    . "/opt/homebrew/opt/nvm/nvm.sh"
+    [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && . "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+  fi
+
+  # ARM GCC setup (specific to macOS/ARM)
+  export PATH="/opt/homebrew/opt/arm-none-eabi-gcc@8/bin:$PATH"
 fi
 
-# Check if running on macOS
-if [[ "$(uname)" == "Darwin" ]]; then
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"   # This loads nvm bash_completion
-fi
-
-
+# Starship prompt initialization
 eval "$(starship init zsh)"
+
+
+ensure_tmux_is_running() {
+  if [[ -z "$TMUX" ]]; then
+    tat 
+  fi
+}
+
+ensure_tmux_is_running
