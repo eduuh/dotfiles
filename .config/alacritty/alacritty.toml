@@ -30,7 +30,7 @@ foreground = "#D8DEE9"
 
 [font]
 size = 16
-normal.family = "Fira Code"
+normal.family = "Fira code"
 
 [font.offset]
 x = 0
