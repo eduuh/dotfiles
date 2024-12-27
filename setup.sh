@@ -198,21 +198,57 @@ install_homebrew_mac() {
 }
 
 # Main function to handle OS detection and installation
+
+clone_repositories() {
+  cd ~
+  
+  # Ensure the ~/projects directory exists
+  if [ ! -d ~/projects ]; then
+    mkdir ~/projects
+  fi
+
+  # List of repositories to clone
+  REPOSITORIES=(
+    "git@github.com:eduuh/byte_safari.git"
+    "git@github.com:eduuh/keyboard.git"
+    "git@github.com:eduuh/dushg.git"
+    "git@github.com:eduuh/homelab.git"
+  )
+
+  # Clone each repository
+  for REPO in "${REPOSITORIES[@]}"; do
+    REPO_NAME=$(basename "$REPO" .git)
+    TARGET_DIR=~/projects/"$REPO_NAME"
+
+    if [ -d "$TARGET_DIR" ]; then
+      echo "Skipping $REPO_NAME: Already exists at $TARGET_DIR."
+    else
+      echo "Cloning $REPO_NAME into $TARGET_DIR..."
+      git clone "$REPO" "$TARGET_DIR"
+    fi
+  done
+}
+
 main() {
     local distro=$(detect_distro)
 
     case "$distro" in
         ubuntu|debian)
             echo "Detected Ubuntu/Debian"
+            clone_repositories
             install_packages_ubuntu
             ;;
         arch)
             echo "Detected Arch Linux"
             install_yay
+            clone_repositories
             install_packages_arch
             ;;
         darwin)
             echo "Detected macOS"
+            clone_repositories
+               # Hide Dock
+            sudo launchctl unload -w /System/Library/LaunchAgents/com.apple.Dock.plist
             install_homebrew_mac
             ;;
         *)
@@ -221,6 +257,7 @@ main() {
             ;;
     esac
 }
+
 
 main
 
