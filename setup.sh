@@ -137,11 +137,12 @@ install_neovim_arch() {
     fi
 }
 
-# Homebrew and software installation for macOS
+# Homebrew and software installation for macO
 install_homebrew_mac() {
     if ! command -v brew &> /dev/null; then
         echo "Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        eval "$(/opt/homebrew/bin/brew shellenv)"
     fi
 
     brew update
@@ -153,11 +154,12 @@ install_homebrew_mac() {
     done
 
     # Additional software for macOS
-    #sudo chown -R $(whoami) /usr/local/bin
     local mac_software=(
         coreutils moreutils findutils bash bash-completion2 wget
         openssh screen git-lfs lua pv p7zip pigz rename ssh-copy-id
-        vbindiff zopfli gnu-sed rust node deno hugo lazygit bat zoxide fish kitty sha256sum
+        vbindiff zopfli gnu-sed rust node deno hugo lazygit bat zoxide
+        fish kitty sha256sum imagemagick pkg-config pngpaste
+        brave-browser
     )
 
     for software in "${mac_software[@]}"; do
@@ -165,9 +167,18 @@ install_homebrew_mac() {
         brew install "$software"
     done
 
-    # Additional macOS configurations
-    ln -sf /usr/local/bin/gsha256sum /usr/local/bin/sha256sum
-    brew install --cask --no-quarantine alacritty
+    # Cask installations for macOS
+    local mac_casks=(
+        alacritty karabiner-elements kitty@nightly
+    )
+
+    for cask in "${mac_casks[@]}"; do
+        echo "Installing $cask..."
+        brew install --cask "$cask"
+    done
+
+    # Install TPM
+    brew install tpm
 
     # Font installation for macOS
     brew tap homebrew/cask-fonts
@@ -183,6 +194,8 @@ install_homebrew_mac() {
 
     # Python environment setup
     brew install pyenv
+    pyenv install 3.12.0
+    pyenv global 3.12.0
     python3 -m venv ~/.local/state/python3
     source ~/.local/state/python3/bin/activate
     pip install --upgrade pip pynvim requests
