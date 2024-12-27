@@ -21,9 +21,21 @@ if [ "$DIR" == "--start" ]; then
     path_name="$(basename "$PWD")"
     session_name=${path_name}
 else
-    # ask the user which directory to start in
-    _session_name=$(cd $DIR && ls -d */ | sed  "s|/||g" | fzf --reverse --header="Select project from $(basename $DIR) >")
+    active_sessions=$(tmux list-sessions -F "#S")
+
+    # Gather directories in the current directory
+    directories=$(cd $DIR && ls -d */ | sed "s|/||g")
+
+    # Combine directories and active tmux sessions, ensuring they are distinct
+    combined_list=$(echo -e "$directories\n$active_sessions" | sort -u)
+
+    # Use fzf to select the project/session, showing both directories and tmux sessions
+    _session_name=$(echo "$combined_list" | fzf --reverse --header="Select project/session from $(basename $DIR) >")
+
+    # Replace dots with underscores in the selected session name
     session_name=${_session_name//./_}
+
+    # Construct the full path to the selected session or project
     path_name="$DIR/$_session_name"
 fi
 
