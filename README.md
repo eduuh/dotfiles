@@ -35,7 +35,5 @@ cd dotfiles
 4. Apply the dotfiles using `stow`:
 
 ```zsh
-stow . --adopt
+stow . --adopt -t ~
 ```
-
----

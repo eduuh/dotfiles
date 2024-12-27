@@ -182,9 +182,11 @@ install_homebrew_mac() {
 
     # Font installation for macOS
     brew tap homebrew/cask-fonts
+    brew tap julien-cpsn/atac
+
     local fonts_list=(
         font-agave-nerd-font font-fira-mono-nerd-font font-caskaydia-cove-nerd-font
-        font-hack-nerd-font font-hurmit-nerd-font font-ubuntu-nerd-font
+        font-hack-nerd-font font-hurmit-nerd-font font-ubuntu-nerd-font atac
     )
 
     for font in "${fonts_list[@]}"; do
@@ -226,6 +228,8 @@ clone_repositories() {
     "git@github.com:eduuh/keyboard.git"
     "git@github.com:eduuh/dushg.git"
     "git@github.com:eduuh/homelab.git"
+    "git@github.com:eduuh/nvim.git"
+    "git@github.com:eduuh/dotfiles.git"
   )
 
   # Clone each repository
