@@ -40,10 +40,10 @@ install_packages_ubuntu() {
 
      if command -v starship &> /dev/null; then
         echo "Starship is already installed!"
-      else
-	 echo "Starship is not installed. Installing now..."
-	 curl -sS https://starship.rs/install.sh | sh
-      fi
+     else
+       echo "Starship is not installed. Installing now..."
+       curl -sS https://starship.rs/install.sh | sh
+     fi
 
     for pkg in "${common_software[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
@@ -69,7 +69,17 @@ install_packages_ubuntu() {
         fi
     done
 
-    install_neovim_ubuntu
+    if command -v starship &> /dev/null; then
+       curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+       export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+       nvm install --lts
+
+    else
+       install_neovim_ubuntu
+    fi
 }
 
 # Install Neovim on Ubuntu/Debian
