@@ -76,7 +76,7 @@ install_packages_ubuntu() {
 install_neovim_ubuntu() {
     echo "Adding Neovim PPA and installing Neovim..."
     if ! command -v nvim &> /dev/null; then
-        sudo apt-add-repository ppa:neovim-ppa/stable -y
+        sudo add-apt-repository ppa:neovim-ppa/unstable
         sudo apt-get update -y
         sudo apt-get install neovim -y
     else
@@ -247,18 +247,33 @@ clone_repositories() {
     "git@github.com:eduuh/nvim.git"
     "git@github.com:eduuh/dotfiles.git"
   )
-
+    
   # Clone each repository
   for REPO in "${REPOSITORIES[@]}"; do
-    REPO_NAME=$(basename "$REPO" .git)
-    TARGET_DIR=~/projects/"$REPO_NAME"
+      # Extract the repository name
+      REPO_NAME=$(basename "$REPO" .git)
+      TARGET_DIR=~/projects/"$REPO_NAME"
 
-    if [ -d "$TARGET_DIR" ]; then
-      echo "Skipping $REPO_NAME: Already exists at $TARGET_DIR."
-    else
-      echo "Cloning $REPO_NAME into $TARGET_DIR..."
-      git clone "$REPO" "$TARGET_DIR"
-    fi
+      # Handle special case for NVIM and create a symbolic link
+      if [[ "$REPO_NAME" == "nvim" ]]; then
+          # Clone the repository if it doesn't already exist
+          if [ ! -d "$TARGET_DIR" ]; then
+              echo "Cloning $REPO_NAME into $TARGET_DIR..."
+              git clone "$REPO" "$TARGET_DIR"
+          fi
+          
+          # Create a symbolic link to the nvim configuration directory
+          echo "Creating symbolic link for $REPO_NAME at ~/.config/nvim..."
+          sudo ln -sf "$TARGET_DIR" ~/.config/nvim
+      else
+          # Clone other repositories normally
+          if [ -d "$TARGET_DIR" ]; then
+              echo "Skipping $REPO_NAME: Already exists at $TARGET_DIR."
+          else
+              echo "Cloning $REPO_NAME into $TARGET_DIR..."
+              git clone "$REPO" "$TARGET_DIR"
+          fi
+      fi
   done
 }
 
@@ -293,4 +308,3 @@ main() {
 
 
 main
-
