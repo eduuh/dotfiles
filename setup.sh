@@ -57,7 +57,7 @@ install_packages_ubuntu() {
     # Additional packages specific to Ubuntu/Debian
     local ubuntu_packages=(
         manpages-dev man-db manpages-posix-dev zoxide
-        libsecret-1-dev gnome-keyring default-jre libgbm-dev
+        libsecret-1-dev gnome-keyring default-jre libgbm-dev python3-pip python3.12-venv
     )
 
     for pkg in "${ubuntu_packages[@]}"; do
@@ -80,6 +80,10 @@ install_packages_ubuntu() {
     else
        install_neovim_ubuntu
     fi
+
+    python3 -m venv ~/.local/state/python3
+    source ~/.local/state/python3/bin/activate
+    pip install --upgrade pip pynvim requests
 }
 
 # Install Neovim on Ubuntu/Debian
@@ -295,6 +299,7 @@ main() {
             echo "Detected Ubuntu/Debian"
             clone_repositories
             install_packages_ubuntu
+            sudo chsh -s /bin/zsh
             ;;
         arch)
             echo "Detected Arch Linux"
