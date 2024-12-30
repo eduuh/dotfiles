@@ -125,7 +125,7 @@ setup_dotfiles() {
     cd ~/projects/dotfiles/
     
     if [[ $CODESPACES == "true" ]]; then
-        stow . -t ~ --ignore='.zshrc' --ignore='.zshenv'
+        stow . -t ~ --ignore='.zshrc' --ignore='.zshenv' --ignore='.bashrc' --ignore='.gitconfig'
     else
         stow . --adopt -t ~
     fi
