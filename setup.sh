@@ -10,7 +10,9 @@ common_software=(
 
 # Detect distribution type
 detect_distro() {
-    if [ -f /etc/os-release ]; then
+    if [ "$CODESPACES" = "true" ]; then
+        echo "codespace"
+    elif [ -f /etc/os-release ]; then
         . /etc/os-release
         echo "$ID"
     elif [ "$(uname)" = "Darwin" ]; then
@@ -37,13 +39,16 @@ install_common_software() {
 install_packages_ubuntu() {
     echo "Updating package list and upgrading installed packages..."
     sudo apt-get update -y && sudo apt-get upgrade -y
+    sudo apt-get install software-properties-common -y
 
-     if command -v starship &> /dev/null; then
-        echo "Starship is already installed!"
-     else
-       echo "Starship is not installed. Installing now..."
-       curl -sS https://starship.rs/install.sh | sh
-     fi
+    if [[ $CODESPACES == "true" ]]; then
+      echo "In a GitHub Codespace environment, skipping Starship installation."
+    elif command -v starship &> /dev/null; then
+      echo "Starship is already installed!"
+    else
+      echo "Starship is not installed. Installing now..."
+      curl -sS https://starship.rs/install.sh | sh
+    fi
 
     for pkg in "${common_software[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
@@ -57,8 +62,15 @@ install_packages_ubuntu() {
     # Additional packages specific to Ubuntu/Debian
     local ubuntu_packages=(
         manpages-dev man-db manpages-posix-dev zoxide
-        libsecret-1-dev gnome-keyring default-jre libgbm-dev python3-pip python3.12-venv
+        libsecret-1-dev gnome-keyring default-jre libgbm-dev python3-pip
     )
+
+    if [[ $CODESPACES == "true" ]]; then
+     sudo apt-get install python3.10-venv -y
+    else
+     sudo apt-get install python3.12-venv -y
+    fi
+
 
     for pkg in "${ubuntu_packages[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
@@ -69,28 +81,38 @@ install_packages_ubuntu() {
         fi
     done
 
-    if command -v starship &> /dev/null; then
-       curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-       export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 
-       nvm install --lts
+   export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+      [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+    nvm install --lts
 
-    else
-       install_neovim_ubuntu
-    fi
-
+    install_neovim_ubuntu
     python3 -m venv ~/.local/state/python3
     source ~/.local/state/python3/bin/activate
     pip install --upgrade pip pynvim requests
+
+    #clean unneeded software
+    sudo apt autoremove
+
+    #setup dotfiles
+    echo "Setting Up dotfiles symlinks"
+    cd ~/projects/dotfiles/
+    
+    if [[ $CODESPACES == "true" ]]; then
+     stow . -t ~ --ignore='.zshrc' --ignore='.zshenv'
+    else
+      stow . --adopt -t ~
+    fi
 }
 
 # Install Neovim on Ubuntu/Debian
 install_neovim_ubuntu() {
     echo "Adding Neovim PPA and installing Neovim..."
+    
     if ! command -v nvim &> /dev/null; then
-        sudo add-apt-repository ppa:neovim-ppa/unstable
+        sudo add-apt-repository ppa:neovim-ppa/unstable -y
         sudo apt-get update -y
         sudo apt-get install neovim -y
     else
@@ -209,6 +231,7 @@ install_homebrew_mac() {
 
     # Install TPM
     brew install tpm
+    brew install jesseduffield/lazydocker/lazydocker
 
     # Font installation for macOS
     brew tap homebrew/cask-fonts
@@ -253,14 +276,21 @@ clone_repositories() {
   fi
 
   # List of repositories to clone
-  REPOSITORIES=(
-    "git@github.com:eduuh/byte_safari.git"
-    "git@github.com:eduuh/keyboard.git"
-    "git@github.com:eduuh/dushg.git"
-    "git@github.com:eduuh/homelab.git"
-    "git@github.com:eduuh/nvim.git"
-    "git@github.com:eduuh/dotfiles.git"
-  )
+  if [ "$CODESPACES" = "true" ]; then
+      REPOSITORIES=(
+          "https://github.com/eduuh/nvim.git"
+          "https://github.com/eduuh/dotfiles.git"
+      )
+  else
+      REPOSITORIES=(
+          "git@github.com:eduuh/byte_safari.git"
+          "git@github.com:eduuh/keyboard.git"
+          "git@github.com:eduuh/dushg.git"
+          "git@github.com:eduuh/homelab.git"
+          "git@github.com:eduuh/nvim.git"
+          "git@github.com:eduuh/dotfiles.git"
+      )
+  fi
     
   # Clone each repository
   for REPO in "${REPOSITORIES[@]}"; do
@@ -306,6 +336,11 @@ main() {
             install_yay
             clone_repositories
             install_packages_arch
+            ;;
+        codespace)
+            echo "Detected Codespace environment"
+            clone_repositories
+            install_packages_ubuntu
             ;;
         darwin)
             echo "Detected macOS"
