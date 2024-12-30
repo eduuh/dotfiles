@@ -31,16 +31,32 @@ install_common_software() {
     done
 }
 
+
+
 # Ubuntu/Debian package installation function
 install_packages_ubuntu() {
     echo "Updating package list and upgrading installed packages..."
     sudo apt-get update -y && sudo apt-get upgrade -y
 
-    install_common_software "apt-get" "sudo apt-get install -y"
+     if command -v starship &> /dev/null; then
+        echo "Starship is already installed!"
+      else
+	 echo "Starship is not installed. Installing now..."
+	 curl -sS https://starship.rs/install.sh | sh
+      fi
+
+    for pkg in "${common_software[@]}"; do
+        if ! dpkg -s "$pkg" &> /dev/null; then
+            echo "Installing $pkg..."
+            sudo apt-get install -y "$pkg"
+        else
+            echo "$pkg is already installed."
+        fi
+    done
 
     # Additional packages specific to Ubuntu/Debian
     local ubuntu_packages=(
-        python3.10-venv manpages-dev man-db manpages-posix-dev
+        manpages-dev man-db manpages-posix-dev zoxide
         libsecret-1-dev gnome-keyring default-jre libgbm-dev
     )
 
