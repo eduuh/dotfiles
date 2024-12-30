@@ -33,23 +33,39 @@ install_common_software() {
     done
 }
 
+install_lazy_Git() {
+  LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | \grep -Po '"tag_name": *"v\K[^"]*')
+  curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
+  tar xf lazygit.tar.gz lazygit
+  sudo install lazygit -D -t /usr/local/bin/
+  rm -rf lazygit.tar.gz lazygit
+}
 
 
 # Ubuntu/Debian package installation function
-install_packages_ubuntu() {
+
+
+update_and_upgrade() {
     echo "Updating package list and upgrading installed packages..."
     sudo apt-get update -y && sudo apt-get upgrade -y
     sudo apt-get install software-properties-common -y
+}
 
+install_starship() {
     if [[ $CODESPACES == "true" ]]; then
-      echo "In a GitHub Codespace environment, skipping Starship installation."
+        echo "In a GitHub Codespace environment, skipping Starship installation."
     elif command -v starship &> /dev/null; then
-      echo "Starship is already installed!"
+        echo "Starship is already installed!"
     else
-      echo "Starship is not installed. Installing now..."
-      curl -sS https://starship.rs/install.sh | sh
+        echo "Starship is not installed. Installing now..."
+        curl -sS https://starship.rs/install.sh | sh
     fi
+}
 
+install_common_packages() {
+    local common_software=(
+        # Add common packages here if needed
+    )
     for pkg in "${common_software[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
@@ -58,19 +74,19 @@ install_packages_ubuntu() {
             echo "$pkg is already installed."
         fi
     done
+}
 
-    # Additional packages specific to Ubuntu/Debian
+install_ubuntu_specific_packages() {
     local ubuntu_packages=(
         manpages-dev man-db manpages-posix-dev zoxide
         libsecret-1-dev gnome-keyring default-jre libgbm-dev python3-pip
     )
 
     if [[ $CODESPACES == "true" ]]; then
-     sudo apt-get install python3.10-venv -y
+        sudo apt-get install python3.10-venv -y
     else
-     sudo apt-get install python3.12-venv -y
+        sudo apt-get install python3.12-venv -y
     fi
-
 
     for pkg in "${ubuntu_packages[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
@@ -80,33 +96,40 @@ install_packages_ubuntu() {
             echo "$pkg is already installed."
         fi
     done
+}
 
-   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+install_nvm() {
+    echo "Installing NVM and Node.js..."
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 
-   export NVM_DIR="$HOME/.nvm"
-      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-      [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
     nvm install --lts
+}
 
-    install_neovim_ubuntu
+setup_python_environment() {
+    echo "Setting up Python environment..."
     python3 -m venv ~/.local/state/python3
     source ~/.local/state/python3/bin/activate
     pip install --upgrade pip pynvim requests
+}
 
-    #clean unneeded software
+clean_unneeded_software() {
+    echo "Cleaning up unneeded software..."
     sudo apt autoremove
+}
 
-    #setup dotfiles
-    echo "Setting Up dotfiles symlinks"
+setup_dotfiles() {
+    echo "Setting up dotfiles symlinks..."
     cd ~/projects/dotfiles/
     
     if [[ $CODESPACES == "true" ]]; then
-     stow . -t ~ --ignore='.zshrc' --ignore='.zshenv'
+        stow . -t ~ --ignore='.zshrc' --ignore='.zshenv'
     else
-      stow . --adopt -t ~
+        stow . --adopt -t ~
     fi
 }
-
 # Install Neovim on Ubuntu/Debian
 install_neovim_ubuntu() {
     echo "Adding Neovim PPA and installing Neovim..."
@@ -265,17 +288,13 @@ install_homebrew_mac() {
     curl -fsSL https://bun.sh/install | bash
 }
 
-# Main function to handle OS detection and installation
-
 clone_repositories() {
   cd ~
   
-  # Ensure the ~/projects directory exists
   if [ ! -d ~/projects ]; then
     mkdir ~/projects
   fi
 
-  # List of repositories to clone
   if [ "$CODESPACES" = "true" ]; then
       REPOSITORIES=(
           "https://github.com/eduuh/nvim.git"
@@ -292,25 +311,19 @@ clone_repositories() {
       )
   fi
     
-  # Clone each repository
   for REPO in "${REPOSITORIES[@]}"; do
-      # Extract the repository name
       REPO_NAME=$(basename "$REPO" .git)
       TARGET_DIR=~/projects/"$REPO_NAME"
 
-      # Handle special case for NVIM and create a symbolic link
       if [[ "$REPO_NAME" == "nvim" ]]; then
-          # Clone the repository if it doesn't already exist
           if [ ! -d "$TARGET_DIR" ]; then
               echo "Cloning $REPO_NAME into $TARGET_DIR..."
               git clone "$REPO" "$TARGET_DIR"
           fi
           
-          # Create a symbolic link to the nvim configuration directory
           echo "Creating symbolic link for $REPO_NAME at ~/.config/nvim..."
           sudo ln -sf "$TARGET_DIR" ~/.config/nvim
       else
-          # Clone other repositories normally
           if [ -d "$TARGET_DIR" ]; then
               echo "Skipping $REPO_NAME: Already exists at $TARGET_DIR."
           else
@@ -319,6 +332,18 @@ clone_repositories() {
           fi
       fi
   done
+}
+
+install_packages_ubuntu() {
+    update_and_upgrade
+    install_starship
+    install_common_packages
+    install_ubuntu_specific_packages
+    install_nvm
+    install_neovim_ubuntu
+    setup_python_environment
+    clean_unneeded_software
+    setup_dotfiles
 }
 
 main() {
