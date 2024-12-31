@@ -1,14 +1,12 @@
 #!/bin/zsh
 
-set -e  # Exit immediately if a command exits with a non-zero status
-set -o pipefail  # Fail a pipeline if any command errors
+set -e  
+set -o pipefail
 
-# Global list of common software packages for all OSes
 common_software=(
     git stow make cmake fzf ripgrep tmux zsh unzip python3
 )
 
-# Detect distribution type
 detect_distro() {
     if [ "$CODESPACES" = "true" ]; then
         echo "codespace"
@@ -22,7 +20,6 @@ detect_distro() {
     fi
 }
 
-# Install common software packages
 install_common_software() {
     local installer="$1"
     local install_cmd="$2"
@@ -34,16 +31,13 @@ install_common_software() {
 }
 
 install_lazy_Git() {
+  echo "Install lazygit"
   LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | \grep -Po '"tag_name": *"v\K[^"]*')
   curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
   tar xf lazygit.tar.gz lazygit
   sudo install lazygit -D -t /usr/local/bin/
-  rm -rf lazygit.tar.gz lazygit
+  sudo rm -rf lazygit lazygit.tar.gz
 }
-
-
-# Ubuntu/Debian package installation function
-
 
 update_and_upgrade() {
     echo "Updating package list and upgrading installed packages..."
@@ -63,9 +57,6 @@ install_starship() {
 }
 
 install_common_packages() {
-    local common_software=(
-        # Add common packages here if needed
-    )
     for pkg in "${common_software[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
@@ -341,6 +332,7 @@ install_packages_ubuntu() {
     install_ubuntu_specific_packages
     install_nvm
     install_neovim_ubuntu
+    install_lazy_Git
     setup_python_environment
     clean_unneeded_software
     setup_dotfiles

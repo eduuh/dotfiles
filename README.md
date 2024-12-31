@@ -23,17 +23,3 @@ bash <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/github_key
 ```zsh
 zsh <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/setup.sh)
 ```
-
-3. Clone the dotfiles repository:
-
-```zsh
-cd
-git clone git@github.com:eduuh/dotfiles.git
-cd dotfiles
-```
-
-4. Apply the dotfiles using `stow`:
-
-```zsh
-stow . --adopt -t ~
-```
