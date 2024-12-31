@@ -330,7 +330,11 @@ install_packages_ubuntu() {
     install_starship
     install_common_packages
     install_ubuntu_specific_packages
-    install_nvm
+
+    if [[ $CODESPACES != "true" ]]; then
+      install_nvm
+    fi
+
     install_neovim_ubuntu
     install_lazy_Git
     setup_python_environment
