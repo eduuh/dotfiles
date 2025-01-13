@@ -295,7 +295,6 @@ clone_repositories() {
       REPOSITORIES=(
           "git@github.com:eduuh/byte_safari.git"
           "git@github.com:eduuh/keyboard.git"
-          "git@github.com:eduuh/dushg.git"
           "git@github.com:eduuh/homelab.git"
           "git@github.com:eduuh/nvim.git"
           "git@github.com:eduuh/dotfiles.git"

@@ -35,12 +35,13 @@ Install-ScoopApp -appName "fd"
 Install-ScoopApp -appName "Cascadia-Code"
 Install-ScoopApp -appName "nodejs"
 Install-ScoopApp -appName "starship"
+Install-ScoopApp -appName "git"
+Install-ScoopApp -appName "powershell"
 
 # Install specific tools from other Scoop buckets
 Install-ScoopApp -appName "python3" -bucket "versions"
 
-scoop bucket add nerd-fonts
-scoop install nerd-fonts/FiraCode-NF
+Install-ScoopApp -appName "nerd-fonts" -buckets "nerd-fonts/FiraCode-NF"
 
 # Install Python package for Neovim
 Write-Host "Installing pynvim..."
