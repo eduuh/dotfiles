@@ -31,6 +31,23 @@ install_common_software() {
     done
 }
 
+install_tmux_tpm() {
+    echo "Checking if TPM is already installed..."
+    local target_dir="$HOME/.tmux/plugins/tpm"
+    if [ -d "$target_dir" ]; then
+        echo "TPM is already installed at $target_dir."
+        return 0
+    fi
+
+    echo "Cloning TPM repository..."
+    if git clone https://github.com/tmux-plugins/tpm "$target_dir"; then
+        echo "TPM has been successfully installed at $target_dir."
+    else
+        echo "Error: Failed to clone the TPM repository."
+        return 1
+    fi
+}
+
 # Ubuntu/Debian package installation function
 install_packages_ubuntu() {
     echo "Updating package list and upgrading installed packages..."
@@ -68,6 +85,7 @@ install_neovim_ubuntu() {
     fi
 }
 
+
 # Arch Linux package installation function
 install_packages_arch() {
     echo "Updating package list and upgrading installed packages..."
@@ -92,7 +110,6 @@ install_packages_arch() {
     done
 
     install_neovim_arch
-    install_tmux_tpm
 }
 
 # Install yay on Arch Linux
@@ -110,22 +127,6 @@ install_yay() {
     fi
 }
 
-install_tmux_tpm() {
-    echo "Checking if TPM is already installed..."
-    local target_dir="$HOME/.tmux/plugins/tpm"
-    if [ -d "$target_dir" ]; then
-        echo "TPM is already installed at $target_dir."
-        return 0
-    fi
-
-    echo "Cloning TPM repository..."
-    if git clone https://github.com/tmux-plugins/tpm "$target_dir"; then
-        echo "TPM has been successfully installed at $target_dir."
-    else
-        echo "Error: Failed to clone the TPM repository."
-        return 1
-    fi
-}
 
 # Install Neovim on Arch Linux using yay
 install_neovim_arch() {
@@ -158,13 +159,18 @@ install_homebrew_mac() {
         coreutils moreutils findutils bash bash-completion2 wget
         openssh screen git-lfs lua pv p7zip pigz rename ssh-copy-id
         vbindiff zopfli gnu-sed rust node deno hugo lazygit bat zoxide
-        fish kitty sha256sum imagemagick pkg-config pngpaste
+        fish sha256sum imagemagick pkg-config pngpaste
         brave-browser
     )
 
     for software in "${mac_software[@]}"; do
-        echo "Installing $software..."
-        brew install "$software"
+        echo "Checking for updates for $software..."
+        if brew outdated | grep -q "^$software"; then
+            echo "Updating $software..."
+            brew upgrade "$software" >/dev/null 2>&1
+        else
+            echo "$software is up-to-date."
+        fi
     done
 
     # Cask installations for macOS
@@ -177,22 +183,7 @@ install_homebrew_mac() {
         brew install --cask "$cask"
     done
 
-    # Install TPM
-    brew install tpm
-
-    # Font installation for macOS
-    brew tap homebrew/cask-fonts
-    brew tap julien-cpsn/atac
-
-    local fonts_list=(
-        font-agave-nerd-font font-fira-mono-nerd-font font-caskaydia-cove-nerd-font
-        font-hack-nerd-font font-hurmit-nerd-font font-ubuntu-nerd-font atac
-    )
-
-    for font in "${fonts_list[@]}"; do
-        echo "Installing font $font..."
-        brew install --cask "$font"
-    done
+    brew install --cask font-fira-code-nerd-font
 
     # Python environment setup
     brew install pyenv
@@ -202,14 +193,11 @@ install_homebrew_mac() {
     source ~/.local/state/python3/bin/activate
     pip install --upgrade pip pynvim requests
 
-    # ATAC installation
-    brew tap julien-cpsn/atac
-    brew install atac
-
     # Enable third-party application support
     sudo spctl --master-disable
 
     curl -fsSL https://bun.sh/install | bash
+
 }
 
 # Main function to handle OS detection and installation
@@ -226,7 +214,6 @@ clone_repositories() {
   REPOSITORIES=(
     "git@github.com:eduuh/byte_safari.git"
     "git@github.com:eduuh/keyboard.git"
-    "git@github.com:eduuh/dushg.git"
     "git@github.com:eduuh/homelab.git"
     "git@github.com:eduuh/nvim.git"
     "git@github.com:eduuh/dotfiles.git"
@@ -244,6 +231,8 @@ clone_repositories() {
       git clone "$REPO" "$TARGET_DIR"
     fi
   done
+
+  install_tmux_tpm
 }
 
 main() {
@@ -264,8 +253,6 @@ main() {
         darwin)
             echo "Detected macOS"
             clone_repositories
-               # Hide Dock
-            sudo launchctl unload -w /System/Library/LaunchAgents/com.apple.Dock.plist
             install_homebrew_mac
             ;;
         *)
