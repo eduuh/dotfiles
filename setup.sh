@@ -4,7 +4,7 @@ set -e
 set -o pipefail
 
 common_software=(
-    git stow make cmake fzf ripgrep tmux zsh unzip python3
+    git stow make cmake fzf ripgrep tmux zsh unzip
 )
 
 detect_distro() {
@@ -87,14 +87,9 @@ install_common_packages() {
 install_ubuntu_specific_packages() {
     local ubuntu_packages=(
         manpages-dev man-db manpages-posix-dev zoxide
-        libsecret-1-dev gnome-keyring default-jre libgbm-dev python3-pip
+        libsecret-1-dev gnome-keyring default-jre libgbm-dev 
     )
 
-    if [[ $CODESPACES == "true" ]]; then
-        sudo apt-get install python3.10-venv -y
-    else
-        sudo apt-get install python3.12-venv -y
-    fi
 
     for pkg in "${ubuntu_packages[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
@@ -104,6 +99,11 @@ install_ubuntu_specific_packages() {
             echo "$pkg is already installed."
         fi
     done
+
+    sudo apt install software-properties-common
+    sudo add-apt-repository ppa:deadsnakes/ppa
+    sudo apt install python3.10
+    sudo apt-get install python3.10-venv -y
 }
 
 install_nvm() {
