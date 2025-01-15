@@ -35,27 +35,18 @@ Install-ScoopApp -appName "fd"
 Install-ScoopApp -appName "Cascadia-Code"
 Install-ScoopApp -appName "nodejs"
 Install-ScoopApp -appName "starship"
+Install-ScoopApp -appName "git"
+Install-ScoopApp -appName "powershell"
 
 # Install specific tools from other Scoop buckets
-Install-ScoopApp -appName "FiraCode-NF" -bucket "nerd-fonts"
 Install-ScoopApp -appName "python3" -bucket "versions"
+
+Install-ScoopApp -appName "nerd-fonts" -buckets "nerd-fonts/FiraCode-NF"
 
 # Install Python package for Neovim
 Write-Host "Installing pynvim..."
 python.exe -m pip install --upgrade pip
 pip install pynvim --user
-
-# Install global npm packages for LSP configurations
-Write-Host "Installing global npm packages..."
-$npmPackages = @(
-    "prettier-eslint-cli",
-    "@typescript-eslint/eslint-plugin",
-    "typescript",
-    "typescript-language-server",
-    "vscode-langservers-extracted",
-    "prettier",
-    "prettier-plugin-solidity"
-)
 
 foreach ($package in $npmPackages) {
     if (-not (npm list -g --depth=0 | Select-String -Pattern $package)) {
