@@ -13,7 +13,6 @@ alias nav='cd "$(find . -type d | fzf)"'
 alias gdel='git branch | grep -v "main" | xargs git branch -D'
 alias cat='bat'
 alias ls='ls -la --color'
-alias cd='z'
 alias zz='z -'
 
 # Unset NODE_OPTIONS to avoid conflicts
@@ -58,11 +57,10 @@ fi
 
 # Starship prompt initialization
 eval "$(starship init zsh)"
-
-export PATH="${PATH}:$HOME/.bin/"
+export PATH=$HOME/.local/bin:$PATH
 ensure_tmux_is_running() {
   if [[ -z "$TMUX" ]]; then
-    tat 
+     $HOME/.bin/tat.sh
   fi
 }
 
