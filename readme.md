@@ -1,19 +1,17 @@
 ## Setting Up the dotfiles
 
-Before starting the setup, ensure that **1Password** is installed and you are logged in.
-
 ## (Automated) Codespaces, WSL (Ubuntu), and Mac
 
 1. Set up GitHub CLI and configure GitHub SSH keys. Make sure to log in to GitHub CLI:
 
 ```zsh
-bash <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/github_keys.sh)
+bash <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/.bin/gh_keys.sh)
 ```
 
 2. Set up the development environment:
 
 ```zsh
-zsh <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/setup.sh)
+zsh <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/.bin/setup.sh)
 ```
 
 ## Manual
