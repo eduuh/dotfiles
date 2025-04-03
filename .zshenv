@@ -1,4 +1,6 @@
-. "$HOME/.cargo/env"
+if [[ -s "$HOME/.cargo/env" ]]; then
+   . "$HOME/.cargo/env"
+fi
 
 # Set Git editor globally
 export GIT_EDITOR=nvim
