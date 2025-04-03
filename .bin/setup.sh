@@ -150,6 +150,12 @@ install_neovim_ubuntu() {
     fi
 }
 
+install_fzf_ubuntu() {
+ sudo apt autoremove fzf -y
+ git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+ ~/.fzf/install
+}
+
 install_packages_arch() {
 
     for pkg in "${common_softwar[@]}"; do
@@ -268,7 +274,6 @@ clone_repositories() {
 
   REPOSITORIES=(
     "git@github.com:eduuh/byte_safari.git"
-    "git@github.com:eduuh/keyboard.git"
     "git@github.com:eduuh/homelab.git"
     "git@github.com:eduuh/nvim.git"
     "git@github.com:eduuh/dotfiles.git"
@@ -320,6 +325,7 @@ install_packages_ubuntu() {
     install_lazy_Git
     setup_python_environment
     clean_unneeded_software
+    install_fzf_ubuntu
     setup_dotfiles
 }
 
