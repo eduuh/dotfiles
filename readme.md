@@ -1,6 +1,6 @@
 ## Setting Up the dotfiles
 
-## (Automated) Codespaces, WSL (Ubuntu), and Mac
+## (Automated Script) Codespaces, WSL (Ubuntu), and Mac
 
 1. Set up GitHub CLI and configure GitHub SSH keys. Make sure to log in to GitHub CLI:
 
@@ -21,8 +21,9 @@ zsh <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/.bin/setup.
 ```zsh
 stow . --adopt -t ~
 
-# ignore some files
+# ignore some files: Codespce command 
 
-stow . -t ~ --ignore='.zshrc' --ignore='.zshenv' --ignore='.bashrc' --ignore='.gitconfig'
+stow . -t ~ --ignore='.zshrc' --ignore='.zshenv' --ignore='.bashrc' --ignore='.gitconfig' --ignore='.fzf.bash' --ignore='.fzf.zsh' --ignore='.zprof
+ile'
 
 ```
