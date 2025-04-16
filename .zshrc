@@ -16,3 +16,18 @@ alias zz='z -'
 # Starship prompt
 eval "$(starship init zsh)"
 
+
+# pnpm
+export PNPM_HOME="/Users/eduuh/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+# pnpm end
+
+# bun completions
+[ -s "/Users/eduuh/yes/_bun" ] && source "/Users/eduuh/yes/_bun"
+
+# bun
+export BUN_INSTALL="yes"
+export PATH="$BUN_INSTALL/bin:$PATH"
