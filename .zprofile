@@ -1,4 +1,6 @@
-eval "$(/opt/homebrew/bin/brew shellenv)"
+if [[ "$(uname)" == "Darwin" ]]; then
+   eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
 
 # Load NVM (only in login shells)
 [[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
@@ -16,3 +18,5 @@ ensure_tmux_is_running() {
 }
 
 ensure_tmux_is_running
+
+eval "$(starship init zsh)"
