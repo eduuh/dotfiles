@@ -1,6 +1,5 @@
-# Check for Apple Silicon Homebrew
-if [[ -s "/opt/homebrew/bin/brew" ]]; then
-  eval "$(/opt/homebrew/bin/brew shellenv)"
+if [[ "$(uname)" == "Darwin" ]]; then
+   eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
 # Load NVM (only in login shells)
@@ -19,3 +18,5 @@ ensure_tmux_is_running() {
 }
 
 ensure_tmux_is_running
+
+eval "$(starship init zsh)"
