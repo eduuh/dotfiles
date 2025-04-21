@@ -31,3 +31,10 @@ esac
 # bun
 export BUN_INSTALL="yes"
 export PATH="$BUN_INSTALL/bin:$PATH"
+
+
+if [[ "$(uname)" == "Darwin" ]]; then
+  export ANDROID_HOME="$HOME/Library/Android/sdk"
+  export NDK_HOME="$ANDROID_HOME/ndk/$(ls -1 $ANDROID_HOME/ndk)"
+  export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+fi
