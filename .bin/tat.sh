@@ -26,7 +26,7 @@ else
 
   combined_list=$(echo -e "$directories\n$active_sessions" | sort -u)
 
-  _session_name=$(echo "$combined_list" | fzf --reverse --header="Select project/session from $(basename "$DIR") >")
+  _session_name=$(echo "$combined_list" | ~/.fzf/bin/fzf --reverse --header="Select project/session from $(basename "$DIR") >")
 
   session_name=${_session_name//./_}
 

@@ -60,7 +60,6 @@ setup_ubuntu() {
     update_system
     install_common_packages
     install_ubuntu_specific_packages
-    install_neovim_ubuntu
 
     if [[ $CODESPACES != "true" ]]; then
         install_nvm
@@ -74,7 +73,6 @@ setup_codespace() {
     update_system
     install_common_packages
     install_codespace_specific_packages
-    install_neovim_ubuntu
     setup_python
     setup_symlinks
 }

@@ -39,6 +39,7 @@ clone_repos() {
         "git@github.com:eduuh/homelab.git"
         "git@github.com:eduuh/nvim.git"
         "git@github.com:eduuh/dotfiles.git"
+        "git@github.com:eduuh/Stow.git"
       )
   fi
 
@@ -147,8 +148,7 @@ install_pnpm() {
     fi
 
     echo "Installing PNPM..."
-    # Use -y flag to automatically accept the installation defaults
-    curl -fsSL https://get.pnpm.io/install.sh | PNPM_VERSION=latest sh -s -- -y
+    curl -fsSL https://get.pnpm.io/install.sh | sh -s -- -y
 
     # Source PNPM environment for the current session
     export PNPM_HOME="$HOME/.local/share/pnpm"

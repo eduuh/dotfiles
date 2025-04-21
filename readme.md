@@ -11,7 +11,7 @@ bash <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/.bin/gh_ke
 2. Set up the development environment:
 
 ```zsh
-zsh <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/.bin/setup.sh)
+zsh <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/setup.sh)
 ```
 
 ## Manual
