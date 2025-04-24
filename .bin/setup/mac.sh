@@ -36,8 +36,8 @@ install_brew_packages() {
         coreutils moreutils findutils bash bash-completion2 wget
         openssh screen git-lfs lua pv p7zip pigz rename ssh-copy-id
         vbindiff zopfli gnu-sed rust node deno hugo lazygit bat
-        fish imagemagick pkg-config pngpaste
-        brave-browser jesseduffield/lazydocker/lazydocker
+        imagemagick pkg-config pngpaste
+        jesseduffield/lazydocker/lazydocker
     )
 
     for software in "${mac_software[@]}"; do

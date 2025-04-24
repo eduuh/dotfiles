@@ -1,4 +1,4 @@
-after-startup-command = ['exec-and-forget sketchybar']
+# after-startup-command = ['exec-and-forget sketchybar']
 
 # Notify Sketchybar about workspace change
 exec-on-workspace-change = ['/bin/bash', '-c',
@@ -7,7 +7,7 @@ exec-on-workspace-change = ['/bin/bash', '-c',
 ]
 
 # Start AeroSpace at login
-start-at-login = false
+start-at-login = true
 
 # Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
 enable-normalization-flatten-containers = true
@@ -52,13 +52,13 @@ if.app-name-regex-substring = 'telegram'
 run = 'layout floating'
 
 [[on-window-detected]]
-if.app-name-regex-substring = 'finder'
+if.app-name-regex-substring = 'spotify'
 run = 'layout floating'
 
 [[on-window-detected]]
-if.app-name-regex-substring = 'safari'
+if.app-name-regex-substring = 'finder'
 run = 'layout floating'
- 
+
 [[on-window-detected]]
 if.app-name-regex-substring = 'camera'
 run = 'layout floating'
@@ -104,8 +104,8 @@ inner.horizontal = 10
 inner.vertical =   10
 outer.left =       10
 outer.bottom =     10
-outer.top =        10
-outer.right =      10
+outer.top =        5
+outer.right =      80
 
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
