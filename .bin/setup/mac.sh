@@ -18,6 +18,12 @@ install_homebrew() {
 
 install_brew_packages() {
     echo "Installing Homebrew packages..."
+    brew install koekeishiya/formulae/skhd
+    brew install --cask nikitabobko/tap/aerospace
+    skhd --start-service
+
+    brew tap FelixKratz/formulae
+    brew install sketchybar
 
     # Install common software packages
     for software in "${common_software[@]}"; do
