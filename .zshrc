@@ -10,3 +10,9 @@ alias gdel='git branch | grep -v "main" | xargs git branch -D'
 alias cat='bat'
 alias ls='ls -la --color'
 alias zz='z -'
+
+export PNPM_HOME="/home/eduuh/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
