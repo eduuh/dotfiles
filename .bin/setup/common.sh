@@ -34,7 +34,8 @@ clone_repos() {
       )
   else
       REPOSITORIES=(
-        "git@github.com:eduuh/byte_safari.git"
+        "git@github.com:eduuh/byte_s.git"
+        "git@github.com:eduuh/ai_s.git"
         "git@github.com:eduuh/homelab.git"
         "git@github.com:eduuh/nvim.git"
         "git@github.com:eduuh/dotfiles.git"

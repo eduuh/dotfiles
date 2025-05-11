@@ -18,6 +18,12 @@ install_homebrew() {
 
 install_brew_packages() {
     echo "Installing Homebrew packages..."
+    brew install koekeishiya/formulae/skhd
+    brew install --cask nikitabobko/tap/aerospace
+    skhd --start-service
+
+    brew tap FelixKratz/formulae
+    brew install sketchybar
 
     # Install common software packages
     for software in "${common_software[@]}"; do
@@ -30,8 +36,8 @@ install_brew_packages() {
         coreutils moreutils findutils bash bash-completion2 wget
         openssh screen git-lfs lua pv p7zip pigz rename ssh-copy-id
         vbindiff zopfli gnu-sed rust node deno hugo lazygit bat
-        fish imagemagick pkg-config pngpaste
-        brave-browser jesseduffield/lazydocker/lazydocker
+        imagemagick pkg-config pngpaste
+        jesseduffield/lazydocker/lazydocker
     )
 
     for software in "${mac_software[@]}"; do
