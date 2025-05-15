@@ -30,8 +30,6 @@ else
 
   session_name=$(echo "$combined_list" | $fzf_cmd --reverse --header="Select project/session from $(basename "$DIR") >")
 
-  session_name=${_session_name//./_}
-
   path_name="$DIR/$_session_name"
 fi
 
