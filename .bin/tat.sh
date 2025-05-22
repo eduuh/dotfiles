@@ -14,9 +14,9 @@ if [[ -z "$TMUX" ]]; then
   exit 1
 fi
 
-# Get active sessions and initialize directories list
-active_sessions=$(tmux list-sessions -F "tmux:#S" 2>/dev/null || echo "")
+# Initialize directories and project sessions lists
 directories=""
+project_sessions=()  # Array to track project session names
 
 # Get directories from all configured paths
 for key in "${(@k)project_paths}"; do
@@ -42,6 +42,8 @@ for key in "${(@k)project_paths}"; do
           else
             directories="$line"
           fi
+          # Add to project sessions array for deduplication
+          project_sessions+=("$line")
         else
           # Normal project name, add prefix with underscore delimiter
           if [[ -n "$directories" ]]; then
@@ -49,26 +51,73 @@ for key in "${(@k)project_paths}"; do
           else
             directories="$key"_"$line"
           fi
+          # Add to project sessions array for deduplication
+          project_sessions+=("$key"_"$line")
         fi
       done <<< "$dir_list"
     fi
   fi
 done
 
-# Include all defined projects in the list
+# Get active tmux sessions
+active_sessions=$(tmux list-sessions -F "#S" 2>/dev/null || echo "")
+filtered_sessions=""
+
+# Filter out tmux sessions that match project directories or path keys
+if [[ -n "$active_sessions" ]]; then
+  while IFS= read -r session; do
+    # Check if this session is already in our project list
+    session_in_projects=0
+    for project in "${project_sessions[@]}"; do
+      if [[ "$session" == "$project" ]]; then
+        session_in_projects=1
+        break
+      fi
+    done
+
+    # Also check if this session name matches one of our path keys (wsl, win)
+    if [[ $session_in_projects -eq 0 && " ${(k)project_paths[@]} " == *" $session "* ]]; then
+      session_in_projects=1
+    fi
+
+    # Only add sessions that aren't already represented by a project directory or path key
+    if [[ $session_in_projects -eq 0 ]]; then
+      # Get the session's current path
+      session_path=$(tmux display-message -p -t "$session" '#{pane_current_path}' 2>/dev/null || echo "$HOME")
+      
+      if [[ -n "$filtered_sessions" ]]; then
+        filtered_sessions="$filtered_sessions"$'\n'"path:$session:$session_path"
+      else
+        filtered_sessions="path:$session:$session_path"
+      fi
+    fi
+  done <<< "$active_sessions"
+fi
+# Initialize filtered paths variable
 all_project_paths=""
+filtered_paths=""
+
+# Process project paths and prepare for deduplication
 for key in "${(@k)project_paths}"; do
   project_path="${project_paths[$key]}"
   if [[ -d "$project_path" ]]; then
     if [[ -n "$all_project_paths" ]]; then
-      all_project_paths="$all_project_paths"$'\n'"path_$key:$project_path"
+      all_project_paths="$all_project_paths"$'\n'"path $key:$project_path"
     else
-      all_project_paths="path_$key:$project_path"
+      all_project_paths="path $key:$project_path"
     fi
   fi
 done
 
-combined_list=$(echo -e "$directories\n$active_sessions\n$all_project_paths" | grep -v '^$' | sort -u)
+# Filter out path entries that are already represented by project directories
+if [[ -n "$all_project_paths" ]]; then
+  # We always include all paths regardless of active sessions
+  # This ensures both WSL and Windows paths are always visible
+  filtered_paths="$all_project_paths"
+fi
+
+# Combine deduplicated lists (project directories, non-duplicate tmux sessions with path: prefix, and non-duplicate paths)
+combined_list=$(echo -e "$directories\n$filtered_sessions\n$filtered_paths" | grep -v '^$' | sort -u)
 
 fzf_cmd=$(command -v fzf || echo "~/.fzf/bin/fzf")
 
@@ -87,19 +136,18 @@ if [[ -z "$selected" ]]; then
 fi
 
 # Parse selection to get real session name and path
-if [[ $selected == tmux:* ]]; then
+if [[ $selected == path:* ]]; then
   # Selected a tmux session
-  session_name=${selected#tmux:}
-  if tmux has-session -t "=$session_name" 2>/dev/null; then
-    path_name=$(tmux display-message -p -t "$session_name" '#{pane_current_path}' 2>/dev/null || echo "$HOME")
-  else
-    path_name="$HOME"
-  fi
-elif [[ $selected == path_* ]]; then
-  # Selected a project path directly
-  prefix_name=${selected#path_}
+  # Format is path:NAME:PATH
+  session_name="${selected#path:}"
+  session_name="${session_name%%:*}"
+  path_name="${selected#path:$session_name:}"
+elif [[ $selected == path\ * ]]; then
+  # Selected a project path directly (path KEY:PATH)
+  # Format is "path key:path_value"
+  prefix_name=${selected#path }
   prefix_name=${prefix_name%%:*}
-  path_name=${selected#path_$prefix_name:}
+  path_name=${selected#path $prefix_name:}
   session_name=$prefix_name
 else
   # Selected a directory with prefix
@@ -133,6 +181,7 @@ echo "Session name is \"$session_name\""
 echo "Path name is \"$path_name\""
 
 if [[ -z "$session_name" ]]; then
+  echo "Error: Empty session name"
   exit 1
 fi
 
