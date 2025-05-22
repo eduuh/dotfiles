@@ -1,0 +1,16 @@
+# filepath: /home/eduuh/projects/dotfiles/.zsh_lazy_load
+# Lazy load function for commands that slow down shell startup
+# Usage: lazy_load <command_name> <loading_script>
+
+function lazy_load() {
+  local command_name="$1"
+  local loading_script="$2"
+  
+  eval "
+  function $command_name() {
+    unfunction $command_name
+    eval \"$loading_script\"
+    $command_name \"\$@\"
+  }
+  "
+}

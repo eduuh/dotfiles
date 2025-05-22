@@ -1,37 +1,28 @@
-if [[ -s "$HOME/.cargo/env" ]]; then
-   . "$HOME/.cargo/env"
-fi
-
+# Fast initial environment setup - keep this file minimal and fast
 export GIT_EDITOR=nvim
-
 unset NODE_OPTIONS
 
+# Setup basic environment paths only once
 export BUN_INSTALL="$HOME/.bun"
 export NVM_DIR="$HOME/.nvm"
-export PNPM_HOME="$HOME/Library/pnpm"
-export PATH="$HOME/.local/bin:$BUN_INSTALL/bin:$PNPM_HOME:$PATH"
 
-if [[ "$(uname)" == "Darwin" ]]; then
-  export PATH="/opt/homebrew/opt/arm-none-eabi-gcc@8/bin:$PATH"
-fi
+# Detect OS only once
+export ZSHENV_OS=$(uname)
 
-if [[ "$(uname)" == "Darwin" ]]; then
-    [ -s "/Users/eduuh/yes/_bun" ] && source "/Users/eduuh/yes/_bun"
+# Set paths based on OS detection - once
+if [[ "$ZSHENV_OS" == "Darwin" ]]; then
     export PNPM_HOME="/Users/eduuh/Library/pnpm"
-    case ":$PATH:" in
-      *":$PNPM_HOME:"*) ;;
-      *) export PATH="$PNPM_HOME:$PATH" ;;
-    esac
 else
     export PNPM_HOME="$HOME/.local/share/pnpm"
-    case ":$PATH:" in
-        *":$PNPM_HOME:"*) ;;
-        *) export PATH="$PNPM_HOME:$PATH" ;;
-    esac
 fi
 
-if [[ -f ~/projects/work-dotfiles/.zshrc ]]; then
-    source ~/projects/work-dotfiles/.zshrc
-fi
+# Add to PATH only if not already there
+[[ ":$PATH:" != *":$PNPM_HOME:"* ]] && export PATH="$PNPM_HOME:$PATH"
+[[ ":$PATH:" != *":$BUN_INSTALL/bin:"* ]] && export PATH="$BUN_INSTALL/bin:$PATH"
+[[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && export PATH="$HOME/.local/bin:$PATH"
+
+# Load cargo once if it exists
+[[ -s "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+
 
 
