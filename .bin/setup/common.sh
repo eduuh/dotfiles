@@ -187,7 +187,7 @@ install_nvm() {
 
 setup_symlinks() {
     cd ~/projects/dotfiles
-    stow -v -R --adopt -t "$HOME" .
+    stow --adopt -t "$HOME" .
 }
 
 change_shell_to_zsh() {
