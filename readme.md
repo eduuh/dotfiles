@@ -21,8 +21,4 @@ zsh <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/setup.sh)
 ```zsh
 stow . --adopt -t ~
 
-# ignore some files
-
-stow . -t ~ --ignore='.zshrc' --ignore='.zshenv' --ignore='.bashrc' --ignore='.gitconfig'
-
 ```

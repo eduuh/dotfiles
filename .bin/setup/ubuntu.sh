@@ -72,7 +72,6 @@ setup_ubuntu() {
 setup_codespace() {
     update_system
     install_common_packages
-    install_codespace_specific_packages
     setup_python
     setup_symlinks
 }
