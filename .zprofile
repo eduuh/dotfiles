@@ -1,4 +1,8 @@
 # Load OS-specific configurations based on variables set in .zshenv
+if [ -f ~/.config/shell/profile ]; then
+    . ~/.config/shell/profile
+fi
+
 if [[ "$ZSHENV_OS" == "Darwin" ]]; then
    # Only run Homebrew setup on macOS
    [[ -f /opt/homebrew/bin/brew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
