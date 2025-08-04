@@ -45,6 +45,7 @@ clone_repos() {
         "git@github.com:eduuh/homelab.git"
         "git@github.com:eduuh/nvim.git"
         "git@github.com:eduuh/dotfiles.git"
+        "git@github.com:eduuh/bash.git"
       )
   fi
 
