@@ -27,6 +27,11 @@ install_yay() {
 ###########################################
 
 install_common_packages_arch() {
+
+    common_software=(
+        git stow make cmake fzf ripgrep tmux zsh unzip lua curl 1password
+    )
+
     echo "Installing common packages..."
 
     for pkg in "${common_software[@]}"; do
@@ -72,6 +77,7 @@ install_neovim_arch() {
 # Main setup function for Arch Linux
 setup_arch() {
     install_yay
+    install_nvm
     install_common_packages_arch
     install_arch_specific_packages
     install_neovim_arch
