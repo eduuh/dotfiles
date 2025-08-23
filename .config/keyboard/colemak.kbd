@@ -1,0 +1,49 @@
+;;  Learn Colemak, a few keys at a time.
+
+(defsrc
+  grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
+  tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
+  caps a    s    d    f    g    h    j    k    l    ;    '    ret
+  lsft z    x    c    v    b    n    m    ,    .    /    rsft
+  lctl lmet lalt           spc            ralt rmet rctl
+)
+
+(defalias
+  shift-colon (multi lsft ; ) ;; hold shift, type `;` → `:`
+  shift-at (multi lsft 2 ) ;; hold shift, type `;` → `:`
+  shift- (multi lsft 2 ) ;; hold shift, type `;` → `:`
+  lalt-layer-key (tap-hold 200 200 lalt (layer-switch lalt-layer))
+  ralt-layer-key (tap-hold 200 200 ralt (layer-switch ralt-layer))
+)
+
+
+(deflayer colemak
+  grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
+  tab  q    w    f    p    g    -    j    l    u    y    ;    @shift-colon   \
+  lsft a    r    s    t    d   ret   k    n    e    i    o    rsft
+  lctl x    c    b    v    b    z    m    h    ,    .    rctl
+  lctl lmet lalt          spc            @ralt-layer-key rmet rctl
+)
+
+(deflayer lalt-layer
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    @shift-at  -    -    -   _    _    _    _    _    _    _    _    _
+  _    tab  tab  tab  tab  _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _              _               _    _    _
+)
+
+(deflayer ralt-layer
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    tab  tab  tab  tab  _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _              _               _    _    _
+)
+
+(defcfg
+  process-unmapped-keys   yes
+  concurrent-tap-hold     yes
+  allow-hardware-repeat   no
+)
+
