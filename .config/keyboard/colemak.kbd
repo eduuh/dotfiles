@@ -10,9 +10,8 @@
 )
 
 (defalias
-  cec (tap-hold 200 200 esc lctl)
-  numbers (tap-hold 200 200 lalt (layer-toggle numbers))
-  symbols (tap-hold 200 200 ralt (layer-toggle symbols))
+  numbers (tap-hold 150 150 lalt (layer-while-held numbers))
+  symbols (tap-hold 150 150 ralt (layer-while-held symbols))
 )
 
 (deflayer colemak
@@ -36,8 +35,8 @@
 (deflayer symbols
   _     _    _    _    _    _    _    _    _    _    _    _    _
   _     _    _    _    _    _    _    _    _    _    _    _    _    _
-  _     S-2  S-`  S-,  S-.  S-6  _    _    _    _    _    _    _    _
-  caps  _    esc   _   S-1  S-/  _    _    _    _    _    ret  _
+  _     S-2  S-`  S-,  S-.  S-6  _    _    _    up    _    _    _    _
+  caps  _    esc   _   S-1  S-/  _    _   left down right  ret  _
   _     S-8  `    S-7  S-\  _    _    _    _    _    _    _
   _     _    _              _              _    _    _
 )
