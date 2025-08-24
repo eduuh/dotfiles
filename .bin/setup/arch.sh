@@ -1,5 +1,26 @@
 #!/bin/zsh
 
+install_hyprland_desktop_tools() {
+    echo "Installing Hyprland desktop tools..."
+
+    local desktop_tools=(
+        hyprland waybar rofi-wayland kitty dunst thunar
+        xdg-desktop-portal-hyprland qt5-wayland qt6-wayland
+        hyprpaper hyprlock firefox ttf-font-awesome vim fastfetch
+        ttf-fira-sans ttf-fira-code ttf-firacode-nerd jq
+        brightnessctl networkmanager wireplumber
+    )
+
+    for pkg in "${desktop_tools[@]}"; do
+        if ! yay -Qi "$pkg" &> /dev/null; then
+            echo "Installing $pkg..."
+            yay -S --noconfirm "$pkg"
+        else
+            echo "$pkg is already installed."
+        fi
+    done
+}
+
 add_kanatakeyboardprev() {
   current_user=$(whoami)
 
@@ -83,6 +104,7 @@ setup_arch() {
     install_yay
     install_nvm
     install_common_packages_arch
+    install_hyprland_desktop_tools
     install_arch_specific_packages
     install_neovim_arch
 
