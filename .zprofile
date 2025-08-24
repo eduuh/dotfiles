@@ -37,3 +37,4 @@ for p in "${paths_to_add[@]}"; do
   [[ -d "$p" && ":$PATH:" != *":$p:"* ]] && PATH="$PATH:$p"
 done
 export PATH
+export PATH="/home/eduuh/.local/share/pnpm:/home/edd/.nvm/versions/node/v22.18.0/bin:/home/edd/.local/share/pnpm:/home/edd/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl:/home/edd/.vector/bin"
