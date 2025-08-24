@@ -1,0 +1,4 @@
+#!/bin/zsh
+
+sudo kanata --cfg ~/.config/keyboard/colemak.kbd
+
