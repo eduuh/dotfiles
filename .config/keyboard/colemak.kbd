@@ -1,6 +1,7 @@
-;;  Learn Colemak, a few keys at a time.
+;; Edwin Keyboard Layout 
 
 (defsrc
+  esc  f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12
   grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
   tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
   caps a    s    d    f    g    h    j    k    l    ;    '    ret
@@ -9,41 +10,35 @@
 )
 
 (defalias
-  shift-colon (multi lsft ; ) ;; hold shift, type `;` → `:`
-  shift-at (multi lsft 2 ) ;; hold shift, type `;` → `:`
-  shift- (multi lsft 2 ) ;; hold shift, type `;` → `:`
-  lalt-layer-key (tap-hold 200 200 lalt (layer-switch lalt-layer))
-  ralt-layer-key (tap-hold 200 200 ralt (layer-switch ralt-layer))
+  cec (tap-hold 200 200 esc lctl)
+  numbers (tap-hold 200 200 lalt (layer-toggle numbers))
+  symbols (tap-hold 200 200 ralt (layer-toggle symbols))
 )
-
 
 (deflayer colemak
-  grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
-  tab  q    w    f    p    g    -    j    l    u    y    ;    @shift-colon   \
-  lsft a    r    s    t    d   ret   k    n    e    i    o    rsft
+  esc  f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12
+  S-/  S-1  [    ]    S-' S-[  S-]  S-8   /   '    S-0  S-9  S-=  bspc
+  tab  q    w    f    p    g    -    j    l    u    y    ;   S-;   \
+  rsft a    r    s    t    d   ret   k    n    e    i    o    rsft
   lctl x    c    b    v    b    z    m    h    ,    .    rctl
-  lctl lmet lalt          spc            @ralt-layer-key rmet rctl
+  lctl lmet @numbers          spc            @symbols  rmet rctl
 )
 
-(deflayer lalt-layer
-  _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    @shift-at  -    -    -   _    _    _    _    _    _    _    _    _
-  _    tab  tab  tab  tab  _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _              _               _    _    _
+(deflayer numbers
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    7    8    9    _    _    _
+  _    _    _    _    _    _    _    _    4    5    6    _    _    _
+  _    _    _    _    _    _    _    -    1    2    3    0   ret
+  _    _    _    _    _    _    _    S-4  S-5  S-3  _    _
+  _    _    _              _              _    _    _
 )
 
-(deflayer ralt-layer
-  _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    tab  tab  tab  tab  _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _              _               _    _    _
-)
-
-(defcfg
-  process-unmapped-keys   yes
-  concurrent-tap-hold     yes
-  allow-hardware-repeat   no
+(deflayer symbols
+  _     _    _    _    _    _    _    _    _    _    _    _    _
+  _     _    _    _    _    _    _    _    _    _    _    _    _    _
+  _     S-2  S-`  S-,  S-.  S-6  _    _    _    _    _    _    _    _
+  caps  _    esc   _   S-1  S-/  _    _    _    _    _    ret  _
+  _     S-8  `    S-7  S-\  _    _    _    _    _    _    _
+  _     _    _              _              _    _    _
 )
 
