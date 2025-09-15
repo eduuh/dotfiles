@@ -1,6 +1,5 @@
 ;; Edwin Keyboard Layout 
 
-
 ;; global configuration options
 (defcfg
       process-unmapped-keys no
@@ -28,7 +27,7 @@
   S-/  S-1  [    ]    S-' S-[  S-]  S-8   /   '    S-0  S-9  S-=  bspc
   tab  q    w    f    p    g    ✗    j    l    u    y    ;   S-;   \
   rsft a    r    s    t    d    ✗  k    n    e    i    o    @enter-shift
-  lctl x    c    b    v    S-\   z    m    h    ,    .    rctl
+  lctl x    c    b    v    \   z    m    h    ,    .    rctl
   lctl lmet @numbers          spc            @symbols  rmet rctl
 )
 
@@ -46,7 +45,7 @@
   ✗     ✗    ✗    ✗    ✗    ✗    ✗    ✗    ✗    ✗    ✗    ✗    ✗    ✗
   ✗     S-2  S-`  S-,  S-.  S-6  ✗    ✗    ✗    up    ✗    ✗    ✗    ✗
   caps  ✗    esc   ✗   S-1  S-/  ✗    ✗   left down right  ret  ✗
-  ✗     S-8  `    S-7  S-\  ✗    ✗    ✗    ✗    ✗    ✗    ✗
+  ✗     S-8  `    S-7  S-\  S-/   ✗    ✗    ✗    ✗    ✗    ✗
   ✗     ✗    ✗              ✗              ✗    ✗    ✗
 )
 
