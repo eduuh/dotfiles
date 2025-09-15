@@ -1,5 +1,5 @@
 #!/bin/zsh
 
 #TODO: fix the user
-sudo kanata --cfg /home/edd/.config/keyboard/colemak.kbd
+sudo kanata --cfg /home/eduuh/.config/keyboard/colemak.kbd
 
