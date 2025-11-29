@@ -1,24 +1,41 @@
-## Setting Up the dotfiles
+## Dotfiles Setup Guide
 
-## (Automated) Codespaces, WSL (Ubuntu), and Mac
+These dotfiles help you quickly configure a consistent development environment across Linux (Arch), macOS, and Windows systems.
 
-1. Set up GitHub CLI and configure GitHub SSH keys. Make sure to log in to GitHub CLI:
+### Prerequisites
+
+- [GNU Stow](https://www.gnu.org/software/stow/) (for managing symlinks)
+- [GitHub CLI](https://cli.github.com/) (for authentication)
+
+
+### 1. Set Up GitHub CLI and SSH Keys
+
+Make sure you are logged in to GitHub CLI and have SSH keys set up:
 
 ```zsh
 bash <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/.bin/gh_keys.sh)
 ```
 
-2. Set up the development environment:
+
+### 2. Clone and Set Up Dotfiles (Linux/macOS)
 
 ```zsh
-zsh <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/setup.sh)
+git clone https://github.com/eduuh/dotfiles.git ~/projects/dotfiles
+cd ~/projects/dotfiles
+./setup.sh
 ```
 
-## Manual
+> **Note:** Skip this step if you are using WSL.
 
-- using stow
+### 3. Windows Setup
 
-```zsh
-stow . --adopt -t ~
+For Windows, use the dedicated repository:
 
-```
+https://github.com/eduuh/win-dot
+
+### 4. Archived Repository
+
+Old dotfiles repository (for reference):
+
+https://github.com/eduuh/arch-dotfiles.git
+

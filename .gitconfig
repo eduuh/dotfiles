@@ -11,7 +11,7 @@
 	helper = !/usr/bin/gh auth git-credential
 [init]
 	defaultBranch = main
-[credential]
-	helper = /mnt/c/Program\\ Files/Git/mingw64/bin/git-credential-manager.exe
 [credential "https://dev.azure.com"]
 	useHttpPath = true
+[core]
+	editor = nvim

@@ -9,7 +9,6 @@ source "$SCRIPT_DIR/.bin/setup/common.sh"
 main() {
     local distro=$(detect_distro)
 
-    clone_repos
     install_tmux_plugins
     install_starship
     install_rust
@@ -18,10 +17,12 @@ main() {
 
     case "$distro" in
         ubuntu|debian)
+            clone_repos
             source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"
             setup_ubuntu
             ;;
         arch)
+            clone_repos
             source "$SCRIPT_DIR/.bin/setup/arch.sh"
             setup_arch
             ;;
@@ -30,6 +31,7 @@ main() {
             setup_codespace
             ;;
         darwin)
+            clone_repos
             source "$SCRIPT_DIR/.bin/setup/mac.sh"
             setup_mac
             ;;

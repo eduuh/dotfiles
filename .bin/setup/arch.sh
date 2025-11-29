@@ -1,9 +1,20 @@
 #!/bin/zsh
-# Arch Linux specific installation routines
 
-###########################################
-# Package manager setup
-###########################################
+add_kanatakeyboardprev() {
+  current_user=$(whoami)
+
+  kanata_path="/home/$current_user/.bin/kanata"
+
+  if ! sudo grep -q "$kanata_path" /etc/sudoers; then
+    echo "$current_user ALL=(ALL) NOPASSWD: $kanata_path" | sudo tee -a /etc/sudoers > /dev/null
+    echo "Sudoers entry added for $current_user to run $kanata_path without a password."
+  else
+    echo "Sudoers entry already exists for $current_user."
+  fi
+
+  systemctl --user enable kanata.service
+  systemctl --user start kanata.service
+}
 
 install_yay() {
     if command -v yay &> /dev/null; then
@@ -18,15 +29,15 @@ install_yay() {
     makepkg -si --noconfirm
     cd - > /dev/null
     rm -rf /tmp/yay
-
     echo "Yay AUR helper installed successfully."
 }
 
-###########################################
-# Package installation functions
-###########################################
-
 install_common_packages_arch() {
+
+    common_software=(
+        git stow make cmake fzf ripgrep tmux zsh unzip lua curl kanata 1password
+    )
+
     echo "Installing common packages..."
 
     for pkg in "${common_software[@]}"; do
@@ -42,7 +53,6 @@ install_common_packages_arch() {
 install_arch_specific_packages() {
     echo "Installing Arch-specific packages..."
 
-    # Additional packages specific to Arch Linux
     local arch_packages=(
         man-db man-pages libsecret acpi d2 starship neovim bat
     )
@@ -69,9 +79,9 @@ install_neovim_arch() {
     yay -S --noconfirm neovim
 }
 
-# Main setup function for Arch Linux
 setup_arch() {
     install_yay
+    install_nvm
     install_common_packages_arch
     install_arch_specific_packages
     install_neovim_arch
@@ -79,4 +89,5 @@ setup_arch() {
     install_lazygit
     setup_python
     setup_symlinks
+    add_kanatakeyboardprev
 }
