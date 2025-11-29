@@ -119,7 +119,7 @@ fi
 # Combine deduplicated lists (project directories, non-duplicate tmux sessions with path: prefix, and non-duplicate paths)
 combined_list=$(echo -e "$directories\n$filtered_sessions\n$filtered_paths" | grep -v '^$' | sort -u)
 
-fzf_cmd=$(command -v fzf || echo "~/.fzf/bin/fzf")
+fzf_cmd=$(command -v fzf || echo "$HOME/.fzf/bin/fzf")
 
 # Check if fzf is available
 if [[ ! -x "$fzf_cmd" ]]; then

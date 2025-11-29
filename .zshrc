@@ -66,3 +66,36 @@ if [[ ! -f ~/.starship.zsh || ! -s ~/.starship.zsh || "$(find ~/.starship.zsh -m
   starship init zsh > ~/.starship.zsh
 fi
 source ~/.starship.zsh
+
+# pnpm
+export PNPM_HOME="$HOME/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+# pnpm end
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+export PATH=$PATH:/snap/bin
+
+
+# ---- NVM lazy load (Node 22.18.0 default) ----
+export NVM_DIR="$HOME/.nvm"
+
+if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+  _nvm_lazy_load() {
+    # Load nvm only when first needed
+    unset -f nvm node npm npx
+    source "$NVM_DIR/nvm.sh"
+
+    # Use default (already aliased to 22.18.0 above)
+    nvm use default &>/dev/null || true
+  }
+
+  nvm() { _nvm_lazy_load; nvm "$@"; }
+  node() { _nvm_lazy_load; node "$@"; }
+  npm() { _nvm_lazy_load; npm "$@"; }
+  npx() { _nvm_lazy_load; npx "$@"; }
+fi
+# ---- end NVM lazy load ----
+
