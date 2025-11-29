@@ -3,9 +3,16 @@
 set -e
 set -o pipefail
 
-common_software=(
-    git stow make cmake fzf ripgrep tmux zsh unzip
-)
+# Define common software based on environment
+if [ "$CODESPACES" = "true" ]; then
+    common_software=(
+        git stow fzf ripgrep tmux zsh unzip
+    )
+else
+    common_software=(
+        git stow make cmake fzf ripgrep tmux zsh unzip
+    )
+fi
 
 detect_distro() {
     if [ "$CODESPACES" = "true" ]; then
@@ -29,7 +36,6 @@ clone_repos() {
 
   if [ "$CODESPACES" = "true" ]; then
       REPOSITORIES=(
-          "https://github.com/eduuh/nvim.git"
           "https://github.com/eduuh/dotfiles.git"
       )
   else
@@ -39,6 +45,7 @@ clone_repos() {
         "git@github.com:eduuh/homelab.git"
         "git@github.com:eduuh/nvim.git"
         "git@github.com:eduuh/dotfiles.git"
+        "git@github.com:eduuh/bash.git"
       )
   fi
 
@@ -127,6 +134,11 @@ install_starship() {
 }
 
 install_rust() {
+    if [[ $CODESPACES == "true" ]]; then
+        echo "In a GitHub Codespace environment, skipping Rust installation."
+        return 0
+    fi
+
     if command -v rustc &> /dev/null && command -v cargo &> /dev/null; then
         echo "Rust is already installed."
         return 0
@@ -141,6 +153,11 @@ install_rust() {
 }
 
 install_pnpm() {
+    if [[ $CODESPACES == "true" ]]; then
+        echo "In a GitHub Codespace environment, skipping PNPM installation."
+        return 0
+    fi
+
     if command -v pnpm &> /dev/null; then
         echo "PNPM is already installed."
         return 0
@@ -158,6 +175,11 @@ install_pnpm() {
 }
 
 setup_python() {
+    if [[ $CODESPACES == "true" ]]; then
+        echo "In a GitHub Codespace environment, skipping Python setup."
+        return 0
+    fi
+
     if [ -d "$HOME/.local/state/python3" ]; then
         echo "Python virtual environment already exists."
         source ~/.local/state/python3/bin/activate
