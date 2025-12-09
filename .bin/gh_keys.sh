@@ -174,7 +174,6 @@ configure_ssh() {
       cat > ~/.ssh/config << EOF
 Host github.com
   AddKeysToAgent yes
-  UseKeychain yes
   IdentityFile ~/.ssh/id_ed25519
 EOF
     else
@@ -197,14 +196,36 @@ setup_github() {
     print_status "Authenticating with GitHub..."
 
     # GitHub authentication method
-    gh auth login --web
+    gh auth login --web -s admin:public_key
   else
     print_status "Already authenticated with GitHub"
   fi
 
   # Add SSH key to GitHub account
   print_status "Adding SSH key to GitHub account..."
-  gh ssh-key add ~/.ssh/id_ed25519.pub --title "$(hostname) $(date +'%Y-%m-%d')"
+  
+  # Capture output and exit code
+  set +e # Disable exit on error temporarily
+  gh ssh-key add ~/.ssh/id_ed25519.pub --title "$(hostname) $(date +'%Y-%m-%d')" > /tmp/gh_key_output 2>&1
+  GH_EXIT_CODE=$?
+  set -e # Re-enable exit on error
+
+  if [ $GH_EXIT_CODE -ne 0 ]; then
+      cat /tmp/gh_key_output # Show the output
+      if grep -q "admin:public_key" /tmp/gh_key_output; then
+          print_status "Missing 'admin:public_key' scope. Refreshing credentials..."
+          gh auth refresh -s admin:public_key
+          print_status "Retrying SSH key addition..."
+          gh ssh-key add ~/.ssh/id_ed25519.pub --title "$(hostname) $(date +'%Y-%m-%d')"
+      elif grep -q "key is already in use" /tmp/gh_key_output; then
+          print_status "SSH key is already added to GitHub."
+      else
+          print_status "Failed to add SSH key."
+      fi
+  else
+      print_status "SSH key added successfully."
+  fi
+  rm -f /tmp/gh_key_output
 }
 
 # Main script execution

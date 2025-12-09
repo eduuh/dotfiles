@@ -10,7 +10,12 @@ install_homebrew() {
 
     echo "Installing Homebrew..."
     NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    eval "$(/opt/homebrew/bin/brew shellenv)"
+    
+    if [ -f "/opt/homebrew/bin/brew" ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [ -f "/usr/local/bin/brew" ]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
 
     echo "Homebrew installed successfully."
 }
@@ -20,7 +25,10 @@ install_brew_packages() {
     echo "Installing Homebrew packages..."
     brew install koekeishiya/formulae/skhd
     brew install --cask nikitabobko/tap/aerospace
-    skhd --start-service
+    
+    # Start skhd service
+    echo "Starting skhd service..."
+    skhd --start-service || echo "Failed to start skhd service (it might be already running or require permissions), continuing..."
 
     brew tap FelixKratz/formulae
     brew install sketchybar
@@ -35,7 +43,7 @@ install_brew_packages() {
     local mac_software=(
         coreutils moreutils findutils bash bash-completion2 wget
         openssh screen git-lfs lua pv p7zip pigz rename ssh-copy-id
-        vbindiff zopfli gnu-sed rust node deno hugo lazygit bat
+        vbindiff zopfli gnu-sed node deno hugo lazygit bat
         imagemagick pkg-config pngpaste
         jesseduffield/lazydocker/lazydocker
     )
@@ -60,7 +68,7 @@ install_brew_casks() {
     echo "Installing Homebrew casks..."
 
     local mac_casks=(
-        alacritty karabiner-elements kitty@nightly
+        alacritty karabiner-elements kitty
         font-fira-code-nerd-font
     )
 

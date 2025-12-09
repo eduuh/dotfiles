@@ -9,6 +9,18 @@ source "$SCRIPT_DIR/.bin/setup/common.sh"
 main() {
     local distro=$(detect_distro)
 
+    # Run GitHub SSH setup script first to ensure we can clone repositories
+    echo "Setting up GitHub CLI and SSH keys..."
+    "$SCRIPT_DIR/.bin/gh_keys.sh"
+
+    # For macOS, we need to install Homebrew and Git before cloning repos or installing plugins
+    if [ "$distro" = "darwin" ]; then
+        echo "Detected macOS. Pre-installing Homebrew and Git..."
+        source "$SCRIPT_DIR/.bin/setup/mac.sh"
+        install_homebrew
+        install_brew_packages
+    fi
+
     install_tmux_plugins
     install_starship
     install_rust
@@ -32,7 +44,7 @@ main() {
             ;;
         darwin)
             clone_repos
-            source "$SCRIPT_DIR/.bin/setup/mac.sh"
+            # mac.sh is already sourced, and packages installed, but we run setup_mac to finish configuration
             setup_mac
             ;;
         *)

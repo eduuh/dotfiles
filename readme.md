@@ -5,25 +5,18 @@ These dotfiles help you quickly configure a consistent development environment a
 ### Prerequisites
 
 - [GNU Stow](https://www.gnu.org/software/stow/) (for managing symlinks)
-- [GitHub CLI](https://cli.github.com/) (for authentication)
+- [GitHub CLI](https://cli.github.com/) (for authentication) - *Installed automatically by setup script*
 
 
-### 1. Set Up GitHub CLI and SSH Keys
-
-Make sure you are logged in to GitHub CLI and have SSH keys set up:
-
-```zsh
-bash <(curl -sL https://raw.githubusercontent.com/eduuh/dotfiles/main/.bin/gh_keys.sh)
-```
-
-
-### 2. Clone and Set Up Dotfiles (Linux/macOS)
+### 1. Clone and Set Up Dotfiles (Linux/macOS)
 
 ```zsh
 git clone https://github.com/eduuh/dotfiles.git ~/projects/dotfiles
 cd ~/projects/dotfiles
 ./setup.sh
 ```
+
+The setup script will handle GitHub authentication and SSH key generation.
 
 > **Note:** Skip this step if you are using WSL.
 
