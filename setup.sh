@@ -25,6 +25,8 @@ main() {
     install_starship
     install_rust
     install_pnpm
+    install_talosctl
+    setup_git_hooks
     change_shell_to_zsh
 
     case "$distro" in

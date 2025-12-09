@@ -46,6 +46,7 @@ clone_repos() {
         "git@github.com:eduuh/nvim.git"
         "git@github.com:eduuh/dotfiles.git"
         "git@github.com:eduuh/bash.git"
+        "git@github.com:eduuh/eduuh-blog-template.git"
       )
   fi
 
@@ -179,6 +180,16 @@ install_pnpm() {
     esac
 }
 
+install_talosctl() {
+    if command -v talosctl &> /dev/null; then
+        echo "talosctl is already installed."
+        return 0
+    fi
+
+    echo "Installing talosctl..."
+    curl -sL https://talos.dev/install | sh
+}
+
 setup_python() {
     if [[ $CODESPACES == "true" ]]; then
         echo "In a GitHub Codespace environment, skipping Python setup."
@@ -214,6 +225,29 @@ install_nvm() {
 setup_symlinks() {
     cd ~/projects/dotfiles
     stow --adopt -t "$HOME" .
+}
+
+setup_git_hooks() {
+    echo "Setting up git hooks for all projects..."
+    local hook_source="$HOME/projects/dotfiles/.bin/git-hooks/pre-push"
+    
+    if [ ! -f "$hook_source" ]; then
+        echo "Error: Pre-push hook not found at $hook_source"
+        return 1
+    fi
+
+    # Find all git repositories in ~/projects
+    find ~/projects -maxdepth 2 -name ".git" -type d | while read git_dir; do
+        local hook_dir="$git_dir/hooks"
+        local hook_dest="$hook_dir/pre-push"
+        
+        # Skip if it's the dotfiles repo itself (optional, but maybe you want to protect dotfiles too)
+        # if [[ "$git_dir" == *"/dotfiles/.git" ]]; then continue; fi
+
+        echo "Installing pre-push hook in $(dirname "$git_dir")..."
+        mkdir -p "$hook_dir"
+        ln -sf "$hook_source" "$hook_dest"
+    done
 }
 
 change_shell_to_zsh() {

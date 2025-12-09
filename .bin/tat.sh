@@ -18,6 +18,9 @@ fi
 directories=""
 project_sessions=()  # Array to track project session names
 
+# Initialize associative array to track project sources
+typeset -A project_sources
+
 # Get directories from all configured paths
 for key in "${(@k)project_paths}"; do
   dir_path="${project_paths[$key]}"
@@ -30,34 +33,50 @@ for key in "${(@k)project_paths}"; do
       -not -path "./.vscode" \
       -not -path "./.idea" \
       -not -path "./__pycache__" \
-      | sed 's|^\./||g' | sort)
+      | sed 's|^\./||g')
       
-    # Add prefix to directories except for number-only project names
     if [[ -n "$dir_list" ]]; then
       while IFS= read -r line; do
-        if [[ "$line" =~ ^[0-9]+$ ]]; then
-          # Number-only project name, keep as is
-          if [[ -n "$directories" ]]; then
-            directories="$directories"$'\n'"$line"
-          else
-            directories="$line"
-          fi
-          # Add to project sessions array for deduplication
-          project_sessions+=("$line")
+        if [[ -n "${project_sources[$line]}" ]]; then
+          project_sources[$line]="${project_sources[$line]} $key"
         else
-          # Normal project name, add prefix with underscore delimiter
-          if [[ -n "$directories" ]]; then
-            directories="$directories"$'\n'"$key"_"$line"
-          else
-            directories="$key"_"$line"
-          fi
-          # Add to project sessions array for deduplication
-          project_sessions+=("$key"_"$line")
+          project_sources[$line]="$key"
         fi
       done <<< "$dir_list"
     fi
   fi
 done
+
+# Build directories list and project sessions
+for name in "${(@k)project_sources}"; do
+  # Split sources into array
+  sources=(${=project_sources[$name]})
+  
+  if [[ ${#sources[@]} -gt 1 ]]; then
+    # Duplicates exist, add prefix for all
+    for key in "${sources[@]}"; do
+      entry="${key}_${name}"
+      if [[ -n "$directories" ]]; then
+        directories="$directories"$'\n'"$entry"
+      else
+        directories="$entry"
+      fi
+      project_sessions+=("$entry")
+    done
+  else
+    # Unique, no prefix
+    entry="$name"
+    if [[ -n "$directories" ]]; then
+      directories="$directories"$'\n'"$entry"
+    else
+      directories="$entry"
+    fi
+    project_sessions+=("$entry")
+  fi
+done
+
+# Sort directories for display
+directories=$(echo "$directories" | sort)
 
 # Get active tmux sessions
 active_sessions=$(tmux list-sessions -F "#S" 2>/dev/null || echo "")
@@ -150,30 +169,42 @@ elif [[ $selected == path\ * ]]; then
   path_name=${selected#path $prefix_name:}
   session_name=$prefix_name
 else
-  # Selected a directory with prefix
-  if [[ $selected =~ ^[0-9]+$ ]]; then
-    # Number-only project name, no prefix
-    dir_name=$selected
-    path_name="$HOME/$dir_name"
-    session_name=$dir_name
-  else
-    # Regular case with prefix - now using underscore delimiter
-    prefix_name=${selected%%_*}
-    dir_name=${selected#*_}
-    session_name=$selected
-    
-    # Set the correct path based on the prefix
+  # Selected a directory (prefixed or unique)
+  session_name=$selected
+  path_name=""
+  
+  # 1. Try to parse as prefixed path
+  for key in "${(@k)project_paths}"; do
+    if [[ "$selected" == "${key}_"* ]]; then
+      # Potential prefix match
+      potential_dir="${selected#${key}_}"
+      potential_path="${project_paths[$key]}/$potential_dir"
+      
+      if [[ -d "$potential_path" ]]; then
+        path_name="$potential_path"
+        break
+      fi
+    fi
+  done
+  
+  # 2. If not found as prefixed, try as exact name in any path
+  if [[ -z "$path_name" ]]; then
     for key in "${(@k)project_paths}"; do
-      if [[ "$prefix_name" == "$key" ]]; then
-        path_name="${project_paths[$key]}/$dir_name"
+      potential_path="${project_paths[$key]}/$selected"
+      if [[ -d "$potential_path" ]]; then
+        path_name="$potential_path"
         break
       fi
     done
-    
-    # Fallback if prefix not found in our paths
-    if [[ -z "$path_name" ]]; then
-      path_name="$HOME/$dir_name"
-    fi
+  fi
+  
+  # 3. Fallback
+  if [[ -z "$path_name" ]]; then
+     # Default to first configured path
+     for key in "${(@k)project_paths}"; do
+        path_name="${project_paths[$key]}/$selected"
+        break
+     done
   fi
 fi
 
