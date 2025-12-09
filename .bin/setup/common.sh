@@ -65,7 +65,7 @@ clone_repos() {
           cd ~
       else
           echo "Cloning $REPO_NAME into $TARGET_DIR..."
-          git clone "$REPO" "$TARGET_DIR"
+          git clone "$REPO" "$TARGET_DIR" || echo "Failed to clone $REPO_NAME. Continuing..."
       fi
 
       # Special handling for Neovim config
@@ -129,8 +129,13 @@ install_starship() {
         return 0
     fi
 
-    # Use -y to automatically accept prompts in non-interactive environments
-    curl -sS https://starship.rs/install.sh | sh -s -- -y
+    if [[ "$(uname)" == "Darwin" ]]; then
+        echo "Installing Starship via Homebrew..."
+        brew install starship
+    else
+        # Use -y to automatically accept prompts in non-interactive environments
+        curl -sS https://starship.rs/install.sh | sh -s -- -y
+    fi
 }
 
 install_rust() {
