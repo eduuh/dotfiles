@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Read the push refs from stdin
+while read local_ref local_sha remote_ref remote_sha
+do
+    # Check if pushing to main or master
+    if [ "$remote_ref" = "refs/heads/main" ] || [ "$remote_ref" = "refs/heads/master" ]; then
+        echo "🚫  \033[1;31mPROTECTED BRANCH VIOLATION\033[0m"
+        echo "You are trying to push directly to '$remote_ref'."
+        echo "Please use a Pull Request instead."
+        echo ""
+        echo "If you absolutely must push, use: git push --no-verify"
+        exit 1
+    fi
+done
+
+exit 0
