@@ -1,5 +1,5 @@
 #!/bin/zsh
 
-#TODO: fix the user
-sudo kanata --cfg /home/eduuh/.config/keyboard/colemak.kbd
+# Fixed path using $HOME
+sudo kanata --cfg "$HOME/.config/keyboard/colemak.kbd"
 

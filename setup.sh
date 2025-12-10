@@ -19,6 +19,8 @@ main() {
         source "$SCRIPT_DIR/.bin/setup/mac.sh"
         install_homebrew
         install_brew_packages
+        install_brew_casks
+        setup_kanata_service
     fi
 
     install_tmux_plugins
