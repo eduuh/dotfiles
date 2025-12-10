@@ -6,11 +6,11 @@ set -o pipefail
 # Define common software based on environment
 if [ "$CODESPACES" = "true" ]; then
     common_software=(
-        git stow fzf ripgrep tmux zsh unzip
+        git stow fzf ripgrep tmux zsh unzip neovim
     )
 else
     common_software=(
-        git stow make cmake fzf ripgrep tmux zsh unzip
+        git stow make cmake fzf ripgrep tmux zsh unzip neovim
     )
 fi
 
