@@ -50,10 +50,6 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 # Starship
 eval "$(starship init zsh)"
 
-# bun
-export BUN_INSTALL="yes"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-# bun
-export BUN_INSTALL="yes"
-export PATH="$BUN_INSTALL/bin:$PATH"
+# Kanata
+alias kanata-restart="sudo launchctl unload /Library/LaunchDaemons/com.custom.kanata.plist && sudo launchctl load /Library/LaunchDaemons/com.custom.kanata.plist"
+alias kanata-log="cat /tmp/kanata.out /tmp/kanata.err"

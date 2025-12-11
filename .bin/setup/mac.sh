@@ -44,9 +44,9 @@ install_brew_packages() {
     local mac_software=(
         coreutils moreutils findutils bash bash-completion2 wget
         openssh screen git-lfs lua pv p7zip pigz rename ssh-copy-id
-        vbindiff zopfli gnu-sed node deno hugo lazygit bat
+        vbindiff zopfli gnu-sed node deno hugo bat
         imagemagick pkg-config pngpaste kanata
-        jesseduffield/lazydocker/lazydocker
+        jesseduffield/lazydocker/lazydocker kubernetes-cli 1password-cli
     )
 
     for software in "${mac_software[@]}"; do
@@ -70,7 +70,7 @@ install_brew_casks() {
 
     local mac_casks=(
         alacritty karabiner-elements kitty
-        font-fira-code-nerd-font
+        font-fira-code-nerd-font docker spotify
     )
 
     for cask in "${mac_casks[@]}"; do
@@ -186,6 +186,7 @@ setup_mac() {
     install_homebrew
     install_brew_packages
     install_brew_casks
+    install_lazygit
     setup_mac_python
     setup_symlinks
     setup_mac_security
