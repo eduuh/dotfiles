@@ -49,6 +49,7 @@ clone_repos() {
                 "git@github.com:eduuh/eduuh-blog-template.git"
                 "git@github.com:eduuh/personal-notes.git"
                 "git@github.com:eduuh/life.git"
+                "git@github.com:eduuh/kube-homelab.git"
             )
   fi
 

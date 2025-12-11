@@ -47,6 +47,7 @@ install_brew_packages() {
         vbindiff zopfli gnu-sed node deno hugo bat
         imagemagick pkg-config pngpaste kanata
         jesseduffield/lazydocker/lazydocker kubernetes-cli 1password-cli
+        fluxcd/tap/flux
     )
 
     for software in "${mac_software[@]}"; do
