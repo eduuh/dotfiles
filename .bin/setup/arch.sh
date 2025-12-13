@@ -33,11 +33,6 @@ install_yay() {
 }
 
 install_common_packages_arch() {
-
-    common_software=(
-        git stow make cmake fzf ripgrep tmux zsh unzip lua curl kanata 1password
-    )
-
     echo "Installing common packages..."
 
     for pkg in "${common_software[@]}"; do
@@ -54,7 +49,7 @@ install_arch_specific_packages() {
     echo "Installing Arch-specific packages..."
 
     local arch_packages=(
-        man-db man-pages libsecret acpi d2 starship neovim bat
+        man-db man-pages libsecret acpi d2 bat lua curl kanata 1password
     )
 
     for pkg in "${arch_packages[@]}"; do
@@ -67,24 +62,11 @@ install_arch_specific_packages() {
     done
 }
 
-install_neovim_arch() {
-    echo "Setting up Neovim..."
-
-    if command -v nvim &> /dev/null; then
-        echo "Neovim is already installed."
-        return 0
-    fi
-
-    echo "Installing Neovim..."
-    yay -S --noconfirm neovim
-}
-
 setup_arch() {
     install_yay
     install_nvm
     install_common_packages_arch
     install_arch_specific_packages
-    install_neovim_arch
 
     install_lazygit
     setup_python
