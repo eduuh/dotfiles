@@ -23,14 +23,6 @@ main() {
         setup_kanata_service
     fi
 
-    install_tmux_plugins
-    install_starship
-    install_rust
-    install_pnpm
-    install_talosctl
-    setup_git_hooks
-    change_shell_to_zsh
-
     case "$distro" in
         ubuntu|debian)
             clone_repos
@@ -56,6 +48,14 @@ main() {
             exit 1
             ;;
     esac
+
+    install_tmux_plugins
+    install_starship
+    install_rust
+    install_pnpm
+    install_talosctl
+    setup_git_hooks
+    change_shell_to_zsh
 
     echo "Setup completed successfully!"
 }

@@ -39,15 +39,18 @@ clone_repos() {
           "https://github.com/eduuh/dotfiles.git"
       )
   else
-      REPOSITORIES=(
-        "git@github.com:eduuh/byte_s.git"
-        "git@github.com:eduuh/ai_s.git"
-        "git@github.com:eduuh/homelab.git"
-        "git@github.com:eduuh/nvim.git"
-        "git@github.com:eduuh/dotfiles.git"
-        "git@github.com:eduuh/bash.git"
-        "git@github.com:eduuh/eduuh-blog-template.git"
-      )
+            REPOSITORIES=(
+                "git@github.com:eduuh/byte_s.git"
+                "git@github.com:eduuh/ai_s.git"
+                "git@github.com:eduuh/homelab.git"
+                "git@github.com:eduuh/nvim.git"
+                "git@github.com:eduuh/dotfiles.git"
+                "git@github.com:eduuh/bash.git"
+                "git@github.com:eduuh/eduuh-blog-template.git"
+                "git@github.com:eduuh/personal-notes.git"
+                "git@github.com:eduuh/life.git"
+                "git@github.com:eduuh/kube-homelab.git"
+            )
   fi
 
   for REPO in "${REPOSITORIES[@]}"; do
