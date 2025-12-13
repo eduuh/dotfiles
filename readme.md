@@ -1,34 +1,31 @@
-## Dotfiles Setup Guide
+<div align="center">
 
-These dotfiles help you quickly configure a consistent development environment across Linux (Arch), macOS, and Windows systems.
+# 🏠 dotfiles
 
-### Prerequisites
+**My personal development environment configuration**
 
-- [GNU Stow](https://www.gnu.org/software/stow/) (for managing symlinks)
-- [GitHub CLI](https://cli.github.com/) (for authentication) - *Installed automatically by setup script*
+[![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](#)
+[![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)](#)
+[![Zsh](https://img.shields.io/badge/Zsh-F15A24?logo=zsh&logoColor=white)](#)
+[![Neovim](https://img.shields.io/badge/Neovim-57A143?logo=neovim&logoColor=white)](#)
 
+</div>
 
-### 1. Clone and Set Up Dotfiles (Linux/macOS)
+---
 
-```zsh
+## ⚡ Quick Start
+
+```bash
 git clone https://github.com/eduuh/dotfiles.git ~/projects/dotfiles
-cd ~/projects/dotfiles
-./setup.sh
+cd ~/projects/dotfiles && ./setup.sh
 ```
 
-The setup script will handle GitHub authentication and SSH key generation.
+> Handles GitHub auth, SSH keys, and symlinks via [GNU Stow](https://www.gnu.org/software/stow/)
 
-> **Note:** Skip this step if you are using WSL.
+## 🔗 Related
 
-### 3. Windows Setup
-
-For Windows, use the dedicated repository:
-
-https://github.com/eduuh/win-dot
-
-### 4. Archived Repository
-
-Old dotfiles repository (for reference):
-
-https://github.com/eduuh/arch-dotfiles.git
+| Platform | Repository |
+|----------|------------|
+| 🪟 Windows | [eduuh/win-dot](https://github.com/eduuh/win-dot) |
+| 📦 Archive | [eduuh/arch-dotfiles](https://github.com/eduuh/arch-dotfiles) |
 
