@@ -50,6 +50,9 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 # Starship
 eval "$(starship init zsh)"
 
+# Zoxide (smart cd)
+command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
+
 # Kanata
 alias kanata-restart="sudo launchctl unload /Library/LaunchDaemons/com.custom.kanata.plist && sudo launchctl load /Library/LaunchDaemons/com.custom.kanata.plist"
 alias kanata-log="cat /tmp/kanata.out /tmp/kanata.err"
@@ -57,12 +60,10 @@ alias kanata-log="cat /tmp/kanata.out /tmp/kanata.err"
 export BUN_INSTALL="yes"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
-# bun
-export BUN_INSTALL="yes"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+export KUBECONFIG=/Users/edd/projects/kube/kubeconfig.local
 
 . "$HOME/.local/bin/env"

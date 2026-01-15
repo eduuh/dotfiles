@@ -44,7 +44,7 @@ install_brew_packages() {
     local mac_software=(
         coreutils moreutils findutils bash bash-completion2 wget
         openssh screen git-lfs lua pv p7zip pigz rename ssh-copy-id
-        vbindiff zopfli gnu-sed node deno hugo bat
+        vbindiff zopfli gnu-sed node deno hugo bat zoxide tree jq
         imagemagick pkg-config pngpaste kanata
         jesseduffield/lazydocker/lazydocker kubernetes-cli 1password-cli
         fluxcd/tap/flux

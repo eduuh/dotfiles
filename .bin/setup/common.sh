@@ -6,11 +6,11 @@ set -o pipefail
 # Define common software based on environment
 if [ "$CODESPACES" = "true" ]; then
     common_software=(
-        git stow fzf ripgrep tmux zsh unzip neovim
+        git stow fzf ripgrep tmux zsh unzip neovim zoxide tree jq
     )
 else
     common_software=(
-        git stow make cmake fzf ripgrep tmux zsh unzip neovim
+        git stow make cmake fzf ripgrep tmux zsh unzip neovim zoxide tree jq
     )
 fi
 
@@ -40,43 +40,73 @@ clone_repos() {
       )
   else
             REPOSITORIES=(
-                "git@github.com:eduuh/byte_s.git"
-                "git@github.com:eduuh/ai_s.git"
-                "git@github.com:eduuh/homelab.git"
-                "git@github.com:eduuh/nvim.git"
+                # eduuh public repos
                 "git@github.com:eduuh/dotfiles.git"
-                "git@github.com:eduuh/bash.git"
-                "git@github.com:eduuh/eduuh-blog-template.git"
-                "git@github.com:eduuh/personal-notes.git"
-                "git@github.com:eduuh/life.git"
+                "git@github.com:eduuh/nvim.git"
                 "git@github.com:eduuh/kube-homelab.git"
+                "git@github.com:eduuh/blog-2026.git"
+                "git@github.com:eduuh/blog-comments.git"
+                "git@github.com:eduuh/tracker.git"
+                "git@github.com:eduuh/growatt_exporter.git"
+                # eduuh-private repos
+                "git@github.com:eduuh-private/byte_s.git"
+                "git@github.com:eduuh-private/bash.git"
+                "git@github.com:eduuh-private/eduuh-blog-template.git"
+                "git@github.com:eduuh-private/personal-notes.git"
+                "git@github.com:eduuh-private/life.git"
             )
   fi
 
   for REPO in "${REPOSITORIES[@]}"; do
       REPO_NAME=$(basename "$REPO" .git)
-      TARGET_DIR=~/projects/"$REPO_NAME"
+      PROJECT_ROOT=~/projects/"$REPO_NAME"
+      BARE_DIR="$PROJECT_ROOT/.bare"
+      CURRENT_WORKTREE=""
 
-      if [ -d "$TARGET_DIR" ]; then
-          # Check if repo has unsaved changes
-          cd "$TARGET_DIR"
-          if [ -d ".git" ] && ! git diff --quiet || ! git diff --cached --quiet; then
-              echo "Skipping $REPO_NAME: Found unsaved changes at $TARGET_DIR."
+      if [ -d "$PROJECT_ROOT" ]; then
+          if [ -d "$BARE_DIR" ]; then
+              echo "Updating $REPO_NAME (bare)..."
+              cd "$BARE_DIR"
+              git fetch origin
+              DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
+              CURRENT_WORKTREE="$PROJECT_ROOT/$DEFAULT_BRANCH"
+              
+              if [ -d "$CURRENT_WORKTREE" ]; then
+                  cd "$CURRENT_WORKTREE"
+                  git pull origin "$DEFAULT_BRANCH" || echo "Failed to pull latest changes for $REPO_NAME"
+              fi
+          elif [ -d "$PROJECT_ROOT/.git" ]; then
+              # Old style
+              CURRENT_WORKTREE="$PROJECT_ROOT"
+              cd "$PROJECT_ROOT"
+              if ! git diff --quiet || ! git diff --cached --quiet; then
+                  echo "Skipping $REPO_NAME: Found unsaved changes at $PROJECT_ROOT."
+              else
+                  echo "Updating $REPO_NAME at $PROJECT_ROOT..."
+                  git pull origin "$(git symbolic-ref --short HEAD)" || echo "Failed to pull latest changes for $REPO_NAME"
+              fi
           else
-              echo "Updating $REPO_NAME at $TARGET_DIR..."
-              git pull origin "$(git symbolic-ref --short HEAD)" || echo "Failed to pull latest changes for $REPO_NAME"
+              echo "Directory $PROJECT_ROOT exists but is not a git repo. Skipping."
           fi
           cd ~
       else
-          echo "Cloning $REPO_NAME into $TARGET_DIR..."
-          git clone "$REPO" "$TARGET_DIR" || echo "Failed to clone $REPO_NAME. Continuing..."
+          echo "Cloning $REPO_NAME (bare) into $PROJECT_ROOT..."
+          mkdir -p "$PROJECT_ROOT"
+          git clone --bare "$REPO" "$BARE_DIR" || { echo "Failed to clone $REPO_NAME. Continuing..."; continue; }
+          
+          cd "$BARE_DIR"
+          DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
+          CURRENT_WORKTREE="$PROJECT_ROOT/$DEFAULT_BRANCH"
+          
+          echo "Creating worktree for $DEFAULT_BRANCH..."
+          git worktree add "$CURRENT_WORKTREE" "$DEFAULT_BRANCH"
       fi
 
       # Special handling for Neovim config
-      if [[ "$REPO_NAME" == "nvim" ]]; then
+      if [[ "$REPO_NAME" == "nvim" ]] && [[ -n "$CURRENT_WORKTREE" ]]; then
           echo "Creating symbolic link for Neovim config at ~/.config/nvim..."
           mkdir -p ~/.config
-          ln -sf "$TARGET_DIR" ~/.config/nvim
+          ln -sf "$CURRENT_WORKTREE" ~/.config/nvim
       fi
   done
 }
@@ -226,7 +256,17 @@ install_nvm() {
 }
 
 setup_symlinks() {
-    cd ~/projects/dotfiles
+    local dotfiles_dir=~/projects/dotfiles
+    
+    # Check if it's the new structure
+    if [ -d "$dotfiles_dir/.bare" ]; then
+         cd "$dotfiles_dir/.bare"
+         local default_branch=$(git symbolic-ref --short HEAD)
+         dotfiles_dir="$dotfiles_dir/$default_branch"
+    fi
+    
+    echo "Stowing dotfiles from $dotfiles_dir..."
+    cd "$dotfiles_dir"
     stow --adopt -t "$HOME" .
 }
 
@@ -234,22 +274,35 @@ setup_git_hooks() {
     echo "Setting up git hooks for all projects..."
     local hook_source="$HOME/projects/dotfiles/.bin/git-hooks/pre-push"
     
+    # Try to locate hook source dynamically if not found
+    if [ ! -f "$hook_source" ]; then
+        local potential_source=$(find "$HOME/projects/dotfiles" -maxdepth 2 -path "*/.bin/git-hooks/pre-push" | head -n 1)
+        if [ -n "$potential_source" ]; then
+            hook_source="$potential_source"
+        fi
+    fi
+    
     if [ ! -f "$hook_source" ]; then
         echo "Error: Pre-push hook not found at $hook_source"
         return 1
     fi
 
-    # Find all git repositories in ~/projects
-    find ~/projects -maxdepth 2 -name ".git" -type d | while read git_dir; do
-        local hook_dir="$git_dir/hooks"
-        local hook_dest="$hook_dir/pre-push"
+    # Iterate over projects
+    for project in ~/projects/*; do
+        local hook_dir=""
+        if [ -d "$project/.bare" ]; then
+            # New structure
+            hook_dir="$project/.bare/hooks"
+        elif [ -d "$project/.git" ]; then
+            # Old structure
+            hook_dir="$project/.git/hooks"
+        fi
         
-        # Skip if it's the dotfiles repo itself (optional, but maybe you want to protect dotfiles too)
-        # if [[ "$git_dir" == *"/dotfiles/.git" ]]; then continue; fi
-
-        echo "Installing pre-push hook in $(dirname "$git_dir")..."
-        mkdir -p "$hook_dir"
-        ln -sf "$hook_source" "$hook_dest"
+        if [ -n "$hook_dir" ]; then
+            echo "Installing pre-push hook in $project..."
+            mkdir -p "$hook_dir"
+            ln -sf "$hook_source" "$hook_dir/pre-push"
+        fi
     done
 }
 
