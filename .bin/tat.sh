@@ -2,19 +2,14 @@
 # tat.sh - Tmux Attach to project
 # Simple session manager with zoxide frecency + fzf preview
 
-# Ensure PATH includes common locations
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+source "$HOME/.bin/tmux-lib.sh"
 
-PROJECT_ROOT="$HOME/projects"
+require_tmux
+tmux_init
+require_fzf
+
 PREVIEW_SCRIPT="$HOME/.bin/tat-preview.sh"
 TEMPLATE_SCRIPT="$HOME/.bin/tat-template.sh"
-
-# Require tmux
-[[ -z "$TMUX" ]] && { echo "Error: Run inside tmux"; exit 1; }
-
-# Find tmux command
-TMUX_CMD=$(command -v tmux)
-[[ -z "$TMUX_CMD" ]] && { echo "Error: tmux not found"; exit 1; }
 
 # Get all project directories
 get_projects() {
@@ -58,12 +53,8 @@ build_list() {
     done
 }
 
-# Find fzf
-fzf_cmd=$(command -v fzf || echo "$HOME/.fzf/bin/fzf")
-[[ ! -x "$fzf_cmd" ]] && { echo "Error: fzf not found"; exit 1; }
-
 # Run fzf with preview
-selected=$(build_list | "$fzf_cmd" \
+selected=$(build_list | "$FZF_CMD" \
     --reverse \
     --ansi \
     --header="Select project (preview: git status, readme)" \

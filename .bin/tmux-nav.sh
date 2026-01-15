@@ -6,14 +6,11 @@
 #   :  = panes only
 #   (no prefix) = show all
 
-# Ensure PATH includes common locations
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+source "$HOME/.bin/tmux-lib.sh"
 
-[[ -z "$TMUX" ]] && { echo "Error: Run inside tmux"; exit 1; }
-
-# Find tmux command
-TMUX_CMD=$(command -v tmux)
-[[ -z "$TMUX_CMD" ]] && { echo "Error: tmux not found"; exit 1; }
+require_tmux
+tmux_init
+require_fzf
 
 # Colors for fzf display
 C_SESSION="\033[36m"  # cyan
@@ -29,7 +26,7 @@ current_pane=$($TMUX_CMD display-message -p '#P')
 
 # Build unified list
 build_list() {
-    # Sessions: @session_name (path)
+    # Sessions: @session_name (windows)
     $TMUX_CMD list-sessions -F "#{session_name}|#{session_path}|#{session_windows}" 2>/dev/null | while IFS='|' read -r name path windows; do
         marker=""
         [[ "$name" == "$current_session" ]] && marker="*"
@@ -52,52 +49,7 @@ build_list() {
     done
 }
 
-# Preview function based on selection type
-preview_cmd() {
-    local sel="$1"
-    case "$sel" in
-        @*)
-            # Session preview: show windows
-            local session="${sel#@}"
-            session="${session%%\**}"  # Remove marker
-            session="${session%% *}"   # Remove trailing info
-            echo "Session: $session"
-            echo "─────────────────────"
-            $TMUX_CMD list-windows -t "$session" -F "  #I: #W #{?window_active,(active),}" 2>/dev/null
-            echo ""
-            echo "Panes:"
-            $TMUX_CMD list-panes -t "$session" -F "  #I.#P: #{pane_current_command}" 2>/dev/null
-            ;;
-        \#*)
-            # Window preview: show panes
-            local target="${sel#\#}"
-            target="${target%%\**}"
-            target="${target%% *}"
-            echo "Window: $target"
-            echo "─────────────────────"
-            $TMUX_CMD list-panes -t "$target" -F "  Pane #P: #{pane_current_command}" 2>/dev/null
-            $TMUX_CMD capture-pane -t "$target" -p 2>/dev/null | head -20
-            ;;
-        :*)
-            # Pane preview: show content
-            local target="${sel#:}"
-            target="${target%%\**}"
-            target="${target%% *}"
-            echo "Pane: $target"
-            echo "─────────────────────"
-            $TMUX_CMD capture-pane -t "$target" -p 2>/dev/null | head -30
-            ;;
-    esac
-}
-
-# Export for fzf preview
-export -f preview_cmd 2>/dev/null || true
-
-# Find fzf
-fzf_cmd=$(command -v fzf || echo "$HOME/.fzf/bin/fzf")
-[[ ! -x "$fzf_cmd" ]] && { echo "Error: fzf not found"; exit 1; }
-
-# Create temp preview script (needed because fzf preview can't use functions directly)
+# Create temp preview script (fzf preview can't use shell functions)
 preview_script=$(mktemp)
 cat > "$preview_script" << 'PREVIEW'
 #!/usr/bin/env zsh
@@ -138,7 +90,7 @@ PREVIEW
 chmod +x "$preview_script"
 
 # Run fzf
-selected=$(build_list | "$fzf_cmd" \
+selected=$(build_list | "$FZF_CMD" \
     --ansi \
     --reverse \
     --header="@ sessions | # windows | : panes" \
@@ -155,27 +107,10 @@ rm -f "$preview_script"
 # Exit if nothing selected
 [[ -z "$selected" ]] && exit 0
 
-# Parse and switch
-case "$selected" in
-    @*)
-        # Switch to session
-        target="${selected#@}"
-        target="${target%%\**}"
-        target="${target%% *}"
-        $TMUX_CMD switch-client -t "$target"
-        ;;
-    \#*)
-        # Switch to window
-        target="${selected#\#}"
-        target="${target%%\**}"
-        target="${target%% *}"
-        $TMUX_CMD switch-client -t "$target"
-        ;;
-    :*)
-        # Switch to pane
-        target="${selected#:}"
-        target="${target%%\**}"
-        target="${target%% *}"
-        $TMUX_CMD switch-client -t "$target"
-        ;;
-esac
+# Parse selection and extract target
+target="${selected#[@#:]}"  # Remove prefix
+target="${target%%\**}"     # Remove marker
+target="${target%% *}"      # Remove trailing info
+
+# Switch to target
+$TMUX_CMD switch-client -t "$target"

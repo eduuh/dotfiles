@@ -1,43 +1,14 @@
 #!/usr/bin/env zsh
 # tat-template.sh - Detect and apply tmux session templates
 
-# Ensure PATH includes common locations
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+source "$HOME/.bin/tmux-lib.sh"
 
-# Find tmux - needed because PATH may not be available in functions
-TMUX_CMD=$(command -v tmux)
-[[ -z "$TMUX_CMD" ]] && { echo "Error: tmux not found"; exit 1; }
-
-PROJECT_ROOT="$HOME/projects"
+tmux_init
 
 session_name="$1"
-project_path="${2:-$PROJECT_ROOT/$session_name}"
+project_path=$(resolve_project_path "${2:-$PROJECT_ROOT/$session_name}")
 
-# Handle bare repo worktree structure
-if [[ -d "$project_path/.bare" ]]; then
-    default_branch=$(cd "$project_path/.bare" && git symbolic-ref --short HEAD 2>/dev/null || echo "main")
-    [[ -d "$project_path/$default_branch" ]] && project_path="$project_path/$default_branch"
-fi
-
-# Detect template type
-detect_template() {
-    local path="$1"
-
-    # Explicit override via .tmux-template file
-    [[ -f "$path/.tmux-template" ]] && { cat "$path/.tmux-template"; return; }
-
-    # Auto-detect by markers
-    [[ -f "$path/Cargo.toml" ]] && { echo "rust"; return; }
-    [[ -f "$path/package.json" ]] && { echo "node"; return; }
-    [[ -f "$path/go.mod" ]] && { echo "go"; return; }
-    [[ -f "$path/pyproject.toml" ]] && { echo "python"; return; }
-    [[ -f "$path/requirements.txt" ]] && { echo "python"; return; }
-    [[ -d "$path/cluster" && -f "$path/Makefile" ]] && { echo "kubernetes"; return; }
-
-    echo "default"
-}
-
-# Apply template - creates session with appropriate layout
+# Apply template based on project type
 apply_template() {
     local template="$1"
     local name="$2"
@@ -48,43 +19,18 @@ apply_template() {
 
     case "$template" in
         node)
-            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
-            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
-            $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
+            apply_base_layout "$name" "$path"
             $TMUX_CMD new-window -t "$name" -n "server" -c "$path"
-            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
-            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
-            $TMUX_CMD select-window -t "$name:editor"
-            $TMUX_CMD select-pane -t "$name:editor.0"
+            # Reorder: editor, server, git
+            $TMUX_CMD move-window -t "$name:server" -s "$name:2"
             ;;
-        rust)
-            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
-            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
-            $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
-            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
-            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
-            $TMUX_CMD select-window -t "$name:editor"
-            $TMUX_CMD select-pane -t "$name:editor.0"
-            ;;
-        go)
-            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
-            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
-            $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
-            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
-            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
-            $TMUX_CMD select-window -t "$name:editor"
-            $TMUX_CMD select-pane -t "$name:editor.0"
+        rust|go)
+            apply_base_layout "$name" "$path"
             ;;
         python)
-            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
-            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
-            $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
+            apply_base_layout "$name" "$path"
             # Activate venv if exists
             $TMUX_CMD send-keys -t "$name:editor.1" "[ -d .venv ] && source .venv/bin/activate" Enter
-            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
-            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
-            $TMUX_CMD select-window -t "$name:editor"
-            $TMUX_CMD select-pane -t "$name:editor.0"
             ;;
         kubernetes)
             $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
@@ -96,7 +42,6 @@ apply_template() {
             $TMUX_CMD select-window -t "$name:editor"
             ;;
         *)
-            # Default: simple single window
             $TMUX_CMD new-session -d -s "$name" -c "$path"
             ;;
     esac
@@ -104,5 +49,5 @@ apply_template() {
     $TMUX_CMD switch-client -t "$name"
 }
 
-template=$(detect_template "$project_path")
+template=$(detect_project_type "$project_path")
 apply_template "$template" "$session_name" "$project_path"
