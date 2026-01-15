@@ -1,6 +1,13 @@
 #!/usr/bin/env zsh
 # tat-template.sh - Detect and apply tmux session templates
 
+# Ensure PATH includes common locations
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+# Find tmux - needed because PATH may not be available in functions
+TMUX_CMD=$(command -v tmux)
+[[ -z "$TMUX_CMD" ]] && { echo "Error: tmux not found"; exit 1; }
+
 PROJECT_ROOT="$HOME/projects"
 
 session_name="$1"
@@ -41,60 +48,60 @@ apply_template() {
 
     case "$template" in
         node)
-            tmux new-session -d -s "$name" -c "$path" -n "editor"
-            tmux send-keys -t "$name:editor" "nvim ." Enter
-            tmux split-window -h -t "$name:editor" -c "$path" -l 40%
-            tmux new-window -t "$name" -n "server" -c "$path"
-            tmux new-window -t "$name" -n "git" -c "$path"
-            tmux send-keys -t "$name:git" "lazygit" Enter
-            tmux select-window -t "$name:editor"
-            tmux select-pane -t "$name:editor.0"
+            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
+            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
+            $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
+            $TMUX_CMD new-window -t "$name" -n "server" -c "$path"
+            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
+            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
+            $TMUX_CMD select-window -t "$name:editor"
+            $TMUX_CMD select-pane -t "$name:editor.0"
             ;;
         rust)
-            tmux new-session -d -s "$name" -c "$path" -n "editor"
-            tmux send-keys -t "$name:editor" "nvim ." Enter
-            tmux split-window -h -t "$name:editor" -c "$path" -l 40%
-            tmux new-window -t "$name" -n "git" -c "$path"
-            tmux send-keys -t "$name:git" "lazygit" Enter
-            tmux select-window -t "$name:editor"
-            tmux select-pane -t "$name:editor.0"
+            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
+            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
+            $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
+            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
+            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
+            $TMUX_CMD select-window -t "$name:editor"
+            $TMUX_CMD select-pane -t "$name:editor.0"
             ;;
         go)
-            tmux new-session -d -s "$name" -c "$path" -n "editor"
-            tmux send-keys -t "$name:editor" "nvim ." Enter
-            tmux split-window -h -t "$name:editor" -c "$path" -l 40%
-            tmux new-window -t "$name" -n "git" -c "$path"
-            tmux send-keys -t "$name:git" "lazygit" Enter
-            tmux select-window -t "$name:editor"
-            tmux select-pane -t "$name:editor.0"
+            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
+            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
+            $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
+            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
+            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
+            $TMUX_CMD select-window -t "$name:editor"
+            $TMUX_CMD select-pane -t "$name:editor.0"
             ;;
         python)
-            tmux new-session -d -s "$name" -c "$path" -n "editor"
-            tmux send-keys -t "$name:editor" "nvim ." Enter
-            tmux split-window -h -t "$name:editor" -c "$path" -l 40%
+            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
+            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
+            $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
             # Activate venv if exists
-            tmux send-keys -t "$name:editor.1" "[ -d .venv ] && source .venv/bin/activate" Enter
-            tmux new-window -t "$name" -n "git" -c "$path"
-            tmux send-keys -t "$name:git" "lazygit" Enter
-            tmux select-window -t "$name:editor"
-            tmux select-pane -t "$name:editor.0"
+            $TMUX_CMD send-keys -t "$name:editor.1" "[ -d .venv ] && source .venv/bin/activate" Enter
+            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
+            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
+            $TMUX_CMD select-window -t "$name:editor"
+            $TMUX_CMD select-pane -t "$name:editor.0"
             ;;
         kubernetes)
-            tmux new-session -d -s "$name" -c "$path" -n "editor"
-            tmux send-keys -t "$name:editor" "nvim ." Enter
-            tmux new-window -t "$name" -n "k9s" -c "$path"
-            tmux send-keys -t "$name:k9s" "command -v k9s &>/dev/null && k9s || echo 'k9s not installed'" Enter
-            tmux new-window -t "$name" -n "git" -c "$path"
-            tmux send-keys -t "$name:git" "lazygit" Enter
-            tmux select-window -t "$name:editor"
+            $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
+            $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
+            $TMUX_CMD new-window -t "$name" -n "k9s" -c "$path"
+            $TMUX_CMD send-keys -t "$name:k9s" "command -v k9s &>/dev/null && k9s || echo 'k9s not installed'" Enter
+            $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
+            $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
+            $TMUX_CMD select-window -t "$name:editor"
             ;;
         *)
             # Default: simple single window
-            tmux new-session -d -s "$name" -c "$path"
+            $TMUX_CMD new-session -d -s "$name" -c "$path"
             ;;
     esac
 
-    tmux switch-client -t "$name"
+    $TMUX_CMD switch-client -t "$name"
 }
 
 template=$(detect_template "$project_path")

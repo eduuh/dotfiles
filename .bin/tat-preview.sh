@@ -1,6 +1,9 @@
 #!/usr/bin/env zsh
 # tat-preview.sh - fzf preview for project selection
 
+# Ensure PATH includes common locations
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
 PROJECT_ROOT="$HOME/projects"
 project="$1"
 path="$PROJECT_ROOT/$project"
@@ -24,10 +27,10 @@ if [[ -d "$path/.git" ]] || [[ -d "$path/.bare" ]]; then
 
     echo "Branch: $branch"
 
-    # Status summary
-    staged=$(git diff --cached --numstat 2>/dev/null | wc -l | tr -d ' ')
-    unstaged=$(git diff --numstat 2>/dev/null | wc -l | tr -d ' ')
-    untracked=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' ')
+    # Status summary using zsh
+    staged=${#${(f)"$(git diff --cached --numstat 2>/dev/null)"}}
+    unstaged=${#${(f)"$(git diff --numstat 2>/dev/null)"}}
+    untracked=${#${(f)"$(git ls-files --others --exclude-standard 2>/dev/null)"}}
 
     [[ "$staged" -gt 0 ]] && echo "Staged: $staged"
     [[ "$unstaged" -gt 0 ]] && echo "Modified: $unstaged"
@@ -36,19 +39,19 @@ if [[ -d "$path/.git" ]] || [[ -d "$path/.bare" ]]; then
 
     echo ""
     echo "Recent commits:"
-    git log --oneline -5 2>/dev/null | head -5
+    git log --oneline -5 2>/dev/null
     echo ""
 fi
 
 # Project type detection
-echo "Type: \c"
+print -n "Type: "
 if [[ -f "$path/Cargo.toml" ]]; then
     echo "Rust"
 elif [[ -f "$path/package.json" ]]; then
     echo "Node.js"
     if command -v jq &>/dev/null && [[ -f "$path/package.json" ]]; then
-        scripts=$(jq -r '.scripts | keys | join(", ")' "$path/package.json" 2>/dev/null | head -c 60)
-        [[ -n "$scripts" ]] && echo "Scripts: $scripts"
+        scripts=$(jq -r '.scripts | keys | join(", ")' "$path/package.json" 2>/dev/null)
+        [[ -n "$scripts" ]] && echo "Scripts: ${scripts:0:60}"
     fi
 elif [[ -f "$path/go.mod" ]]; then
     echo "Go"
@@ -68,7 +71,11 @@ for readme in README.md readme.md README.rst README; do
         if command -v bat &>/dev/null; then
             bat --style=plain --color=always --line-range=:15 "$path/$readme" 2>/dev/null
         else
-            head -15 "$path/$readme"
+            # Use zsh to read first 15 lines
+            local i=0
+            while IFS= read -r line && (( i++ < 15 )); do
+                echo "$line"
+            done < "$path/$readme"
         fi
         break
     fi

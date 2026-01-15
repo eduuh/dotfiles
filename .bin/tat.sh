@@ -2,7 +2,8 @@
 # tat.sh - Tmux Attach to project
 # Simple session manager with zoxide frecency + fzf preview
 
-set -e
+# Ensure PATH includes common locations
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 PROJECT_ROOT="$HOME/projects"
 PREVIEW_SCRIPT="$HOME/.bin/tat-preview.sh"
@@ -10,6 +11,10 @@ TEMPLATE_SCRIPT="$HOME/.bin/tat-template.sh"
 
 # Require tmux
 [[ -z "$TMUX" ]] && { echo "Error: Run inside tmux"; exit 1; }
+
+# Find tmux command
+TMUX_CMD=$(command -v tmux)
+[[ -z "$TMUX_CMD" ]] && { echo "Error: tmux not found"; exit 1; }
 
 # Get all project directories
 get_projects() {
@@ -39,7 +44,7 @@ sort_by_frecency() {
 
 # Check if session exists
 has_session() {
-    tmux has-session -t "=$1" 2>/dev/null
+    $TMUX_CMD has-session -t "=$1" 2>/dev/null
 }
 
 # Build display list with session indicators
@@ -62,7 +67,7 @@ selected=$(build_list | "$fzf_cmd" \
     --reverse \
     --ansi \
     --header="Select project (preview: git status, readme)" \
-    --preview="$PREVIEW_SCRIPT {2}" \
+    --preview="$PREVIEW_SCRIPT {-1}" \
     --preview-window="right:50%:wrap" \
     | awk '{print $NF}')
 
@@ -74,7 +79,7 @@ project_path="$PROJECT_ROOT/$selected"
 
 # Create or switch to session
 if has_session "$session_name"; then
-    tmux switch-client -t "$session_name"
+    $TMUX_CMD switch-client -t "$session_name"
 else
     "$TEMPLATE_SCRIPT" "$session_name" "$project_path"
 fi

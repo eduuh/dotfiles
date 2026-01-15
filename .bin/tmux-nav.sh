@@ -6,9 +6,14 @@
 #   :  = panes only
 #   (no prefix) = show all
 
-set -e
+# Ensure PATH includes common locations
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 [[ -z "$TMUX" ]] && { echo "Error: Run inside tmux"; exit 1; }
+
+# Find tmux command
+TMUX_CMD=$(command -v tmux)
+[[ -z "$TMUX_CMD" ]] && { echo "Error: tmux not found"; exit 1; }
 
 # Colors for fzf display
 C_SESSION="\033[36m"  # cyan
@@ -18,28 +23,28 @@ C_RESET="\033[0m"
 C_DIM="\033[2m"
 
 # Current context
-current_session=$(tmux display-message -p '#S')
-current_window=$(tmux display-message -p '#I')
-current_pane=$(tmux display-message -p '#P')
+current_session=$($TMUX_CMD display-message -p '#S')
+current_window=$($TMUX_CMD display-message -p '#I')
+current_pane=$($TMUX_CMD display-message -p '#P')
 
 # Build unified list
 build_list() {
     # Sessions: @session_name (path)
-    tmux list-sessions -F "#{session_name}|#{session_path}|#{session_windows}" 2>/dev/null | while IFS='|' read -r name path windows; do
+    $TMUX_CMD list-sessions -F "#{session_name}|#{session_path}|#{session_windows}" 2>/dev/null | while IFS='|' read -r name path windows; do
         marker=""
         [[ "$name" == "$current_session" ]] && marker="*"
         echo -e "@${C_SESSION}${name}${marker}${C_RESET} ${C_DIM}(${windows}w)${C_RESET}"
     done
 
     # Windows: #session:window - name
-    tmux list-windows -a -F "#{session_name}|#{window_index}|#{window_name}|#{window_active}" 2>/dev/null | while IFS='|' read -r sess idx name active; do
+    $TMUX_CMD list-windows -a -F "#{session_name}|#{window_index}|#{window_name}|#{window_active}" 2>/dev/null | while IFS='|' read -r sess idx name active; do
         marker=""
         [[ "$sess" == "$current_session" && "$idx" == "$current_window" ]] && marker="*"
         echo -e "#${C_WINDOW}${sess}:${idx}${marker}${C_RESET} ${name}"
     done
 
     # Panes: :session:window.pane - command (path)
-    tmux list-panes -a -F "#{session_name}|#{window_index}|#{pane_index}|#{pane_current_command}|#{pane_current_path}" 2>/dev/null | while IFS='|' read -r sess win pane cmd path; do
+    $TMUX_CMD list-panes -a -F "#{session_name}|#{window_index}|#{pane_index}|#{pane_current_command}|#{pane_current_path}" 2>/dev/null | while IFS='|' read -r sess win pane cmd path; do
         marker=""
         [[ "$sess" == "$current_session" && "$win" == "$current_window" && "$pane" == "$current_pane" ]] && marker="*"
         short_path="${path/#$HOME/~}"
@@ -58,10 +63,10 @@ preview_cmd() {
             session="${session%% *}"   # Remove trailing info
             echo "Session: $session"
             echo "─────────────────────"
-            tmux list-windows -t "$session" -F "  #I: #W #{?window_active,(active),}" 2>/dev/null
+            $TMUX_CMD list-windows -t "$session" -F "  #I: #W #{?window_active,(active),}" 2>/dev/null
             echo ""
             echo "Panes:"
-            tmux list-panes -t "$session" -F "  #I.#P: #{pane_current_command}" 2>/dev/null
+            $TMUX_CMD list-panes -t "$session" -F "  #I.#P: #{pane_current_command}" 2>/dev/null
             ;;
         \#*)
             # Window preview: show panes
@@ -70,8 +75,8 @@ preview_cmd() {
             target="${target%% *}"
             echo "Window: $target"
             echo "─────────────────────"
-            tmux list-panes -t "$target" -F "  Pane #P: #{pane_current_command}" 2>/dev/null
-            tmux capture-pane -t "$target" -p 2>/dev/null | head -20
+            $TMUX_CMD list-panes -t "$target" -F "  Pane #P: #{pane_current_command}" 2>/dev/null
+            $TMUX_CMD capture-pane -t "$target" -p 2>/dev/null | head -20
             ;;
         :*)
             # Pane preview: show content
@@ -80,7 +85,7 @@ preview_cmd() {
             target="${target%% *}"
             echo "Pane: $target"
             echo "─────────────────────"
-            tmux capture-pane -t "$target" -p 2>/dev/null | head -30
+            $TMUX_CMD capture-pane -t "$target" -p 2>/dev/null | head -30
             ;;
     esac
 }
@@ -96,6 +101,7 @@ fzf_cmd=$(command -v fzf || echo "$HOME/.fzf/bin/fzf")
 preview_script=$(mktemp)
 cat > "$preview_script" << 'PREVIEW'
 #!/usr/bin/env zsh
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 sel="$1"
 case "$sel" in
     @*)
@@ -156,20 +162,20 @@ case "$selected" in
         target="${selected#@}"
         target="${target%%\**}"
         target="${target%% *}"
-        tmux switch-client -t "$target"
+        $TMUX_CMD switch-client -t "$target"
         ;;
     \#*)
         # Switch to window
         target="${selected#\#}"
         target="${target%%\**}"
         target="${target%% *}"
-        tmux switch-client -t "$target"
+        $TMUX_CMD switch-client -t "$target"
         ;;
     :*)
         # Switch to pane
         target="${selected#:}"
         target="${target%%\**}"
         target="${target%% *}"
-        tmux switch-client -t "$target"
+        $TMUX_CMD switch-client -t "$target"
         ;;
 esac
