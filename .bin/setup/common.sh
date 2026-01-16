@@ -45,7 +45,6 @@ clone_repos() {
                 "git@github.com:eduuh/nvim.git"
                 "git@github.com:eduuh/kube-homelab.git"
                 "git@github.com:eduuh/blog-2026.git"
-                "git@github.com:eduuh/blog-comments.git"
                 "git@github.com:eduuh/tracker.git"
                 "git@github.com:eduuh/growatt_exporter.git"
                 # eduuh-private repos
