@@ -65,6 +65,7 @@ setup_ubuntu() {
         install_nvm
     fi
     install_lazygit
+    install_claude_code
     setup_python
     setup_symlinks
 }
@@ -72,6 +73,7 @@ setup_ubuntu() {
 setup_codespace() {
     update_system
     install_common_packages
+    install_claude_code
     setup_python
     setup_symlinks
 }

@@ -171,6 +171,16 @@ install_starship() {
     fi
 }
 
+install_claude_code() {
+    if command -v claude &> /dev/null; then
+        echo "Claude Code is already installed."
+        return 0
+    fi
+
+    echo "Installing Claude Code..."
+    curl -fsSL https://claude.ai/install.sh | bash
+}
+
 install_rust() {
     if [[ $CODESPACES == "true" ]]; then
         echo "In a GitHub Codespace environment, skipping Rust installation."

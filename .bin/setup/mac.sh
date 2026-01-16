@@ -71,7 +71,7 @@ install_brew_casks() {
 
     local mac_casks=(
         alacritty karabiner-elements kitty
-        font-fira-code-nerd-font docker spotify
+        font-fira-code-nerd-font docker spotify obs
     )
 
     for cask in "${mac_casks[@]}"; do
@@ -188,6 +188,7 @@ setup_mac() {
     install_brew_packages
     install_brew_casks
     install_lazygit
+    install_claude_code
     setup_mac_python
     setup_symlinks
     setup_mac_security

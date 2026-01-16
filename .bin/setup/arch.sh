@@ -69,6 +69,7 @@ setup_arch() {
     install_arch_specific_packages
 
     install_lazygit
+    install_claude_code
     setup_python
     setup_symlinks
     add_kanatakeyboardprev
