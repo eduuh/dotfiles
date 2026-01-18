@@ -32,3 +32,4 @@ cd ~/projects/dotfiles && ./setup.sh
 |----------|------------|
 | Windows | [eduuh/win-dot](https://github.com/eduuh/win-dot) |
 | Archive | [eduuh/arch-dotfiles](https://github.com/eduuh/arch-dotfiles) |
+| Trading | [eduuh/thetrader](https://github.com/eduuh/thetrader) |
