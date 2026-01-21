@@ -27,11 +27,11 @@ get_projects() {
 sort_by_frecency() {
     if command -v zoxide &>/dev/null; then
         while IFS= read -r project; do
-            local path="$PROJECT_ROOT/$project"
-            local score=$(zoxide query -s "$path" 2>/dev/null | awk '{print $1}')
+            local ppath="$PROJECT_ROOT/$project"
+            local score=$(zoxide query -s "$ppath" 2>/dev/null | /usr/bin/awk '{print $1}')
             [[ -z "$score" ]] && score="0"
             echo "$score $project"
-        done | sort -rn | awk '{print $2}'
+        done | sort -rn | /usr/bin/awk '{print $2}'
     else
         sort
     fi
@@ -60,7 +60,7 @@ selected=$(build_list | "$FZF_CMD" \
     --header="Select project (preview: git status, readme)" \
     --preview="$PREVIEW_SCRIPT {-1}" \
     --preview-window="right:50%:wrap" \
-    | awk '{print $NF}')
+    | /usr/bin/awk '{print $NF}')
 
 # Exit if nothing selected
 [[ -z "$selected" ]] && exit 0
