@@ -89,26 +89,37 @@ clone_repos() {
     mkdir ~/projects
   fi
 
+  # Detect if running on WSL
+  local is_wsl=false
+  if grep -qi microsoft /proc/version 2>/dev/null; then
+      is_wsl=true
+  fi
+
   if [ "$CODESPACES" = "true" ]; then
       REPOSITORIES=(
           "https://github.com/eduuh/dotfiles.git"
       )
   else
-            REPOSITORIES=(
-                # eduuh public repos
-                "git@github.com:eduuh/dotfiles.git"
-                "git@github.com:eduuh/nvim.git"
-                "git@github.com:eduuh/kube-homelab.git"
-                "git@github.com:eduuh/blog-2026.git"
-                "git@github.com:eduuh/tracker.git"
-                "git@github.com:eduuh/growatt_exporter.git"
-                # eduuh-private repos
-                "git@github.com:eduuh-private/byte_s.git"
-                "git@github.com:eduuh-private/bash.git"
-                "git@github.com:eduuh-private/eduuh-blog-template.git"
-                "git@github.com:eduuh-private/personal-notes.git"
-                "git@github.com:eduuh-private/life.git"
-            )
+      # Base repos for all environments
+      REPOSITORIES=(
+          "git@github.com:eduuh/dotfiles.git"
+          "git@github.com:eduuh/nvim.git"
+          "git@github.com:eduuh-private/personal-notes.git"
+      )
+
+      # Additional repos to skip on WSL
+      if [ "$is_wsl" = false ]; then
+          REPOSITORIES+=(
+              "git@github.com:eduuh/kube-homelab.git"
+              "git@github.com:eduuh/blog-2026.git"
+              "git@github.com:eduuh/tracker.git"
+              "git@github.com:eduuh/growatt_exporter.git"
+              "git@github.com:eduuh-private/byte_s.git"
+              "git@github.com:eduuh-private/bash.git"
+              "git@github.com:eduuh-private/eduuh-blog-template.git"
+              "git@github.com:eduuh-private/life.git"
+          )
+      fi
   fi
 
   for REPO in "${REPOSITORIES[@]}"; do
@@ -163,6 +174,80 @@ clone_repos() {
           ln -sf "$CURRENT_WORKTREE" ~/.config/nvim
       fi
   done
+}
+
+ensure_tmux_version() {
+    local min_version="3.2"
+
+    # macOS via Homebrew always has recent tmux, skip
+    if [[ "$(uname)" == "Darwin" ]]; then
+        return 0
+    fi
+
+    # Check current tmux version
+    if command -v tmux &> /dev/null; then
+        local current_version
+        current_version=$(tmux -V | sed -n 's/^tmux \([0-9.]*\).*/\1/p')
+
+        if [[ "$(printf '%s\n' "$min_version" "$current_version" | sort -V | head -n1)" == "$min_version" ]]; then
+            echo "tmux $current_version is installed (>= $min_version required). OK."
+            return 0
+        fi
+        echo "tmux $current_version is too old (need >= $min_version). Installing from source..."
+    else
+        echo "tmux not found. Installing from source..."
+    fi
+
+    # Install build dependencies based on distro
+    echo "Installing tmux build dependencies..."
+    if command -v pacman &> /dev/null; then
+        sudo pacman -S --needed --noconfirm libevent ncurses base-devel bison pkg-config || {
+            track_failure "tmux" "Failed to install tmux build dependencies"
+            return 1
+        }
+    else
+        sudo apt-get install -y libevent-dev ncurses-dev build-essential bison pkg-config || {
+            track_failure "tmux" "Failed to install tmux build dependencies"
+            return 1
+        }
+    fi
+
+    # Build tmux from source
+    local tmux_version="3.5a"
+    local build_dir="/tmp/tmux-build"
+
+    rm -rf "$build_dir"
+    mkdir -p "$build_dir"
+    cd "$build_dir" || return 1
+
+    echo "Downloading tmux $tmux_version..."
+    if ! curl -sLO "https://github.com/tmux/tmux/releases/download/${tmux_version}/tmux-${tmux_version}.tar.gz"; then
+        track_failure "tmux" "Failed to download tmux source"
+        cd ~ || return 1
+        return 1
+    fi
+
+    tar -xzf "tmux-${tmux_version}.tar.gz"
+    cd "tmux-${tmux_version}" || return 1
+
+    echo "Building tmux..."
+    if ! ./configure && make; then
+        track_failure "tmux" "Failed to build tmux"
+        cd ~ || return 1
+        return 1
+    fi
+
+    echo "Installing tmux..."
+    if ! sudo make install; then
+        track_failure "tmux" "Failed to install tmux"
+        cd ~ || return 1
+        return 1
+    fi
+
+    cd ~ || return 1
+    rm -rf "$build_dir"
+
+    echo "tmux $(tmux -V) installed successfully."
 }
 
 install_tmux_plugins() {
@@ -336,6 +421,12 @@ install_pnpm() {
 }
 
 install_talosctl() {
+    # Skip on WSL - talosctl should be installed on Windows host
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        echo "Skipping talosctl on WSL (install on Windows host instead)."
+        return 0
+    fi
+
     if command -v talosctl &> /dev/null; then
         echo "talosctl is already installed."
         return 0
