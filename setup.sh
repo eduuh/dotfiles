@@ -51,6 +51,7 @@ main() {
     esac
 
     install_tmux_plugins
+    install_zoxide
     install_starship
     install_rust
     install_pnpm

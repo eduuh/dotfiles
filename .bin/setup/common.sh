@@ -58,13 +58,14 @@ print_failure_summary() {
 }
 
 # Define common software based on environment
+# Note: zoxide is NOT in Ubuntu apt repos, so it's installed separately via install_zoxide
 if [ "$CODESPACES" = "true" ]; then
     common_software=(
-        git stow fzf ripgrep tmux zsh unzip neovim zoxide tree jq
+        git stow fzf ripgrep tmux zsh unzip neovim tree jq
     )
 else
     common_software=(
-        git stow make cmake fzf ripgrep tmux zsh unzip neovim zoxide tree jq
+        git stow make cmake fzf ripgrep tmux zsh unzip neovim tree jq
     )
 fi
 
@@ -216,6 +217,31 @@ install_lazygit() {
         else
             rm -f lazygit lazygit.tar.gz
             track_failure "lazygit" "Failed to download/install lazygit"
+        fi
+    fi
+}
+
+install_zoxide() {
+    if command -v zoxide &> /dev/null; then
+        echo "zoxide is already installed."
+        return 0
+    fi
+
+    echo "Installing zoxide..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # macOS installation via Homebrew
+        if ! brew install zoxide; then
+            track_failure "zoxide" "Failed to install zoxide via Homebrew"
+        fi
+    else
+        # Linux installation via official install script
+        if ! curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh; then
+            track_failure "zoxide" "Failed to install zoxide via install script"
+        else
+            # Add to PATH for current session if installed to ~/.local/bin
+            if [[ -d "$HOME/.local/bin" ]] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+                export PATH="$HOME/.local/bin:$PATH"
+            fi
         fi
     fi
 }
