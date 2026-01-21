@@ -2,8 +2,15 @@
 
 update_system() {
     echo "Updating package list and upgrading installed packages..."
-    sudo apt-get update -y && sudo apt-get upgrade -y
-    sudo apt-get install software-properties-common -y
+    if ! sudo apt-get update -y; then
+        track_failure "apt" "Failed to update package list"
+    fi
+    if ! sudo apt-get upgrade -y; then
+        track_failure "apt" "Failed to upgrade packages"
+    fi
+    if ! sudo apt-get install software-properties-common -y; then
+        track_failure "apt" "Failed to install software-properties-common"
+    fi
 }
 
 install_common_packages() {
@@ -12,7 +19,9 @@ install_common_packages() {
     for pkg in "${common_software[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
-            sudo apt-get install -y "$pkg"
+            if ! sudo apt-get install -y "$pkg"; then
+                track_failure "apt" "Failed to install: $pkg"
+            fi
         else
             echo "$pkg is already installed."
         fi
@@ -30,7 +39,9 @@ install_ubuntu_specific_packages() {
     for pkg in "${ubuntu_packages[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
-            sudo apt-get install -y "$pkg"
+            if ! sudo apt-get install -y "$pkg"; then
+                track_failure "apt" "Failed to install: $pkg"
+            fi
         else
             echo "$pkg is already installed."
         fi
@@ -38,14 +49,18 @@ install_ubuntu_specific_packages() {
 
     if ! grep -q "deadsnakes/ppa" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
         echo "Adding deadsnakes PPA for Python versions..."
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
+        if ! sudo add-apt-repository ppa:deadsnakes/ppa -y; then
+            track_failure "apt" "Failed to add deadsnakes PPA"
+        fi
     else
         echo "deadsnakes PPA already added."
     fi
 
     if ! dpkg -s python3.10 &> /dev/null; then
         echo "Installing Python 3.10..."
-        sudo apt-get install -y python3.10 python3.10-venv
+        if ! sudo apt-get install -y python3.10 python3.10-venv; then
+            track_failure "python" "Failed to install Python 3.10"
+        fi
     else
         echo "Python 3.10 is already installed."
     fi
@@ -53,7 +68,7 @@ install_ubuntu_specific_packages() {
 
 clean_unneeded_software() {
     echo "Cleaning up unneeded software..."
-    sudo apt autoremove -y
+    sudo apt autoremove -y || track_failure "apt" "Failed to autoremove packages"
 }
 
 setup_ubuntu() {

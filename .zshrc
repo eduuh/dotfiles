@@ -18,6 +18,7 @@ alias grep='grep --color=auto'
 alias ll='ls -alF'
 alias la='ls -A'
 alias l='ls -CF'
+alias yolo='claude --dangerously-skip-permissions'
 
 # Load NVM
 export NVM_DIR="$HOME/.nvm"
