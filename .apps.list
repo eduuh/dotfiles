@@ -1,0 +1,49 @@
+# Application Launcher Configuration
+# Format: name:command:type:platform
+#   type: tui (terminal app) or gui (graphical app)
+#   platform: mac, wsl, linux, or all (default if omitted)
+
+# System monitors (all platforms)
+htop:htop:tui
+btop:btop:tui
+
+# Development tools
+lazygit:lazygit:tui
+k9s:k9s:tui
+lazydocker:lazydocker:tui
+
+# File managers
+ranger:ranger:tui
+yazi:yazi:tui
+
+# Editors
+nvim:nvim:tui
+vim:vim:tui
+
+# Network tools
+bandwhich:sudo bandwhich:tui
+
+#------------------------------------------------------------------------------
+# macOS
+#------------------------------------------------------------------------------
+Safari:open -a Safari:gui:mac
+Chrome:open -a "Google Chrome":gui:mac
+Firefox:open -a Firefox:gui:mac
+Finder:open -a Finder:gui:mac
+Activity Monitor:open -a "Activity Monitor":gui:mac
+Terminal:open -a Terminal:gui:mac
+System Settings:open -a "System Settings":gui:mac
+Spotify:open -a Spotify:gui:mac
+Slack:open -a Slack:gui:mac
+VS Code:open -a "Visual Studio Code":gui:mac
+Docker Desktop:open -a Docker:gui:mac
+
+#------------------------------------------------------------------------------
+# WSL (Windows Subsystem for Linux)
+#------------------------------------------------------------------------------
+Browser:wslview https://google.com:gui:wsl
+Explorer:explorer.exe .:gui:wsl
+Windows Terminal:wt.exe:gui:wsl
+VS Code:code .:gui:wsl
+Notepad:notepad.exe:gui:wsl
+Task Manager:taskmgr.exe:gui:wsl

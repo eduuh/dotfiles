@@ -1,6 +1,4 @@
 #!/bin/zsh
-set -e
-set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Script directory: $SCRIPT_DIR"
@@ -11,7 +9,9 @@ main() {
 
     # Run GitHub SSH setup script first to ensure we can clone repositories
     echo "Setting up GitHub CLI and SSH keys..."
-    "$SCRIPT_DIR/.bin/gh_keys.sh"
+    if ! "$SCRIPT_DIR/.bin/gh_keys.sh"; then
+        track_failure "github" "Failed to setup GitHub CLI/SSH keys"
+    fi
 
     # For macOS, we need to install Homebrew and Git before cloning repos or installing plugins
     if [ "$distro" = "darwin" ]; then
@@ -44,12 +44,14 @@ main() {
             setup_mac
             ;;
         *)
-            echo "Unsupported distribution: $distro"
+            track_failure "distro" "Unsupported distribution: $distro"
+            print_failure_summary
             exit 1
             ;;
     esac
 
     install_tmux_plugins
+    install_zoxide
     install_starship
     install_rust
     install_pnpm
@@ -57,7 +59,8 @@ main() {
     setup_git_hooks
     change_shell_to_zsh
 
-    echo "Setup completed successfully!"
+    # Print summary of any failures
+    print_failure_summary
 }
 
 main
