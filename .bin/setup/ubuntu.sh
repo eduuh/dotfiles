@@ -74,6 +74,7 @@ clean_unneeded_software() {
 setup_ubuntu() {
     update_system
     install_common_packages
+    ensure_tmux_version
     install_ubuntu_specific_packages
 
     if [[ $CODESPACES != "true" ]]; then
@@ -88,6 +89,7 @@ setup_ubuntu() {
 setup_codespace() {
     update_system
     install_common_packages
+    ensure_tmux_version
     install_claude_code
     setup_python
     setup_symlinks
