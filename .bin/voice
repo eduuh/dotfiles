@@ -1,0 +1,81 @@
+#!/usr/bin/env zsh
+# Voice-to-text using Whisper
+# Records until silence, transcribes, copies to clipboard
+
+set -e
+
+# Parse arguments
+SEND_TO_CLAUDE=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --claude|-c)
+            SEND_TO_CLAUDE=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+TMPDIR="${TMPDIR:-/tmp}"
+AUDIO_FILE="$TMPDIR/voice_prompt.wav"
+TEXT_FILE="$TMPDIR/voice_prompt.txt"
+MODEL="${WHISPER_MODEL:-tiny}"
+
+# Cleanup on exit
+trap "rm -f $AUDIO_FILE ${TEXT_FILE%.txt}.*" EXIT
+
+echo "Recording... (press Enter to stop, or pause for 2s)"
+
+# Record until 2 seconds of silence, or Enter is pressed
+# silence 1 0.1 1% = start after 0.1s of sound above 1%
+# silence 1 2.0 1% = stop after 2s of silence below 1%
+rec -q "$AUDIO_FILE" silence 1 0.1 1% 1 2.0 1% &
+REC_PID=$!
+
+# Wait for Enter or rec to finish
+while kill -0 $REC_PID 2>/dev/null; do
+    if read -t 0.5; then
+        kill $REC_PID 2>/dev/null
+        wait $REC_PID 2>/dev/null || true
+        break
+    fi
+done
+
+echo "Transcribing..."
+
+# Transcribe with mlx-whisper (Apple Silicon optimized)
+mlx_whisper "$AUDIO_FILE" \
+    --model "mlx-community/whisper-$MODEL-mlx" \
+    --output-format txt \
+    --output-dir "$TMPDIR" \
+    --language en \
+    --verbose False \
+    2>/dev/null
+
+# Handle output
+if [[ ! -f "$TEXT_FILE" ]]; then
+    echo "Error: Transcription failed"
+    exit 1
+fi
+
+if [[ "$SEND_TO_CLAUDE" == true ]]; then
+    # Open in editor for review/edit
+    ${EDITOR:-nvim} "$TEXT_FILE"
+
+    # Check if file still has content after editing
+    if [[ -s "$TEXT_FILE" ]]; then
+        echo "Sending to Claude..."
+        claude "$(cat "$TEXT_FILE")"
+    else
+        echo "Empty prompt, cancelled."
+    fi
+else
+    # Copy to clipboard and display
+    cat "$TEXT_FILE" | pbcopy
+    echo "---"
+    cat "$TEXT_FILE"
+    echo "---"
+    echo "Copied to clipboard. Paste with Cmd+V"
+fi

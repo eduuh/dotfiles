@@ -1,19 +1,25 @@
 #!/bin/zsh
 
 add_kanatakeyboardprev() {
-  current_user=$(whoami)
+    local current_user=$(whoami)
+    local kanata_path="/home/$current_user/.bin/kanata"
 
-  kanata_path="/home/$current_user/.bin/kanata"
+    if ! sudo grep -q "$kanata_path" /etc/sudoers; then
+        if ! echo "$current_user ALL=(ALL) NOPASSWD: $kanata_path" | sudo tee -a /etc/sudoers > /dev/null; then
+            track_failure "kanata" "Failed to add sudoers entry for kanata"
+            return 0
+        fi
+        echo "Sudoers entry added for $current_user to run $kanata_path without a password."
+    else
+        echo "Sudoers entry already exists for $current_user."
+    fi
 
-  if ! sudo grep -q "$kanata_path" /etc/sudoers; then
-    echo "$current_user ALL=(ALL) NOPASSWD: $kanata_path" | sudo tee -a /etc/sudoers > /dev/null
-    echo "Sudoers entry added for $current_user to run $kanata_path without a password."
-  else
-    echo "Sudoers entry already exists for $current_user."
-  fi
-
-  systemctl --user enable kanata.service
-  systemctl --user start kanata.service
+    if ! systemctl --user enable kanata.service; then
+        track_failure "kanata" "Failed to enable kanata service"
+    fi
+    if ! systemctl --user start kanata.service; then
+        track_failure "kanata" "Failed to start kanata service"
+    fi
 }
 
 install_yay() {
@@ -23,10 +29,23 @@ install_yay() {
     fi
 
     echo "Installing Yay AUR helper..."
-    sudo pacman -S --needed --noconfirm git base-devel
-    git clone https://aur.archlinux.org/yay.git /tmp/yay
+    if ! sudo pacman -S --needed --noconfirm git base-devel; then
+        track_failure "pacman" "Failed to install git and base-devel"
+        return 0
+    fi
+
+    if ! git clone https://aur.archlinux.org/yay.git /tmp/yay; then
+        track_failure "yay" "Failed to clone yay repository"
+        return 0
+    fi
+
     cd /tmp/yay
-    makepkg -si --noconfirm
+    if ! makepkg -si --noconfirm; then
+        cd - > /dev/null
+        rm -rf /tmp/yay
+        track_failure "yay" "Failed to build and install yay"
+        return 0
+    fi
     cd - > /dev/null
     rm -rf /tmp/yay
     echo "Yay AUR helper installed successfully."
@@ -38,7 +57,9 @@ install_common_packages_arch() {
     for pkg in "${common_software[@]}"; do
         if ! yay -Qi "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
-            yay -S --noconfirm "$pkg"
+            if ! yay -S --noconfirm "$pkg"; then
+                track_failure "yay" "Failed to install: $pkg"
+            fi
         else
             echo "$pkg is already installed."
         fi
@@ -55,7 +76,9 @@ install_arch_specific_packages() {
     for pkg in "${arch_packages[@]}"; do
         if ! yay -Qi "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
-            yay -S --noconfirm "$pkg"
+            if ! yay -S --noconfirm "$pkg"; then
+                track_failure "yay" "Failed to install: $pkg"
+            fi
         else
             echo "$pkg is already installed."
         fi

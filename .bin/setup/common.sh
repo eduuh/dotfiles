@@ -1,16 +1,71 @@
 #!/bin/zsh
 
-set -e
-set -o pipefail
+# Failure tracking - collect errors instead of exiting
+typeset -ga SETUP_FAILURES=()
+
+track_failure() {
+    local component="$1"
+    local message="$2"
+    SETUP_FAILURES+=("[$component] $message")
+    echo "WARNING: $message (continuing...)"
+}
+
+# Run a command and track failure if it fails
+run_or_track() {
+    local component="$1"
+    shift
+    if ! "$@"; then
+        track_failure "$component" "Failed: $*"
+        return 1
+    fi
+    return 0
+}
+
+# Install a package with error tracking (generic wrapper)
+install_package() {
+    local pkg="$1"
+    local install_cmd="$2"
+
+    echo "Installing $pkg..."
+    if ! eval "$install_cmd" 2>&1; then
+        track_failure "package" "Failed to install $pkg"
+        return 1
+    fi
+    return 0
+}
+
+# Print all failures at the end
+print_failure_summary() {
+    if [[ ${#SETUP_FAILURES[@]} -eq 0 ]]; then
+        echo ""
+        echo "=========================================="
+        echo "  Setup completed with no failures!"
+        echo "=========================================="
+        return 0
+    fi
+
+    echo ""
+    echo "=========================================="
+    echo "  Setup completed with ${#SETUP_FAILURES[@]} failure(s):"
+    echo "=========================================="
+    for failure in "${SETUP_FAILURES[@]}"; do
+        echo "  - $failure"
+    done
+    echo "=========================================="
+    echo ""
+    echo "You may need to manually fix these issues."
+    return 1
+}
 
 # Define common software based on environment
+# Note: zoxide is NOT in Ubuntu apt repos, so it's installed separately via install_zoxide
 if [ "$CODESPACES" = "true" ]; then
     common_software=(
-        git stow fzf ripgrep tmux zsh unzip neovim zoxide tree jq
+        git stow fzf ripgrep tmux zsh unzip neovim tree jq
     )
 else
     common_software=(
-        git stow make cmake fzf ripgrep tmux zsh unzip neovim zoxide tree jq
+        git stow make cmake fzf ripgrep tmux zsh unzip neovim tree jq
     )
 fi
 
@@ -122,8 +177,7 @@ install_tmux_plugins() {
     if git clone https://github.com/tmux-plugins/tpm "$target_dir"; then
         echo "TPM has been successfully installed at $target_dir."
     else
-        echo "Error: Failed to clone the TPM repository."
-        return 1
+        track_failure "tmux" "Failed to clone TPM repository"
     fi
 }
 
@@ -133,21 +187,62 @@ install_lazygit() {
         return 0
     fi
 
+    echo "Installing LazyGit..."
     if [[ "$(uname)" == "Darwin" ]]; then
         # macOS installation via Homebrew
-        brew install lazygit
+        if ! brew install lazygit; then
+            track_failure "lazygit" "Failed to install lazygit via Homebrew"
+        fi
     else
         # Linux installation
         if ! command -v curl &> /dev/null; then
             echo "Installing curl..."
-            sudo apt-get install -y curl || sudo pacman -S --noconfirm curl
+            sudo apt-get install -y curl || sudo pacman -S --noconfirm curl || {
+                track_failure "lazygit" "Failed to install curl (required for lazygit)"
+                return 0
+            }
         fi
 
-        LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
-        curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
-        tar xf lazygit.tar.gz lazygit
-        sudo install -D lazygit -t /usr/local/bin/
-        rm -f lazygit lazygit.tar.gz
+        local lazygit_version
+        lazygit_version=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
+        if [[ -z "$lazygit_version" ]]; then
+            track_failure "lazygit" "Failed to fetch lazygit version"
+            return 0
+        fi
+
+        if curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/lazygit_${lazygit_version}_Linux_x86_64.tar.gz" && \
+           tar xf lazygit.tar.gz lazygit && \
+           sudo install -D lazygit -t /usr/local/bin/; then
+            rm -f lazygit lazygit.tar.gz
+        else
+            rm -f lazygit lazygit.tar.gz
+            track_failure "lazygit" "Failed to download/install lazygit"
+        fi
+    fi
+}
+
+install_zoxide() {
+    if command -v zoxide &> /dev/null; then
+        echo "zoxide is already installed."
+        return 0
+    fi
+
+    echo "Installing zoxide..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # macOS installation via Homebrew
+        if ! brew install zoxide; then
+            track_failure "zoxide" "Failed to install zoxide via Homebrew"
+        fi
+    else
+        # Linux installation via official install script
+        if ! curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh; then
+            track_failure "zoxide" "Failed to install zoxide via install script"
+        else
+            # Add to PATH for current session if installed to ~/.local/bin
+            if [[ -d "$HOME/.local/bin" ]] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+                export PATH="$HOME/.local/bin:$PATH"
+            fi
+        fi
     fi
 }
 
@@ -162,12 +257,27 @@ install_starship() {
         return 0
     fi
 
+    echo "Installing Starship..."
     if [[ "$(uname)" == "Darwin" ]]; then
-        echo "Installing Starship via Homebrew..."
-        brew install starship
+        if ! brew install starship; then
+            track_failure "starship" "Failed to install starship via Homebrew"
+        fi
     else
-        # Use -y to automatically accept prompts in non-interactive environments
-        curl -sS https://starship.rs/install.sh | sh -s -- -y
+        if ! curl -sS https://starship.rs/install.sh | sh -s -- -y; then
+            track_failure "starship" "Failed to install starship"
+        fi
+    fi
+}
+
+install_claude_code() {
+    if command -v claude &> /dev/null; then
+        echo "Claude Code is already installed."
+        return 0
+    fi
+
+    echo "Installing Claude Code..."
+    if ! curl -fsSL https://claude.ai/install.sh | bash; then
+        track_failure "claude-code" "Failed to install Claude Code"
     fi
 }
 
@@ -193,11 +303,12 @@ install_rust() {
     fi
 
     echo "Installing Rust..."
-    # Use -y flag to automatically accept the installation defaults
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-
-    # Source the cargo environment for the current session
-    source "$HOME/.cargo/env"
+    if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; then
+        # Source the cargo environment for the current session
+        [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+    else
+        track_failure "rust" "Failed to install Rust"
+    fi
 }
 
 install_pnpm() {
@@ -212,14 +323,16 @@ install_pnpm() {
     fi
 
     echo "Installing PNPM..."
-    curl -fsSL https://get.pnpm.io/install.sh | sh -s -- -y
-
-    # Source PNPM environment for the current session
-    export PNPM_HOME="$HOME/.local/share/pnpm"
-    case ":$PATH:" in
-        *":$PNPM_HOME:"*) ;;
-        *) export PATH="$PNPM_HOME:$PATH" ;;
-    esac
+    if curl -fsSL https://get.pnpm.io/install.sh | sh -s -- -y; then
+        # Source PNPM environment for the current session
+        export PNPM_HOME="$HOME/.local/share/pnpm"
+        case ":$PATH:" in
+            *":$PNPM_HOME:"*) ;;
+            *) export PATH="$PNPM_HOME:$PATH" ;;
+        esac
+    else
+        track_failure "pnpm" "Failed to install PNPM"
+    fi
 }
 
 install_talosctl() {
@@ -229,7 +342,9 @@ install_talosctl() {
     fi
 
     echo "Installing talosctl..."
-    curl -sL https://talos.dev/install | sh
+    if ! curl -sL https://talos.dev/install | sh; then
+        track_failure "talosctl" "Failed to install talosctl"
+    fi
 }
 
 setup_python() {
@@ -238,16 +353,22 @@ setup_python() {
         return 0
     fi
 
+    echo "Setting up Python environment..."
     if [ -d "$HOME/.local/state/python3" ]; then
         echo "Python virtual environment already exists."
         source ~/.local/state/python3/bin/activate
     else
         echo "Creating Python virtual environment..."
-        python3 -m venv ~/.local/state/python3
+        if ! python3 -m venv ~/.local/state/python3; then
+            track_failure "python" "Failed to create Python virtual environment"
+            return 0
+        fi
         source ~/.local/state/python3/bin/activate
     fi
 
-    pip install --upgrade pip pynvim requests
+    if ! pip install --upgrade pip pynvim requests; then
+        track_failure "python" "Failed to install Python packages (pip, pynvim, requests)"
+    fi
 }
 
 install_nvm() {
@@ -256,33 +377,42 @@ install_nvm() {
         return 0
     fi
 
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash -s -- --no-use --silent
+    echo "Installing NVM..."
+    if ! curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash -s -- --no-use --silent; then
+        track_failure "nvm" "Failed to install NVM"
+        return 0
+    fi
 
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
     [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
-    nvm install --lts
+
+    if ! nvm install --lts; then
+        track_failure "nvm" "Failed to install Node.js LTS via NVM"
+    fi
 }
 
 setup_symlinks() {
     local dotfiles_dir=~/projects/dotfiles
-    
+
     # Check if it's the new structure
     if [ -d "$dotfiles_dir/.bare" ]; then
          cd "$dotfiles_dir/.bare"
          local default_branch=$(git symbolic-ref --short HEAD)
          dotfiles_dir="$dotfiles_dir/$default_branch"
     fi
-    
+
     echo "Stowing dotfiles from $dotfiles_dir..."
     cd "$dotfiles_dir"
-    stow --adopt -t "$HOME" .
+    if ! stow --adopt -t "$HOME" .; then
+        track_failure "symlinks" "Failed to create symlinks with stow"
+    fi
 }
 
 setup_git_hooks() {
     echo "Setting up git hooks for all projects..."
     local hook_source="$HOME/projects/dotfiles/.bin/git-hooks/pre-push"
-    
+
     # Try to locate hook source dynamically if not found
     if [ ! -f "$hook_source" ]; then
         local potential_source=$(find "$HOME/projects/dotfiles" -maxdepth 2 -path "*/.bin/git-hooks/pre-push" | head -n 1)
@@ -290,10 +420,10 @@ setup_git_hooks() {
             hook_source="$potential_source"
         fi
     fi
-    
+
     if [ ! -f "$hook_source" ]; then
-        echo "Error: Pre-push hook not found at $hook_source"
-        return 1
+        track_failure "git-hooks" "Pre-push hook not found at $hook_source"
+        return 0
     fi
 
     # Iterate over projects
@@ -306,11 +436,13 @@ setup_git_hooks() {
             # Old structure
             hook_dir="$project/.git/hooks"
         fi
-        
+
         if [ -n "$hook_dir" ]; then
             echo "Installing pre-push hook in $project..."
             mkdir -p "$hook_dir"
-            ln -sf "$hook_source" "$hook_dir/pre-push"
+            if ! ln -sf "$hook_source" "$hook_dir/pre-push"; then
+                track_failure "git-hooks" "Failed to install hook in $(basename $project)"
+            fi
         fi
     done
 }
@@ -323,11 +455,15 @@ change_shell_to_zsh() {
         case "$(detect_distro)" in
             darwin)
                 # macOS doesn't need sudo for chsh
-                chsh -s /bin/zsh
+                if ! chsh -s /bin/zsh; then
+                    track_failure "shell" "Failed to change shell to zsh"
+                fi
                 ;;
             *)
                 # Linux distributions typically need sudo
-                sudo chsh -s /bin/zsh $USER
+                if ! sudo chsh -s /bin/zsh $USER; then
+                    track_failure "shell" "Failed to change shell to zsh"
+                fi
                 ;;
         esac
     else
