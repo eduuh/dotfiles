@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# Prune worktrees for branches that have been merged/deleted
+# Usage: wt-prune [--dry-run]
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Find project root
+find_project_root() {
+    local dir="$PWD"
+    while [ "$dir" != "/" ]; do
+        if [ -d "$dir/.bare" ]; then
+            echo "$dir"
+            return 0
+        fi
+        if [ -f "$dir/.git" ]; then
+            local gitdir=$(cat "$dir/.git" | sed 's/gitdir: //')
+            local bare_dir=$(dirname $(dirname "$gitdir"))
+            if [ -d "$bare_dir" ] && [ "$(basename $bare_dir)" = ".bare" ]; then
+                echo "$(dirname $bare_dir)"
+                return 0
+            fi
+        fi
+        dir=$(dirname "$dir")
+    done
+    return 1
+}
+
+PROJECT_ROOT=$(find_project_root)
+if [ -z "$PROJECT_ROOT" ]; then
+    echo -e "${RED}Error:${NC} Not in a bare repo worktree project"
+    exit 1
+fi
+
+BARE_DIR="$PROJECT_ROOT/.bare"
+
+DRY_RUN=""
+if [ "$1" == "--dry-run" ]; then
+    DRY_RUN="true"
+    echo -e "${BLUE}Dry run mode - no changes will be made${NC}"
+    echo ""
+fi
+
+cd "$BARE_DIR"
+
+echo -e "${BLUE}Fetching and pruning remote branches...${NC}"
+git fetch origin --prune
+
+echo ""
+echo -e "${BLUE}Checking for stale worktrees...${NC}"
+echo ""
+
+# Get list of worktrees
+git worktree list | while read -r line; do
+    WORKTREE_PATH=$(echo "$line" | awk '{print $1}')
+    FOLDER_NAME=$(basename "$WORKTREE_PATH")
+
+    # Skip bare repo and main
+    if [ "$FOLDER_NAME" == ".bare" ] || [ "$FOLDER_NAME" == "main" ]; then
+        continue
+    fi
+
+    # Check if marked as prunable
+    if [[ "$line" == *"prunable"* ]]; then
+        echo -e "  ${YELLOW}●${NC} $FOLDER_NAME - branch deleted from remote"
+
+        if [ -z "$DRY_RUN" ]; then
+            read -p "    Remove this worktree? (y/N) " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || true
+                echo -e "    ${GREEN}✓ Removed${NC}"
+            fi
+        fi
+    fi
+done
+
+# Clean up any broken worktree references
+if [ -z "$DRY_RUN" ]; then
+    git worktree prune
+    echo ""
+    echo -e "${GREEN}✓ Prune complete${NC}"
+fi

@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Create a new worktree and output the path (for cd)
+# Usage: wt-start <type>/<branch-name> [base-branch]
+# Use with: cd $(wt-start feat/my-feature)
+
+wt-new "$@" >/dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+    # Find project root
+    find_project_root() {
+        local dir="$PWD"
+        while [ "$dir" != "/" ]; do
+            if [ -d "$dir/.bare" ]; then
+                echo "$dir"
+                return 0
+            fi
+            if [ -f "$dir/.git" ]; then
+                local gitdir=$(cat "$dir/.git" | sed 's/gitdir: //')
+                local bare_dir=$(dirname $(dirname "$gitdir"))
+                if [ -d "$bare_dir" ] && [ "$(basename $bare_dir)" = ".bare" ]; then
+                    echo "$(dirname $bare_dir)"
+                    return 0
+                fi
+            fi
+            dir=$(dirname "$dir")
+        done
+        return 1
+    }
+
+    PROJECT_ROOT=$(find_project_root)
+    FOLDER_NAME=$(echo "$1" | tr '/' '-')
+    echo "$PROJECT_ROOT/$FOLDER_NAME"
+fi

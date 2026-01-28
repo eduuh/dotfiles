@@ -1,5 +1,5 @@
 # Basic Path Setup
-export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+export PATH="$HOME/projects/dotfiles/.bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
 # Homebrew Setup
 if [ -f "/opt/homebrew/bin/brew" ]; then
@@ -68,3 +68,27 @@ export NVM_DIR="$HOME/.nvm"
 export KUBECONFIG=/Users/edd/projects/kube/kubeconfig.local
 
 . "$HOME/.local/bin/env"
+
+# Git worktree workflow (works with any bare repo project)
+# wt-new, wt-delete, wt-list, wt-prune are in .bin
+# Shell functions for commands that need to change directory:
+wt-cd() {
+    local target=$(command wt-cd "$@" 2>/dev/null)
+    if [ -n "$target" ] && [ -d "$target" ]; then
+        cd "$target"
+    else
+        command wt-cd "$@"
+    fi
+}
+wt-start() {
+    local target=$(command wt-start "$@")
+    if [ -n "$target" ] && [ -d "$target" ]; then
+        cd "$target"
+    fi
+}
+# Aliases
+alias wtl="wt-list"
+alias wtn="wt-new"
+alias wtd="wt-delete"
+alias wts="wt-start"
+alias wtp="wt-prune"

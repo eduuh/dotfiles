@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Change to a worktree directory
+# Usage: wt-cd <folder-name>
+# Note: This must be sourced or used as a shell function to actually change directory
+
+# Colors
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Find project root
+find_project_root() {
+    local dir="$PWD"
+    while [ "$dir" != "/" ]; do
+        if [ -d "$dir/.bare" ]; then
+            echo "$dir"
+            return 0
+        fi
+        if [ -f "$dir/.git" ]; then
+            local gitdir=$(cat "$dir/.git" | sed 's/gitdir: //')
+            local bare_dir=$(dirname $(dirname "$gitdir"))
+            if [ -d "$bare_dir" ] && [ "$(basename $bare_dir)" = ".bare" ]; then
+                echo "$(dirname $bare_dir)"
+                return 0
+            fi
+        fi
+        dir=$(dirname "$dir")
+    done
+    return 1
+}
+
+PROJECT_ROOT=$(find_project_root)
+if [ -z "$PROJECT_ROOT" ]; then
+    echo -e "${RED}Error:${NC} Not in a bare repo worktree project"
+    exit 1
+fi
+
+if [ -z "$1" ]; then
+    echo -e "${BLUE}Usage:${NC} wt-cd <folder-name>"
+    echo ""
+    wt-list
+    exit 1
+fi
+
+TARGET="$PROJECT_ROOT/$1"
+if [ -d "$TARGET" ]; then
+    echo "$TARGET"
+else
+    echo -e "${RED}Error:${NC} Worktree not found: $1"
+    wt-list
+    exit 1
+fi

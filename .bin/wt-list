@@ -1,0 +1,104 @@
+#!/bin/bash
+
+# List all worktrees with status
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Find project root
+find_project_root() {
+    local dir="$PWD"
+    while [ "$dir" != "/" ]; do
+        if [ -d "$dir/.bare" ]; then
+            echo "$dir"
+            return 0
+        fi
+        if [ -f "$dir/.git" ]; then
+            local gitdir=$(cat "$dir/.git" | sed 's/gitdir: //')
+            local bare_dir=$(dirname $(dirname "$gitdir"))
+            if [ -d "$bare_dir" ] && [ "$(basename $bare_dir)" = ".bare" ]; then
+                echo "$(dirname $bare_dir)"
+                return 0
+            fi
+        fi
+        dir=$(dirname "$dir")
+    done
+    return 1
+}
+
+PROJECT_ROOT=$(find_project_root)
+if [ -z "$PROJECT_ROOT" ]; then
+    echo -e "${RED}Error:${NC} Not in a bare repo worktree project"
+    exit 1
+fi
+
+BARE_DIR="$PROJECT_ROOT/.bare"
+
+echo -e "${BLUE}Worktrees${NC} ($(basename $PROJECT_ROOT)):"
+echo ""
+
+cd "$BARE_DIR"
+
+# Get worktree list
+git worktree list --porcelain | while read -r line; do
+    if [[ $line == worktree* ]]; then
+        WORKTREE_PATH=$(echo "$line" | sed 's/worktree //')
+        FOLDER_NAME=$(basename "$WORKTREE_PATH")
+
+        # Skip bare repo
+        if [ "$FOLDER_NAME" == ".bare" ]; then
+            continue
+        fi
+    elif [[ $line == HEAD* ]]; then
+        HEAD=$(echo "$line" | sed 's/HEAD //')
+    elif [[ $line == branch* ]]; then
+        BRANCH=$(echo "$line" | sed 's/branch refs\/heads\///')
+
+        # Get status
+        if [ -d "$WORKTREE_PATH" ]; then
+            cd "$WORKTREE_PATH"
+
+            # Check for uncommitted changes
+            CHANGES=""
+            if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+                CHANGES="${YELLOW}[changes]${NC}"
+            fi
+
+            # Check if ahead/behind remote
+            AHEAD_BEHIND=""
+            if git rev-parse --abbrev-ref "@{upstream}" >/dev/null 2>&1; then
+                AHEAD=$(git rev-list --count "@{upstream}..HEAD" 2>/dev/null || echo "0")
+                BEHIND=$(git rev-list --count "HEAD..@{upstream}" 2>/dev/null || echo "0")
+                if [ "$AHEAD" -gt 0 ]; then
+                    AHEAD_BEHIND="${GREEN}↑$AHEAD${NC}"
+                fi
+                if [ "$BEHIND" -gt 0 ]; then
+                    AHEAD_BEHIND="$AHEAD_BEHIND${RED}↓$BEHIND${NC}"
+                fi
+            else
+                AHEAD_BEHIND="${CYAN}[local]${NC}"
+            fi
+
+            # Format output
+            if [ "$FOLDER_NAME" == "main" ]; then
+                echo -e "  ${GREEN}●${NC} ${CYAN}$FOLDER_NAME${NC} → $BRANCH $AHEAD_BEHIND $CHANGES"
+            else
+                echo -e "  ○ $FOLDER_NAME → $BRANCH $AHEAD_BEHIND $CHANGES"
+            fi
+
+            cd "$BARE_DIR"
+        fi
+    elif [ -z "$line" ]; then
+        # Reset for next worktree
+        WORKTREE_PATH=""
+        HEAD=""
+        BRANCH=""
+    fi
+done
+
+echo ""
