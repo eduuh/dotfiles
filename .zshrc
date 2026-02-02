@@ -67,4 +67,7 @@ export NVM_DIR="$HOME/.nvm"
 
 export KUBECONFIG=/Users/edd/projects/kube/kubeconfig.local
 
-. "$HOME/.local/bin/env"
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+export PATH="$HOME/.local/bin:$PATH"
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

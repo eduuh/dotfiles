@@ -89,20 +89,38 @@ esac
 PREVIEW
 chmod +x "$preview_script"
 
+# Create rename helper script for fzf execute binding
+rename_script=$(mktemp)
+cat > "$rename_script" << 'RENAME'
+#!/usr/bin/env zsh
+sel="$1"
+# Only works for sessions (@prefix)
+[[ "$sel" != @* ]] && exit 0
+session="${sel#@}"
+session="${session%%\**}"
+session="${session%% *}"
+# Remove ANSI codes
+session=$(echo "$session" | sed 's/\x1b\[[0-9;]*m//g')
+# Use tmux command-prompt for rename
+tmux command-prompt -p "Rename '$session' to:" "rename-session -t '$session' '%%'"
+RENAME
+chmod +x "$rename_script"
+
 # Run fzf
 selected=$(build_list | "$FZF_CMD" \
     --ansi \
     --reverse \
-    --header="@ sessions | # windows | : panes" \
+    --header="@ sessions | # windows | : panes | ctrl-r: rename session" \
     --preview="$preview_script {}" \
     --preview-window="right:40%:wrap" \
     --bind="@:reload(tmux list-sessions -F '@#S')" \
     --bind="ctrl-s:reload(tmux list-sessions -F '@#S')" \
     --bind="ctrl-w:reload(tmux list-windows -a -F '##{session_name}:#{window_index} #{window_name}')" \
-    --bind="ctrl-p:reload(tmux list-panes -a -F ':#{session_name}:#{window_index}.#{pane_index} #{pane_current_command}')")
+    --bind="ctrl-p:reload(tmux list-panes -a -F ':#{session_name}:#{window_index}.#{pane_index} #{pane_current_command}')" \
+    --bind="ctrl-r:execute-silent($rename_script {})+reload(sleep 0.2 && $0)")
 
 # Cleanup
-rm -f "$preview_script"
+rm -f "$preview_script" "$rename_script"
 
 # Exit if nothing selected
 [[ -z "$selected" ]] && exit 0
