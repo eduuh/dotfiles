@@ -54,6 +54,17 @@ eval "$(starship init zsh)"
 # Zoxide (smart cd)
 command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
 
+# Worktree manager wrapper (wt go needs to cd in current shell)
+wt() {
+    if [[ "$1" == "go" ]]; then
+        local dir
+        dir=$("$HOME/.bin/wt.sh" go "${@:2}")
+        [[ -n "$dir" && -d "$dir" ]] && cd "$dir"
+    else
+        "$HOME/.bin/wt.sh" "$@"
+    fi
+}
+
 # Kanata
 alias kanata-restart="sudo launchctl unload /Library/LaunchDaemons/com.custom.kanata.plist && sudo launchctl load /Library/LaunchDaemons/com.custom.kanata.plist"
 alias kanata-log="cat /tmp/kanata.out /tmp/kanata.err"
