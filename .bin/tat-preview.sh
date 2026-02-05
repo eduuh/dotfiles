@@ -12,8 +12,8 @@ path=$(resolve_project_path "$PROJECT_ROOT/$project")
 echo "━━━ $project ━━━"
 echo ""
 
-# Git info
-if [[ -d "$path/.git" ]] || [[ -d "$path/.bare" ]]; then
+# Git info (handles regular repos, bare repos, and worktrees)
+if [[ -d "$path/.git" ]] || [[ -d "$path/.bare" ]] || [[ -f "$path/.git" ]]; then
     cd "$path"
     branch=$(git branch --show-current 2>/dev/null || echo "detached")
 
