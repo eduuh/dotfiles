@@ -14,12 +14,20 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Repositories that should NOT be cloned as bare (regular clone instead)
+# These repos will be cloned to ~/projects/reponame (without .git suffix)
+REGULAR_CLONE_REPOS=(
+    "dotfiles"
+    "nvim"
+    "personal-notes"
+)
+
 usage() {
     cat << EOF
 Usage: wt <command> [args]
 
 Commands:
-  clone <url>              Clone repo as bare (e.g., wt clone git@github.com:user/repo.git)
+  clone <url>              Clone repo (bare by default, some repos as regular)
   add [branch]             Add worktree (interactive if no branch specified)
   list                     List all worktrees for current repo
   remove [worktree]        Remove worktree (interactive if not specified)
@@ -38,6 +46,15 @@ EOF
 # Sanitize branch name for directory (replace / with -)
 sanitize_branch() {
     echo "$1" | tr '/' '-'
+}
+
+# Check if repo should be cloned as regular (not bare)
+is_regular_clone() {
+    local repo_name="$1"
+    for pattern in "${REGULAR_CLONE_REPOS[@]}"; do
+        [[ "$repo_name" == "$pattern" ]] && return 0
+    done
+    return 1
 }
 
 # Get repo name from bare repo path or current worktree
@@ -87,30 +104,47 @@ find_bare_repo() {
     return 1
 }
 
-# Clone a repo as bare
+# Clone a repo (bare by default, some repos as regular)
 cmd_clone() {
     local url="$1"
     [[ -z "$url" ]] && { echo -e "${RED}Error: URL required${NC}"; usage; exit 1; }
 
     # Extract repo name from URL
     local repo_name=$(basename "$url" .git)
-    local bare_path="$PROJECT_ROOT/${repo_name}.git"
 
-    if [[ -d "$bare_path" ]]; then
-        echo -e "${RED}Error: $bare_path already exists${NC}"
-        exit 1
+    # Check if this repo should be cloned as regular (not bare)
+    if is_regular_clone "$repo_name"; then
+        local clone_path="$PROJECT_ROOT/${repo_name}"
+
+        if [[ -d "$clone_path" ]]; then
+            echo -e "${RED}Error: $clone_path already exists${NC}"
+            exit 1
+        fi
+
+        echo -e "${BLUE}Cloning $url as regular repo (not bare)...${NC}"
+        git clone "$url" "$clone_path"
+
+        echo -e "${GREEN}✓ Cloned to $clone_path${NC}"
+        echo -e "${YELLOW}This is a regular repo (not bare). Use standard git commands.${NC}"
+    else
+        local bare_path="$PROJECT_ROOT/${repo_name}.git"
+
+        if [[ -d "$bare_path" ]]; then
+            echo -e "${RED}Error: $bare_path already exists${NC}"
+            exit 1
+        fi
+
+        echo -e "${BLUE}Cloning $url as bare repo...${NC}"
+        git clone --bare "$url" "$bare_path"
+
+        # Set up fetch to get all branches
+        cd "$bare_path"
+        git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+        git fetch origin
+
+        echo -e "${GREEN}✓ Cloned to $bare_path${NC}"
+        echo -e "${YELLOW}Next: cd $bare_path && wt add main${NC}"
     fi
-
-    echo -e "${BLUE}Cloning $url as bare repo...${NC}"
-    git clone --bare "$url" "$bare_path"
-
-    # Set up fetch to get all branches
-    cd "$bare_path"
-    git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-    git fetch origin
-
-    echo -e "${GREEN}✓ Cloned to $bare_path${NC}"
-    echo -e "${YELLOW}Next: cd $bare_path && wt add main${NC}"
 }
 
 # Add a worktree

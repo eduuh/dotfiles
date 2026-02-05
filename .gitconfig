@@ -1,5 +1,6 @@
 [http]
 	postBuffer = 524288000
+	maxRequests = 100
 [user]
 	name = eduuh
 	email = 31909722+eduuh@users.noreply.github.com
