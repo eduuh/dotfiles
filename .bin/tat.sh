@@ -11,13 +11,14 @@ require_fzf
 PREVIEW_SCRIPT="$HOME/.bin/tat-preview.sh"
 TEMPLATE_SCRIPT="$HOME/.bin/tat-template.sh"
 
-# Get all project directories
+# Get all project directories (excluding bare repos ending in .git)
 get_projects() {
     local projects=()
     for dir in "$PROJECT_ROOT"/*/; do
         [[ -d "$dir" ]] || continue
         local name=$(basename "$dir")
         [[ "$name" == .* ]] && continue
+        [[ "$name" == *.git ]] && continue  # Skip bare repos
         projects+=("$name")
     done
     printf '%s\n' "${projects[@]}"
