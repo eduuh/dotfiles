@@ -33,6 +33,8 @@ export NVM_DIR="$HOME/.nvm"
 # Load Lazy Load
 [ -f "$HOME/projects/dotfiles/.zsh_lazy_load" ] && source "$HOME/projects/dotfiles/.zsh_lazy_load"
 
+[ -f "$HOME/projects/personal-notes/scripts/ws.zsh" ] && source "$HOME/projects/personal-notes/scripts/ws.zsh"
+
 # pnpm
 export PNPM_HOME="/Users/edd/Library/pnpm"
 case ":$PATH:" in
