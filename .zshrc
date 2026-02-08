@@ -33,6 +33,8 @@ export NVM_DIR="$HOME/.nvm"
 # Load Lazy Load
 [ -f "$HOME/projects/dotfiles/.zsh_lazy_load" ] && source "$HOME/projects/dotfiles/.zsh_lazy_load"
 
+[ -f "$HOME/projects/personal-notes/scripts/ws.zsh" ] && source "$HOME/projects/personal-notes/scripts/ws.zsh"
+
 # pnpm
 export PNPM_HOME="/Users/edd/Library/pnpm"
 case ":$PATH:" in
@@ -50,6 +52,14 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 
 # Starship
 eval "$(starship init zsh)"
+
+# Tmux integration: Update current path for splits/windows
+if [ -n "$TMUX" ]; then
+  _tmux_refresh_path() {
+    tmux refresh-client -S 2>/dev/null
+  }
+  chpwd_functions+=(_tmux_refresh_path)
+fi
 
 # Zoxide (smart cd)
 command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
