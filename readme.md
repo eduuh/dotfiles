@@ -26,6 +26,14 @@ cd ~/projects/dotfiles && ./setup.sh
 
 - [Tmux Workflow](docs/tmux.md)
 
+## Private Configuration
+
+Claude Code config is managed separately in a private repo:
+
+```bash
+cd ~/projects/personal-notes/stow/home && stow --adopt -t "$HOME" .
+```
+
 ## Related
 
 | Platform | Repository |

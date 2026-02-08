@@ -483,6 +483,30 @@ install_nvm() {
     fi
 }
 
+install_npm_globals() {
+    if ! command -v npm &> /dev/null; then
+        echo "npm not found. Skipping global npm packages installation."
+        return 0
+    fi
+
+    echo "Installing global npm packages..."
+
+    local packages=(
+        "@github/copilot"
+    )
+
+    for package in "${packages[@]}"; do
+        if npm list -g "$package" &> /dev/null; then
+            echo "$package is already installed globally."
+        else
+            echo "Installing $package..."
+            if ! npm install -g "$package"; then
+                track_failure "npm" "Failed to install $package"
+            fi
+        fi
+    done
+}
+
 setup_symlinks() {
     local dotfiles_dir=~/projects/dotfiles
 

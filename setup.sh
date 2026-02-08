@@ -55,6 +55,7 @@ main() {
     install_starship
     install_rust
     install_pnpm
+    install_npm_globals
     install_talosctl
     setup_git_hooks
     change_shell_to_zsh
