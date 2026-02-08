@@ -23,6 +23,9 @@ vim:vim:tui
 # Network tools
 bandwhich:sudo bandwhich:tui
 
+# Background services
+json-server:node $HOME/.bin/json-server.js:bg:all
+
 #------------------------------------------------------------------------------
 # macOS
 #------------------------------------------------------------------------------
