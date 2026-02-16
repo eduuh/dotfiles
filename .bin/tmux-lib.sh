@@ -6,6 +6,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 # Constants
 PROJECT_ROOT="$HOME/projects"
+BARE_DIR="$PROJECT_ROOT/bare"
+WORKTREE_DIR="$PROJECT_ROOT/worktree"
 
 # Find tmux command and set TMUX_CMD
 tmux_init() {
@@ -24,15 +26,17 @@ require_fzf() {
     [[ ! -x "$FZF_CMD" ]] && { echo "Error: fzf not found"; exit 1; }
 }
 
-# Resolve bare repo worktree path
-# Usage: path=$(resolve_project_path "$path")
+# Resolve project name to full path
+# If name contains "/" (e.g. "kube-homelab/main") → worktree path
+# Otherwise → regular clone at project root
+# Usage: path=$(resolve_project_path "$name")
 resolve_project_path() {
-    local path="$1"
-    if [[ -d "$path/.bare" ]]; then
-        local default_branch=$(cd "$path/.bare" && git symbolic-ref --short HEAD 2>/dev/null || echo "main")
-        [[ -d "$path/$default_branch" ]] && path="$path/$default_branch"
+    local name="$1"
+    if [[ "$name" == */* ]]; then
+        echo "$WORKTREE_DIR/$name"
+    else
+        echo "$PROJECT_ROOT/$name"
     fi
-    echo "$path"
 }
 
 # Detect project type by marker files

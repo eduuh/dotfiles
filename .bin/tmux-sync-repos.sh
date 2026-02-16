@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tmux-sync-repos.sh - Open matching repos in synchronized vertical panes
 # Usage: tmux-sync-repos.sh <prefix> [base_dir]
+# When prefix matches a repo name in worktree/, opens all its branch worktrees as synced panes
 
 source "$HOME/.bin/tmux-lib.sh"
 
@@ -8,23 +9,27 @@ require_tmux
 tmux_init
 
 PREFIX="$1"
-BASE_DIR="${2:-$HOME/projects}"
+WORKTREE_BASE="${2:-$HOME/projects/worktree}"
 
 if [[ -z "$PREFIX" ]]; then
     echo "Usage: tmux-sync-repos.sh <prefix> [base_dir]"
     exit 1
 fi
 
-# Find matching directories (immediate children only, case-insensitive)
+# Find matching repo directories in worktree/
 matches=()
 shopt -s nocaseglob nullglob
-for dir in "$BASE_DIR"/"$PREFIX"*/; do
-    [[ -d "$dir" ]] && matches+=("${dir%/}")
+for repo_dir in "$WORKTREE_BASE"/"$PREFIX"*/; do
+    [[ -d "$repo_dir" ]] || continue
+    # Collect all branch worktrees within the matching repo
+    for branch_dir in "$repo_dir"/*/; do
+        [[ -d "$branch_dir" ]] && matches+=("${branch_dir%/}")
+    done
 done
 shopt -u nocaseglob nullglob
 
 if [[ ${#matches[@]} -eq 0 ]]; then
-    $TMUX_CMD display-message "No directories matching '$PREFIX*' in $BASE_DIR"
+    $TMUX_CMD display-message "No worktrees matching '$PREFIX*' in $WORKTREE_BASE"
     exit 1
 fi
 
@@ -47,4 +52,4 @@ done
 $TMUX_CMD set-window-option -t ":$window_name" synchronize-panes on
 
 # Display info
-$TMUX_CMD display-message "Synced ${#matches[@]} repos: ${PREFIX}* (sync ON)"
+$TMUX_CMD display-message "Synced ${#matches[@]} worktrees: ${PREFIX}* (sync ON)"
