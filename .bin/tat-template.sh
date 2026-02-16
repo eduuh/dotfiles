@@ -6,7 +6,7 @@ source "$HOME/.bin/tmux-lib.sh"
 tmux_init
 
 session_name="$1"
-project_path=$(resolve_project_path "${2:-$PROJECT_ROOT/$session_name}")
+project_path="${2:-$(resolve_project_path "$session_name")}"
 
 # Add to zoxide for frecency tracking
 command -v zoxide &>/dev/null && zoxide add "$project_path"

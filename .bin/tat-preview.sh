@@ -4,7 +4,7 @@
 source "$HOME/.bin/tmux-lib.sh"
 
 project="$1"
-path=$(resolve_project_path "$PROJECT_ROOT/$project")
+path=$(resolve_project_path "$project")
 
 [[ ! -d "$path" ]] && { echo "Directory not found: $path"; exit 1; }
 
@@ -12,8 +12,8 @@ path=$(resolve_project_path "$PROJECT_ROOT/$project")
 echo "━━━ $project ━━━"
 echo ""
 
-# Git info (handles regular repos, bare repos, and worktrees)
-if [[ -d "$path/.git" ]] || [[ -d "$path/.bare" ]] || [[ -f "$path/.git" ]]; then
+# Git info (handles regular repos and worktrees)
+if [[ -d "$path/.git" ]] || [[ -f "$path/.git" ]]; then
     cd "$path"
     branch=$(git branch --show-current 2>/dev/null || echo "detached")
 

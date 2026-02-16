@@ -11,16 +11,33 @@ require_fzf
 PREVIEW_SCRIPT="$HOME/.bin/tat-preview.sh"
 TEMPLATE_SCRIPT="$HOME/.bin/tat-template.sh"
 
-# Get all project directories (excluding bare repos ending in .git)
+# Get all projects: worktree entries (repo/branch) + regular clones
 get_projects() {
     local projects=()
+
+    # Worktree entries: ~/projects/worktree/repo/branch → "repo/branch"
+    if [[ -d "$WORKTREE_DIR" ]]; then
+        for repo_dir in "$WORKTREE_DIR"/*/; do
+            [[ -d "$repo_dir" ]] || continue
+            local repo_name=$(basename "$repo_dir")
+            for branch_dir in "$repo_dir"/*/; do
+                [[ -d "$branch_dir" ]] || continue
+                local branch_name=$(basename "$branch_dir")
+                projects+=("${repo_name}/${branch_name}")
+            done
+        done
+    fi
+
+    # Regular clones: ~/projects/*/ excluding bare/, worktree/, hidden dirs
     for dir in "$PROJECT_ROOT"/*/; do
         [[ -d "$dir" ]] || continue
         local name=$(basename "$dir")
         [[ "$name" == .* ]] && continue
-        [[ "$name" == *.git ]] && continue  # Skip bare repos
+        [[ "$name" == "bare" ]] && continue
+        [[ "$name" == "worktree" ]] && continue
         projects+=("$name")
     done
+
     printf '%s\n' "${projects[@]}"
 }
 
@@ -28,7 +45,7 @@ get_projects() {
 sort_by_frecency() {
     if command -v zoxide &>/dev/null; then
         while IFS= read -r project; do
-            local ppath="$PROJECT_ROOT/$project"
+            local ppath=$(resolve_project_path "$project")
             local score=$(zoxide query -s "$ppath" 2>/dev/null | /usr/bin/awk '{print $1}')
             [[ -z "$score" ]] && score="0"
             echo "$score $project"
@@ -67,7 +84,7 @@ selected=$(build_list | "$FZF_CMD" \
 [[ -z "$selected" ]] && exit 0
 
 session_name="$selected"
-project_path="$PROJECT_ROOT/$selected"
+project_path=$(resolve_project_path "$selected")
 
 # Create or switch to session
 if has_session "$session_name"; then
