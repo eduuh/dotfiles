@@ -3,8 +3,6 @@
 install_homebrew() {
     if command -v brew &> /dev/null; then
         echo "Homebrew is already installed."
-        brew update || track_failure "homebrew" "Failed to update Homebrew"
-        brew upgrade || track_failure "homebrew" "Failed to upgrade Homebrew packages"
         return 0
     fi
 
@@ -27,16 +25,27 @@ install_homebrew() {
 install_brew_packages() {
     echo "Installing Homebrew packages..."
 
-    # Helper function to install brew package with error tracking
+    # Helper function to install brew package only if missing
     install_brew_pkg() {
         local pkg="$1"
         local is_cask="${2:-false}"
+        local pkg_short="${pkg##*/}"  # strip tap prefix for checking
 
         if [[ "$is_cask" == "true" ]]; then
+            if brew list --cask "$pkg_short" &>/dev/null; then
+                echo "$pkg_short (cask) already installed."
+                return 0
+            fi
+            echo "Installing cask $pkg_short..."
             if ! brew install --cask "$pkg" 2>&1; then
                 track_failure "brew-cask" "Failed to install cask: $pkg"
             fi
         else
+            if brew list "$pkg_short" &>/dev/null; then
+                echo "$pkg_short already installed."
+                return 0
+            fi
+            echo "Installing $pkg..."
             if ! brew install "$pkg" 2>&1; then
                 track_failure "brew" "Failed to install: $pkg"
             fi
@@ -48,15 +57,13 @@ install_brew_packages() {
     install_brew_pkg "karabiner-elements" true
 
     # Start skhd service
-    echo "Starting skhd service..."
-    skhd --start-service || echo "Failed to start skhd service (it might be already running or require permissions), continuing..."
+    skhd --start-service 2>/dev/null || true
 
-    brew tap FelixKratz/formulae || track_failure "brew" "Failed to tap FelixKratz/formulae"
+    brew tap FelixKratz/formulae 2>/dev/null || track_failure "brew" "Failed to tap FelixKratz/formulae"
     install_brew_pkg "sketchybar"
 
     # Install common software packages
     for software in "${common_software[@]}"; do
-        echo "Installing $software..."
         install_brew_pkg "$software"
     done
 
@@ -71,18 +78,7 @@ install_brew_packages() {
     )
 
     for software in "${mac_software[@]}"; do
-        echo "Checking for updates for $software..."
-        if brew list "$software" &>/dev/null; then
-            if brew outdated | grep -q "^$software"; then
-                echo "Updating $software..."
-                brew upgrade "$software" >/dev/null 2>&1 || track_failure "brew" "Failed to upgrade: $software"
-            else
-                echo "$software is up-to-date."
-            fi
-        else
-            echo "Installing $software..."
-            install_brew_pkg "$software"
-        fi
+        install_brew_pkg "$software"
     done
 }
 
@@ -95,9 +91,13 @@ install_brew_casks() {
     )
 
     for cask in "${mac_casks[@]}"; do
-        echo "Installing $cask..."
-        if ! brew install --cask "$cask" 2>&1; then
-            track_failure "brew-cask" "Failed to install cask: $cask"
+        if brew list --cask "$cask" &>/dev/null; then
+            echo "$cask (cask) already installed."
+        else
+            echo "Installing $cask..."
+            if ! brew install --cask "$cask" 2>&1; then
+                track_failure "brew-cask" "Failed to install cask: $cask"
+            fi
         fi
     done
 }
@@ -228,13 +228,10 @@ EOF
 }
 
 setup_mac() {
-    install_homebrew
-    install_brew_packages
-    install_brew_casks
+    # Homebrew, packages, casks, and kanata are already called from setup.sh
     install_lazygit
     install_claude_code
     setup_mac_python
     setup_symlinks
     setup_mac_security
-    setup_kanata_service
 }
