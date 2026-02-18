@@ -86,7 +86,7 @@ clone_repos() {
   cd ~
 
   # Repos that get regular (non-bare) clones at ~/projects/reponame
-  local REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes)
+  local REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh)
 
   mkdir -p ~/projects ~/projects/bare ~/projects/worktree
 
@@ -106,6 +106,7 @@ clone_repos() {
           "git@github.com:eduuh/dotfiles.git"
           "git@github.com:eduuh/nvim.git"
           "git@github.com:eduuh-private/personal-notes.git"
+          "git@github.com:eduuh/eduuh.git"
       )
 
       # Additional repos to skip on WSL
@@ -119,6 +120,7 @@ clone_repos() {
               "git@github.com:eduuh-private/bash.git"
               "git@github.com:eduuh-private/eduuh-blog-template.git"
               "git@github.com:eduuh-private/life.git"
+              "git@github.com:eduuh/bits-and-atoms.git"
           )
       fi
   fi
