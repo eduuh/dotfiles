@@ -16,9 +16,8 @@ note_dir=$("$HOME/.bin/branch-note.sh")
 note_file="$note_dir/note.md"
 
 # Sync window sections
-windows=($(tmux list-windows -F '#{window_name}' 2>/dev/null))
-for win in "${windows[@]}"; do
-    if ! grep -q "^### $win$" "$note_file" 2>/dev/null; then
+tmux list-windows -F '#{window_name}' 2>/dev/null | while IFS= read -r win; do
+    if ! grep -Fq "### $win" "$note_file" 2>/dev/null; then
         echo "" >> "$note_file"
         echo "### $win" >> "$note_file"
     fi

@@ -1,5 +1,5 @@
 # Basic Path Setup
-export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+export PATH="$HOME/.bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
 # Homebrew Setup
 if [ -f "/opt/homebrew/bin/brew" ]; then
