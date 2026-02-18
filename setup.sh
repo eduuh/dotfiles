@@ -4,6 +4,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Script directory: $SCRIPT_DIR"
 source "$SCRIPT_DIR/.bin/setup/common.sh"
 
+# Ask for sudo upfront and keep the session alive
+sudo -v
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+SUDO_PID=$!
+
 main() {
     local distro=$(detect_distro)
 
@@ -13,24 +18,21 @@ main() {
         track_failure "github" "Failed to setup GitHub CLI/SSH keys"
     fi
 
-    # For macOS, we need to install Homebrew and Git before cloning repos or installing plugins
+    # For macOS, install Homebrew and all packages via Brewfile
     if [ "$distro" = "darwin" ]; then
-        echo "Detected macOS. Pre-installing Homebrew and Git..."
+        echo "Detected macOS. Installing Homebrew and packages..."
         source "$SCRIPT_DIR/.bin/setup/mac.sh"
         install_homebrew
-        install_brew_packages
-        install_brew_casks
+        install_brew_bundle
         setup_kanata_service
     fi
 
     case "$distro" in
         ubuntu|debian)
-            clone_repos
             source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"
             setup_ubuntu
             ;;
         arch)
-            clone_repos
             source "$SCRIPT_DIR/.bin/setup/arch.sh"
             setup_arch
             ;;
@@ -39,8 +41,7 @@ main() {
             setup_codespace
             ;;
         darwin)
-            clone_repos
-            # mac.sh is already sourced, and packages installed, but we run setup_mac to finish configuration
+            # mac.sh is already sourced; finish configuration
             setup_mac
             ;;
         *)
@@ -53,12 +54,17 @@ main() {
     install_tmux_plugins
     install_zoxide
     install_starship
-    install_rust
     install_pnpm
-    install_npm_globals
     install_talosctl
     setup_git_hooks
     change_shell_to_zsh
+
+    echo ""
+    echo "To clone project repos:  ./setup-projects.sh"
+    echo "To install Rust:         ./setup-rust.sh"
+
+    # Clean up sudo keepalive
+    kill "$SUDO_PID" 2>/dev/null
 
     # Print summary of any failures
     print_failure_summary

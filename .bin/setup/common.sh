@@ -82,122 +82,123 @@ detect_distro() {
     fi
 }
 
+# Repos that get regular (non-bare) clones at ~/projects/reponame
+REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh)
+
+_is_regular_repo() {
+    local name="$1"
+    for r in "${REGULAR_CLONE_REPOS[@]}"; do
+        [[ "$name" == "$r" ]] && return 0
+    done
+    return 1
+}
+
+_clone_single_repo() {
+    local REPO="$1"
+    local REPO_NAME=$(basename "$REPO" .git)
+
+    if _is_regular_repo "$REPO_NAME"; then
+        local CLONE_DIR=~/projects/"$REPO_NAME"
+
+        if [ -d "$CLONE_DIR" ]; then
+            if [ -d "$CLONE_DIR/.git" ]; then
+                cd "$CLONE_DIR"
+                if ! git diff --quiet || ! git diff --cached --quiet; then
+                    echo "[$REPO_NAME] Skipping: unsaved changes."
+                else
+                    echo "[$REPO_NAME] Updating..."
+                    git pull origin "$(git symbolic-ref --short HEAD)" || echo "[$REPO_NAME] Failed to pull."
+                fi
+                cd ~
+            else
+                echo "[$REPO_NAME] Directory exists but is not a git repo. Skipping."
+            fi
+        else
+            echo "[$REPO_NAME] Cloning (regular)..."
+            git clone "$REPO" "$CLONE_DIR" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
+        fi
+
+        # Special handling for Neovim config
+        if [[ "$REPO_NAME" == "nvim" ]]; then
+            mkdir -p ~/.config
+            ln -sf "$CLONE_DIR" ~/.config/nvim
+        fi
+    else
+        local BARE_PATH=~/projects/bare/"${REPO_NAME}.git"
+        local WT_BASE=~/projects/worktree/"$REPO_NAME"
+
+        if [ -d "$BARE_PATH" ]; then
+            echo "[$REPO_NAME] Updating (bare)..."
+            cd "$BARE_PATH"
+            git fetch origin
+            local DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
+            local CURRENT_WORKTREE="$WT_BASE/$DEFAULT_BRANCH"
+
+            if [ -d "$CURRENT_WORKTREE" ]; then
+                cd "$CURRENT_WORKTREE"
+                git pull origin "$DEFAULT_BRANCH" || echo "[$REPO_NAME] Failed to pull."
+            fi
+            cd ~
+        else
+            echo "[$REPO_NAME] Cloning (bare)..."
+            git clone --bare "$REPO" "$BARE_PATH" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
+
+            cd "$BARE_PATH"
+            git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+            git fetch origin
+            local DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
+
+            mkdir -p "$WT_BASE"
+            git worktree add "$WT_BASE/$DEFAULT_BRANCH" "$DEFAULT_BRANCH"
+            cd ~
+        fi
+    fi
+}
+
 clone_repos() {
-  cd ~
+    cd ~
+    mkdir -p ~/projects ~/projects/bare ~/projects/worktree
 
-  # Repos that get regular (non-bare) clones at ~/projects/reponame
-  local REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh)
+    # Detect if running on WSL
+    local is_wsl=false
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        is_wsl=true
+    fi
 
-  mkdir -p ~/projects ~/projects/bare ~/projects/worktree
+    local REPOSITORIES=()
+    if [ "$CODESPACES" = "true" ]; then
+        REPOSITORIES=(
+            "https://github.com/eduuh/dotfiles.git"
+        )
+    else
+        REPOSITORIES=(
+            "git@github.com:eduuh/dotfiles.git"
+            "git@github.com:eduuh/nvim.git"
+            "git@github.com:eduuh-private/personal-notes.git"
+            "git@github.com:eduuh/eduuh.git"
+        )
 
-  # Detect if running on WSL
-  local is_wsl=false
-  if grep -qi microsoft /proc/version 2>/dev/null; then
-      is_wsl=true
-  fi
+        if [ "$is_wsl" = false ]; then
+            REPOSITORIES+=(
+                "git@github.com:eduuh/kube-homelab.git"
+                "git@github.com:eduuh/blog-2026.git"
+                "git@github.com:eduuh/tracker.git"
+                "git@github.com:eduuh/growatt_exporter.git"
+                "git@github.com:eduuh-private/byte_s.git"
+                "git@github.com:eduuh-private/bash.git"
+                "git@github.com:eduuh-private/eduuh-blog-template.git"
+                "git@github.com:eduuh-private/life.git"
+                "git@github.com:eduuh/bits-and-atoms.git"
+            )
+        fi
+    fi
 
-  if [ "$CODESPACES" = "true" ]; then
-      REPOSITORIES=(
-          "https://github.com/eduuh/dotfiles.git"
-      )
-  else
-      # Base repos for all environments
-      REPOSITORIES=(
-          "git@github.com:eduuh/dotfiles.git"
-          "git@github.com:eduuh/nvim.git"
-          "git@github.com:eduuh-private/personal-notes.git"
-          "git@github.com:eduuh/eduuh.git"
-      )
-
-      # Additional repos to skip on WSL
-      if [ "$is_wsl" = false ]; then
-          REPOSITORIES+=(
-              "git@github.com:eduuh/kube-homelab.git"
-              "git@github.com:eduuh/blog-2026.git"
-              "git@github.com:eduuh/tracker.git"
-              "git@github.com:eduuh/growatt_exporter.git"
-              "git@github.com:eduuh-private/byte_s.git"
-              "git@github.com:eduuh-private/bash.git"
-              "git@github.com:eduuh-private/eduuh-blog-template.git"
-              "git@github.com:eduuh-private/life.git"
-              "git@github.com:eduuh/bits-and-atoms.git"
-          )
-      fi
-  fi
-
-  # Helper: check if repo is in the regular clone list
-  _is_regular() {
-      local name="$1"
-      for r in "${REGULAR_CLONE_REPOS[@]}"; do
-          [[ "$name" == "$r" ]] && return 0
-      done
-      return 1
-  }
-
-  for REPO in "${REPOSITORIES[@]}"; do
-      REPO_NAME=$(basename "$REPO" .git)
-
-      if _is_regular "$REPO_NAME"; then
-          # Regular clone at ~/projects/reponame
-          local CLONE_DIR=~/projects/"$REPO_NAME"
-
-          if [ -d "$CLONE_DIR" ]; then
-              if [ -d "$CLONE_DIR/.git" ]; then
-                  cd "$CLONE_DIR"
-                  if ! git diff --quiet || ! git diff --cached --quiet; then
-                      echo "Skipping $REPO_NAME: Found unsaved changes at $CLONE_DIR."
-                  else
-                      echo "Updating $REPO_NAME at $CLONE_DIR..."
-                      git pull origin "$(git symbolic-ref --short HEAD)" || echo "Failed to pull latest changes for $REPO_NAME"
-                  fi
-                  cd ~
-              else
-                  echo "Directory $CLONE_DIR exists but is not a git repo. Skipping."
-              fi
-          else
-              echo "Cloning $REPO_NAME (regular) into $CLONE_DIR..."
-              git clone "$REPO" "$CLONE_DIR" || { echo "Failed to clone $REPO_NAME. Continuing..."; continue; }
-          fi
-
-          # Special handling for Neovim config
-          if [[ "$REPO_NAME" == "nvim" ]]; then
-              echo "Creating symbolic link for Neovim config at ~/.config/nvim..."
-              mkdir -p ~/.config
-              ln -sf "$CLONE_DIR" ~/.config/nvim
-          fi
-      else
-          # Bare clone at ~/projects/bare/reponame.git
-          local BARE_PATH=~/projects/bare/"${REPO_NAME}.git"
-          local WT_BASE=~/projects/worktree/"$REPO_NAME"
-
-          if [ -d "$BARE_PATH" ]; then
-              echo "Updating $REPO_NAME (bare)..."
-              cd "$BARE_PATH"
-              git fetch origin
-              DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
-              local CURRENT_WORKTREE="$WT_BASE/$DEFAULT_BRANCH"
-
-              if [ -d "$CURRENT_WORKTREE" ]; then
-                  cd "$CURRENT_WORKTREE"
-                  git pull origin "$DEFAULT_BRANCH" || echo "Failed to pull latest changes for $REPO_NAME"
-              fi
-              cd ~
-          else
-              echo "Cloning $REPO_NAME (bare) into $BARE_PATH..."
-              git clone --bare "$REPO" "$BARE_PATH" || { echo "Failed to clone $REPO_NAME. Continuing..."; continue; }
-
-              cd "$BARE_PATH"
-              git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-              git fetch origin
-              DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
-
-              mkdir -p "$WT_BASE"
-              echo "Creating worktree for $DEFAULT_BRANCH..."
-              git worktree add "$WT_BASE/$DEFAULT_BRANCH" "$DEFAULT_BRANCH"
-              cd ~
-          fi
-      fi
-  done
+    echo "Cloning ${#REPOSITORIES[@]} repositories in parallel..."
+    for REPO in "${REPOSITORIES[@]}"; do
+        _clone_single_repo "$REPO" &
+    done
+    wait
+    echo "All repository clones finished."
 }
 
 ensure_tmux_version() {
@@ -296,37 +297,30 @@ install_lazygit() {
         return 0
     fi
 
+    # macOS: installed via Brewfile, only need the Linux path
     echo "Installing LazyGit..."
-    if [[ "$(uname)" == "Darwin" ]]; then
-        # macOS installation via Homebrew
-        if ! brew install lazygit; then
-            track_failure "lazygit" "Failed to install lazygit via Homebrew"
-        fi
-    else
-        # Linux installation
-        if ! command -v curl &> /dev/null; then
-            echo "Installing curl..."
-            sudo apt-get install -y curl || sudo pacman -S --noconfirm curl || {
-                track_failure "lazygit" "Failed to install curl (required for lazygit)"
-                return 0
-            }
-        fi
-
-        local lazygit_version
-        lazygit_version=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
-        if [[ -z "$lazygit_version" ]]; then
-            track_failure "lazygit" "Failed to fetch lazygit version"
+    if ! command -v curl &> /dev/null; then
+        echo "Installing curl..."
+        sudo apt-get install -y curl || sudo pacman -S --noconfirm curl || {
+            track_failure "lazygit" "Failed to install curl (required for lazygit)"
             return 0
-        fi
+        }
+    fi
 
-        if curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/lazygit_${lazygit_version}_Linux_x86_64.tar.gz" && \
-           tar xf lazygit.tar.gz lazygit && \
-           sudo install -D lazygit -t /usr/local/bin/; then
-            rm -f lazygit lazygit.tar.gz
-        else
-            rm -f lazygit lazygit.tar.gz
-            track_failure "lazygit" "Failed to download/install lazygit"
-        fi
+    local lazygit_version
+    lazygit_version=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
+    if [[ -z "$lazygit_version" ]]; then
+        track_failure "lazygit" "Failed to fetch lazygit version"
+        return 0
+    fi
+
+    if curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/lazygit_${lazygit_version}_Linux_x86_64.tar.gz" && \
+       tar xf lazygit.tar.gz lazygit && \
+       sudo install -D lazygit -t /usr/local/bin/; then
+        rm -f lazygit lazygit.tar.gz
+    else
+        rm -f lazygit lazygit.tar.gz
+        track_failure "lazygit" "Failed to download/install lazygit"
     fi
 }
 
@@ -336,21 +330,13 @@ install_zoxide() {
         return 0
     fi
 
+    # macOS: installed via Brewfile, only need the Linux path
     echo "Installing zoxide..."
-    if [[ "$(uname)" == "Darwin" ]]; then
-        # macOS installation via Homebrew
-        if ! brew install zoxide; then
-            track_failure "zoxide" "Failed to install zoxide via Homebrew"
-        fi
+    if ! curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh; then
+        track_failure "zoxide" "Failed to install zoxide via install script"
     else
-        # Linux installation via official install script
-        if ! curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh; then
-            track_failure "zoxide" "Failed to install zoxide via install script"
-        else
-            # Add to PATH for current session if installed to ~/.local/bin
-            if [[ -d "$HOME/.local/bin" ]] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-                export PATH="$HOME/.local/bin:$PATH"
-            fi
+        if [[ -d "$HOME/.local/bin" ]] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+            export PATH="$HOME/.local/bin:$PATH"
         fi
     fi
 }
@@ -366,15 +352,10 @@ install_starship() {
         return 0
     fi
 
+    # macOS: installed via Brewfile, only need the Linux path
     echo "Installing Starship..."
-    if [[ "$(uname)" == "Darwin" ]]; then
-        if ! brew install starship; then
-            track_failure "starship" "Failed to install starship via Homebrew"
-        fi
-    else
-        if ! curl -sS https://starship.rs/install.sh | sh -s -- -y; then
-            track_failure "starship" "Failed to install starship"
-        fi
+    if ! curl -sS https://starship.rs/install.sh | sh -s -- -y; then
+        track_failure "starship" "Failed to install starship"
     fi
 }
 
@@ -388,16 +369,6 @@ install_claude_code() {
     if ! curl -fsSL https://claude.ai/install.sh | bash; then
         track_failure "claude-code" "Failed to install Claude Code"
     fi
-}
-
-install_claude_code() {
-    if command -v claude &> /dev/null; then
-        echo "Claude Code is already installed."
-        return 0
-    fi
-
-    echo "Installing Claude Code..."
-    curl -fsSL https://claude.ai/install.sh | bash
 }
 
 install_rust() {
@@ -505,30 +476,6 @@ install_nvm() {
     if ! nvm install --lts; then
         track_failure "nvm" "Failed to install Node.js LTS via NVM"
     fi
-}
-
-install_npm_globals() {
-    if ! command -v npm &> /dev/null; then
-        echo "npm not found. Skipping global npm packages installation."
-        return 0
-    fi
-
-    echo "Installing global npm packages..."
-
-    local packages=(
-        "@github/copilot"
-    )
-
-    for package in "${packages[@]}"; do
-        if npm list -g "$package" &> /dev/null; then
-            echo "$package is already installed globally."
-        else
-            echo "Installing $package..."
-            if ! npm install -g "$package"; then
-                track_failure "npm" "Failed to install $package"
-            fi
-        fi
-    done
 }
 
 setup_symlinks() {
