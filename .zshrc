@@ -75,6 +75,13 @@ wt() {
     fi
 }
 
+# Branch note quick-add
+t() { "$HOME/.bin/branch-note.sh" add todo "$*" }
+unalias r 2>/dev/null  # override zsh's default r=fc (repeat last command)
+r() { "$HOME/.bin/branch-note.sh" add research "$*" }
+c() { "$HOME/.bin/branch-note.sh" add collab "$*" }
+a() { "$HOME/.bin/branch-note.sh" add ask "$*" }
+
 # Kanata
 alias kanata-restart="sudo launchctl unload /Library/LaunchDaemons/com.custom.kanata.plist && sudo launchctl load /Library/LaunchDaemons/com.custom.kanata.plist"
 alias kanata-log="cat /tmp/kanata.out /tmp/kanata.err"
