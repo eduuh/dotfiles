@@ -19,6 +19,15 @@ cd ~/projects/dotfiles && ./setup.sh
 
 Auto-detects platform (macOS, Ubuntu, Arch, Codespaces) and installs packages, configs, and symlinks via [GNU Stow](https://www.gnu.org/software/stow/).
 
+After setup, optionally run:
+
+```bash
+./setup-projects.sh   # Clone project repos (parallel)
+./setup-rust.sh       # Install Rust toolchain
+```
+
+On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
+
 ## Key Tools
 
 - **`tat`** — Tmux session picker with zoxide frecency and fzf preview
