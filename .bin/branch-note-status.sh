@@ -11,8 +11,8 @@ note="$HOME/projects/personal-notes/branch-notes/$NOTE_REPO/$NOTE_BRANCH/note.md
 [[ -f "$note" ]] || exit 0
 
 # Skip closed notes
-status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$note")
-[[ "$status" == "closed" ]] && exit 0
+note_status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$note")
+[[ "$note_status" == "closed" ]] && exit 0
 
 count=$(grep -c '^\- \[ \]' "$note" 2>/dev/null)
 (( count > 0 )) && echo " [$count]"

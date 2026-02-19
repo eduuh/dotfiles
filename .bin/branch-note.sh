@@ -68,9 +68,9 @@ EOF
 # Read status from frontmatter (defaults to "active" if missing)
 get_note_status() {
     local note_file="$1"
-    local status
-    status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$note_file")
-    echo "${status:-active}"
+    local note_status
+    note_status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$note_file")
+    echo "${note_status:-active}"
 }
 
 # Set status in frontmatter
@@ -179,8 +179,8 @@ cmd_list() {
 
     local found=false
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        local status=$(get_note_status "$note_file")
-        if ! $show_all && [[ "$status" == "closed" ]]; then
+        local note_status=$(get_note_status "$note_file")
+        if ! $show_all && [[ "$note_status" == "closed" ]]; then
             continue
         fi
 
@@ -199,10 +199,10 @@ cmd_list() {
         local created=""
         created=$(sed -n '/^---$/,/^---$/{ /^created:/s/^created: *//p; }' "$note_file")
 
-        local status_tag=""
-        [[ "$status" == "closed" ]] && status_tag=" (closed)"
+        local note_status_tag=""
+        [[ "$note_status" == "closed" ]] && note_status_tag=" (closed)"
 
-        printf "%-30s %-12s %d todos  %s%s\n" "$repo/$branch" "$type" "$todos" "$created" "$status_tag"
+        printf "%-30s %-12s %d todos  %s%s\n" "$repo/$branch" "$type" "$todos" "$created" "$note_status_tag"
     done
 
     $found || echo "No branch notes found"
@@ -224,8 +224,8 @@ cmd_prune() {
 
     local closed=0
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        local status=$(get_note_status "$note_file")
-        [[ "$status" == "closed" ]] && continue
+        local note_status=$(get_note_status "$note_file")
+        [[ "$note_status" == "closed" ]] && continue
 
         local note_dir=$(dirname "$note_file")
         local branch=$(basename "$note_dir")
@@ -255,8 +255,8 @@ cmd_summary() {
     local found=false
 
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        local status=$(get_note_status "$note_file")
-        [[ "$status" == "closed" ]] && continue
+        local note_status=$(get_note_status "$note_file")
+        [[ "$note_status" == "closed" ]] && continue
 
         found=true
         local note_dir=$(dirname "$note_file")
@@ -365,11 +365,8 @@ cmd_refresh_all() {
 
         echo "  $repo_name: updating main..."
 
-        # Fast-forward the local main branch ref
-        git --git-dir="$bare" branch -f main origin/main 2>/dev/null
-
-        # Pull in the worktree
-        if git -C "$main_wt" pull --ff-only 2>/dev/null; then
+        # Merge remote changes (fetch already done in phase 1)
+        if git -C "$main_wt" merge --ff-only origin/main 2>/dev/null; then
             if run_build_sh "$repo_name" "$main_wt"; then
                 updated=$((updated + 1))
             else
