@@ -48,10 +48,28 @@ if [[ "$action" == "Create worktree" ]]; then
 
     bare_repo="$BARE_DIR/${selected}.git"
 
-    # 2. Prompt for branch name
-    printf "Branch name: "
-    read -r branch_name
-    [[ -z "$branch_name" ]] && exit 0
+    # 2. Fetch + update main
+    echo "Fetching origin..."
+    git --git-dir="$bare_repo" fetch origin
+
+    echo "Updating main → origin/main..."
+    git --git-dir="$bare_repo" branch -f main origin/main 2>/dev/null
+
+    # 3. New branch vs existing branch picker
+    branch_mode=$(printf 'New branch\nExisting branch' | $FZF_CMD --prompt="Branch type: " --reverse)
+    [[ -z "$branch_mode" ]] && exit 0
+
+    if [[ "$branch_mode" == "Existing branch" ]]; then
+        # Pick from remote branches (strip origin/ prefix, deduplicate)
+        branch_name=$(git --git-dir="$bare_repo" branch -a --format='%(refname:short)' | \
+            sed 's|^origin/||' | sort -u | grep -v '^HEAD$' | \
+            $FZF_CMD --prompt="Branch: " --reverse)
+        [[ -z "$branch_name" ]] && exit 0
+    else
+        printf "Branch name: "
+        read -r branch_name
+        [[ -z "$branch_name" ]] && exit 0
+    fi
 
     sanitized=$(echo "$branch_name" | tr '/' '-')
     worktree_path="$WORKTREE_DIR/${selected}/${sanitized}"
@@ -62,16 +80,23 @@ if [[ "$action" == "Create worktree" ]]; then
         exit 0
     fi
 
-    # 3. Fetch + reset main + create worktree
-    echo "Fetching origin..."
-    git --git-dir="$bare_repo" fetch origin
-
-    echo "Updating main → origin/main..."
-    git --git-dir="$bare_repo" branch -f main origin/main 2>/dev/null
-
+    # 4. Create worktree
     echo "Creating worktree: $worktree_path"
     mkdir -p "$WORKTREE_DIR/${selected}"
-    git --git-dir="$bare_repo" worktree add -b "$branch_name" "$worktree_path" main
+    if [[ "$branch_mode" == "Existing branch" ]]; then
+        # Check if local branch exists, otherwise track from remote
+        if git --git-dir="$bare_repo" show-ref --verify --quiet "refs/heads/$branch_name"; then
+            git --git-dir="$bare_repo" worktree add "$worktree_path" "$branch_name"
+        elif git --git-dir="$bare_repo" show-ref --verify --quiet "refs/remotes/origin/$branch_name"; then
+            git --git-dir="$bare_repo" worktree add "$worktree_path" "$branch_name"
+        else
+            echo "Branch '$branch_name' not found"
+            read -sk1 "?Press any key..."
+            exit 1
+        fi
+    else
+        git --git-dir="$bare_repo" worktree add -b "$branch_name" "$worktree_path" main
+    fi
 
     if [[ $? -ne 0 ]]; then
         echo "Failed to create worktree"
@@ -79,7 +104,7 @@ if [[ "$action" == "Create worktree" ]]; then
         exit 1
     fi
 
-    # 4. Run build.sh if it exists for this repo
+    # 5. Run build.sh if it exists for this repo
     local build_sh="$NOTES_DIR/${selected}/main/build.sh"
     if [[ -x "$build_sh" ]]; then
         echo "Running build.sh..."
@@ -88,7 +113,7 @@ if [[ "$action" == "Create worktree" ]]; then
 
     echo "Done!"
 
-    # 5. Open tmux session in new worktree
+    # 6. Open tmux session in new worktree
     session_name="${selected}/${sanitized}"
     "$HOME/.bin/tat-template.sh" "$session_name" "$worktree_path"
 

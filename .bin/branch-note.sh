@@ -11,10 +11,13 @@
 #   branch-note close                    # Close current branch's note
 #   branch-note prune                    # Close notes whose worktrees no longer exist
 #   branch-note summary                  # Dashboard: open todos, blockers, per-branch detail
+#   branch-note status                   # One-line status for current branch
+#   branch-note todo                     # List open todos across all branches
 #   branch-note refresh                  # Fetch, pull, build current branch
 #   branch-note refresh-all              # Refresh all main worktrees
 #   branch-note build-init               # Create build.sh for current repo
 #   branch-note build-edit               # Open build.sh in $EDITOR
+#   branch-note archive [--days N] [--dry-run]  # Archive old closed notes
 
 source "$HOME/.bin/tmux-lib.sh"
 
@@ -243,6 +246,9 @@ cmd_prune() {
     done
 
     (( closed == 0 )) && echo "Nothing to prune"
+
+    # Auto-archive old closed notes
+    cmd_archive
 }
 
 # Summary dashboard
@@ -333,24 +339,30 @@ cmd_refresh() {
     echo "Refresh complete: $NOTE_REPO/$NOTE_BRANCH"
 }
 
-# Refresh all main worktrees: parallel fetch, sequential update+build
+# Refresh all main worktrees: parallel fetch (batched), sequential update+build
 cmd_refresh_all() {
     local bare_repos=("$BARE_DIR"/*.git(N/))
     [[ ${#bare_repos[@]} -eq 0 ]] && { echo "No bare repos found"; exit 0; }
 
     local updated=0 skipped=0 failed=0
+    local batch_size=4
 
-    # Phase 1: parallel fetch all bare repos
-    echo "Fetching all repos..."
+    # Phase 1: batched parallel fetch (avoid SSH rate limits)
+    echo -e "${BLUE}Fetching ${#bare_repos[@]} repos (batch size $batch_size)...${NC}"
+    local count=0
     local pids=()
     for bare in "${bare_repos[@]}"; do
-        git --git-dir="$bare" fetch origin &
+        git --git-dir="$bare" fetch origin 2>/dev/null &
         pids+=($!)
+        count=$((count + 1))
+        if (( count % batch_size == 0 )); then
+            for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null; done
+            pids=()
+        fi
     done
-    for pid in "${pids[@]}"; do
-        wait "$pid"
-    done
-    echo "Fetch complete."
+    # Wait for remaining
+    for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null; done
+    echo -e "${GREEN}Fetch complete.${NC}"
 
     # Phase 2: sequential update + build
     for bare in "${bare_repos[@]}"; do
@@ -358,29 +370,29 @@ cmd_refresh_all() {
         local main_wt="$WORKTREE_DIR/${repo_name}/main"
 
         if [[ ! -d "$main_wt" ]]; then
-            echo "  $repo_name: no main worktree, skipping"
+            echo -e "  ${YELLOW}${repo_name}: no main worktree, skipping${NC}"
             skipped=$((skipped + 1))
             continue
         fi
 
-        echo "  $repo_name: updating main..."
+        echo -e "  ${BLUE}${repo_name}: updating main...${NC}"
 
-        # Merge remote changes (fetch already done in phase 1)
         if git -C "$main_wt" merge --ff-only origin/main 2>/dev/null; then
             if run_build_sh "$repo_name" "$main_wt"; then
+                echo -e "  ${GREEN}${repo_name}: updated${NC}"
                 updated=$((updated + 1))
             else
-                echo "  $repo_name: build failed"
+                echo -e "  ${RED}${repo_name}: build failed${NC}"
                 failed=$((failed + 1))
             fi
         else
-            echo "  $repo_name: pull failed (not fast-forwardable?)"
+            echo -e "  ${RED}${repo_name}: pull failed (not fast-forwardable?)${NC}"
             failed=$((failed + 1))
         fi
     done
 
     echo ""
-    echo "Summary: $updated updated, $skipped skipped, $failed failed"
+    echo -e "Summary: ${GREEN}$updated updated${NC}, ${YELLOW}$skipped skipped${NC}, ${RED}$failed failed${NC}"
 }
 
 # Create build.sh template for current repo
@@ -438,6 +450,142 @@ cmd_build_edit() {
     ${EDITOR:-nvim} "$build_sh"
 }
 
+# Status: one-line summary for current branch
+cmd_status() {
+    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    if [[ ! -f "$note_file" ]]; then
+        echo "$NOTE_REPO/$NOTE_BRANCH: no note"
+        return
+    fi
+
+    local todos=0 blockers=0
+    todos=$(grep -c '^\- \[ \]' "$note_file" 2>/dev/null || true)
+    blockers=$(awk '/^## Blockers$/{found=1; next} /^## |^---$/{found=0} found && /^- ./' "$note_file" | wc -l | tr -d ' ')
+
+    local parts=()
+    (( todos > 0 )) && parts+=("${todos} todo$( (( todos != 1 )) && echo s)")
+    (( blockers > 0 )) && parts+=("${blockers} blocker$( (( blockers != 1 )) && echo s)")
+    if [[ ${#parts[@]} -eq 0 ]]; then
+        echo "$NOTE_REPO/$NOTE_BRANCH: clear"
+    else
+        echo "$NOTE_REPO/$NOTE_BRANCH: ${(j:, :)parts}"
+    fi
+}
+
+# Todo: list open todos across all active branches
+cmd_todo() {
+    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
+
+    local found=false
+    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
+        local note_status=$(get_note_status "$note_file")
+        [[ "$note_status" == "closed" ]] && continue
+
+        local todos=()
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && todos+=("$line")
+        done <<< "$(grep '^\- \[ \]' "$note_file" 2>/dev/null)"
+
+        [[ ${#todos[@]} -eq 0 ]] && continue
+
+        found=true
+        local note_dir=$(dirname "$note_file")
+        local branch=$(basename "$note_dir")
+        local repo=$(basename "$(dirname "$note_dir")")
+
+        echo -e "${BLUE}${repo}/${branch}${NC}"
+        for todo in "${todos[@]}"; do
+            echo "  $todo"
+        done
+    done
+
+    $found || echo "No open todos"
+}
+
+# Archive closed notes older than N days
+cmd_archive() {
+    local days=30
+    local dry_run=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --days) days="$2"; shift 2 ;;
+            --dry-run) dry_run=true; shift ;;
+            *) echo "Unknown option: $1" >&2; exit 1 ;;
+        esac
+    done
+
+    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
+
+    local cutoff
+    cutoff=$(date -v-${days}d '+%Y-%m-%d')
+
+    local archived=0
+    local -a affected_paths=()
+
+    if $dry_run; then
+        echo -e "${YELLOW}[DRY RUN — no changes will be made]${NC}"
+        echo ""
+    fi
+
+    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
+        local note_status=$(get_note_status "$note_file")
+        [[ "$note_status" != "closed" ]] && continue
+
+        local created=$(sed -n '/^---$/,/^---$/{ /^created:/s/^created: *//p; }' "$note_file")
+        [[ -z "$created" ]] && continue
+        [[ "$created" > "$cutoff" ]] && continue
+
+        local note_dir=$(dirname "$note_file")
+        local branch=$(basename "$note_dir")
+        local repo=$(basename "$(dirname "$note_dir")")
+
+        local dest="$NOTES_DIR/archive/$repo/$branch"
+
+        if [[ -d "$dest" ]]; then
+            echo -e "${RED}Already exists, skipping: archive/$repo/$branch${NC}" >&2
+            continue
+        fi
+
+        echo -e "${YELLOW}Archive: $repo/$branch${NC} (created $created)"
+
+        if ! $dry_run; then
+            mkdir -p "$(dirname "$dest")"
+            mv "$note_dir" "$dest"
+            archived=$((archived + 1))
+            affected_paths+=("$repo/$branch")
+
+            # Clean up empty repo dir
+            local repo_dir="$NOTES_DIR/$repo"
+            if [[ -d "$repo_dir" ]] && [[ -z "$(ls -A "$repo_dir")" ]]; then
+                rmdir "$repo_dir"
+            fi
+        else
+            archived=$((archived + 1))
+        fi
+    done
+
+    echo ""
+    if $dry_run; then
+        echo -e "${GREEN}Would archive: $archived note(s)${NC}"
+    else
+        echo -e "${GREEN}Archived: $archived note(s)${NC}"
+
+        # Auto-commit only the moved note directories
+        if (( archived > 0 )); then
+            for p in "${affected_paths[@]}"; do
+                git -C "$NOTES_DIR" add -- "archive/$p"
+                git -C "$NOTES_DIR" rm -r --cached --ignore-unmatch --quiet -- "$p"
+            done
+            git -C "$NOTES_DIR" diff --cached --quiet || {
+                git -C "$NOTES_DIR" commit -m "archive ${archived} note(s)" >/dev/null
+                echo -e "${GREEN}Committed to personal-notes${NC}"
+            }
+        fi
+    fi
+}
+
 # Main
 case "${1:-}" in
     --path)
@@ -446,6 +594,15 @@ case "${1:-}" in
         ;;
     --cat)
         resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+        local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+        # Auto-prune: if note is active, repo is bare-based, and worktree is gone
+        if [[ -f "$note_file" && -d "$BARE_DIR/${NOTE_REPO}.git" ]]; then
+            local wt_path="$WORKTREE_DIR/${NOTE_REPO}/${NOTE_BRANCH}"
+            if [[ ! -d "$wt_path" ]] && [[ "$(get_note_status "$note_file")" == "active" ]]; then
+                set_note_status "$note_file" "closed"
+                echo "Auto-closed: $NOTE_REPO/$NOTE_BRANCH (worktree removed)" >&2
+            fi
+        fi
         local file="${2:-note.md}"
         cat "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/$file"
         ;;
@@ -475,6 +632,12 @@ case "${1:-}" in
     summary)
         cmd_summary
         ;;
+    status)
+        cmd_status
+        ;;
+    todo|todos)
+        cmd_todo
+        ;;
     refresh)
         cmd_refresh
         ;;
@@ -486,6 +649,10 @@ case "${1:-}" in
         ;;
     build-edit)
         cmd_build_edit
+        ;;
+    archive)
+        shift
+        cmd_archive "$@"
         ;;
     -h|--help|help)
         cat << 'HELPEOF'
@@ -502,10 +669,13 @@ Commands:
   close                           Close current branch's note
   prune                           Close notes whose worktrees are gone
   summary                         Dashboard of active work
+  status                          One-line status for current branch
+  todo                            List open todos across all branches
   refresh                          Fetch, pull, build current branch
   refresh-all                      Refresh all main worktrees
   build-init                       Create build.sh template for repo
   build-edit                       Open build.sh in \$EDITOR
+  archive [--days N] [--dry-run]   Archive closed notes older than N days (default 30)
 
 Sections: todo, blocker, decision, research, collab, ask
 HELPEOF

@@ -5,16 +5,7 @@
 
 set -e
 
-PROJECT_ROOT="$HOME/projects"
-BARE_DIR="$PROJECT_ROOT/bare"
-WORKTREE_DIR="$PROJECT_ROOT/worktree"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+source "$HOME/.bin/tmux-lib.sh"
 
 # Repositories that should NOT be cloned as bare (regular clone instead)
 # These repos will be cloned to ~/projects/reponame (without .git suffix)
