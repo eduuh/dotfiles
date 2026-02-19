@@ -79,3 +79,20 @@ apply_base_layout() {
     $TMUX_CMD select-window -t "$name:editor"
     $TMUX_CMD select-pane -t "$name:editor.0"
 }
+
+# Resolve repo name and branch from a directory path
+# Sets: NOTE_REPO, NOTE_BRANCH (slashes sanitized to dashes)
+resolve_note_context() {
+    local dir="$1"
+    if [[ "$dir" == "$WORKTREE_DIR"/* ]]; then
+        local rel="${dir#$WORKTREE_DIR/}"
+        NOTE_REPO="${rel%%/*}"
+        NOTE_BRANCH=$(git -C "$dir" branch --show-current 2>/dev/null)
+    else
+        NOTE_REPO=$(basename "$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)")
+        NOTE_BRANCH=$(git -C "$dir" branch --show-current 2>/dev/null)
+    fi
+    [[ -z "$NOTE_REPO" || -z "$NOTE_BRANCH" ]] && return 1
+    NOTE_BRANCH="${NOTE_BRANCH//\//-}"
+    return 0
+}

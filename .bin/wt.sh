@@ -317,6 +317,9 @@ cmd_remove() {
     fi
 
     echo -e "${GREEN}Removed worktree${NC}"
+
+    # Close any orphaned branch notes
+    "$HOME/.bin/branch-note.sh" prune
 }
 
 # Go to a worktree (for shell functions)
