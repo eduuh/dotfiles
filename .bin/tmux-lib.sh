@@ -9,6 +9,13 @@ PROJECT_ROOT="$HOME/projects"
 BARE_DIR="$PROJECT_ROOT/bare"
 WORKTREE_DIR="$PROJECT_ROOT/worktree"
 
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
 # Find tmux command and set TMUX_CMD
 tmux_init() {
     TMUX_CMD=$(command -v tmux)
