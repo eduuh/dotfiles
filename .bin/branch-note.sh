@@ -17,6 +17,7 @@
 #   branch-note refresh-all              # Refresh all main worktrees
 #   branch-note build-init               # Create build.sh for current repo
 #   branch-note build-edit               # Open build.sh in $EDITOR
+#   branch-note archive [--days N] [--dry-run]  # Archive old closed notes
 
 source "$HOME/.bin/tmux-lib.sh"
 
@@ -245,6 +246,9 @@ cmd_prune() {
     done
 
     (( closed == 0 )) && echo "Nothing to prune"
+
+    # Auto-archive old closed notes
+    cmd_archive
 }
 
 # Summary dashboard
@@ -499,6 +503,89 @@ cmd_todo() {
     $found || echo "No open todos"
 }
 
+# Archive closed notes older than N days
+cmd_archive() {
+    local days=30
+    local dry_run=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --days) days="$2"; shift 2 ;;
+            --dry-run) dry_run=true; shift ;;
+            *) echo "Unknown option: $1" >&2; exit 1 ;;
+        esac
+    done
+
+    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
+
+    local cutoff
+    cutoff=$(date -v-${days}d '+%Y-%m-%d')
+
+    local archived=0
+    local -a affected_paths=()
+
+    if $dry_run; then
+        echo -e "${YELLOW}[DRY RUN — no changes will be made]${NC}"
+        echo ""
+    fi
+
+    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
+        local note_status=$(get_note_status "$note_file")
+        [[ "$note_status" != "closed" ]] && continue
+
+        local created=$(sed -n '/^---$/,/^---$/{ /^created:/s/^created: *//p; }' "$note_file")
+        [[ -z "$created" ]] && continue
+        [[ "$created" > "$cutoff" ]] && continue
+
+        local note_dir=$(dirname "$note_file")
+        local branch=$(basename "$note_dir")
+        local repo=$(basename "$(dirname "$note_dir")")
+
+        local dest="$NOTES_DIR/archive/$repo/$branch"
+
+        if [[ -d "$dest" ]]; then
+            echo -e "${RED}Already exists, skipping: archive/$repo/$branch${NC}" >&2
+            continue
+        fi
+
+        echo -e "${YELLOW}Archive: $repo/$branch${NC} (created $created)"
+
+        if ! $dry_run; then
+            mkdir -p "$(dirname "$dest")"
+            mv "$note_dir" "$dest"
+            archived=$((archived + 1))
+            affected_paths+=("$repo/$branch")
+
+            # Clean up empty repo dir
+            local repo_dir="$NOTES_DIR/$repo"
+            if [[ -d "$repo_dir" ]] && [[ -z "$(ls -A "$repo_dir")" ]]; then
+                rmdir "$repo_dir"
+            fi
+        else
+            archived=$((archived + 1))
+        fi
+    done
+
+    echo ""
+    if $dry_run; then
+        echo -e "${GREEN}Would archive: $archived note(s)${NC}"
+    else
+        echo -e "${GREEN}Archived: $archived note(s)${NC}"
+
+        # Auto-commit only the moved note directories
+        if (( archived > 0 )); then
+            for p in "${affected_paths[@]}"; do
+                git -C "$NOTES_DIR" add -- "archive/$p"
+                git -C "$NOTES_DIR" rm -r --cached --ignore-unmatch --quiet -- "$p"
+            done
+            git -C "$NOTES_DIR" diff --cached --quiet || {
+                git -C "$NOTES_DIR" commit -m "archive ${archived} note(s)" >/dev/null
+                echo -e "${GREEN}Committed to personal-notes${NC}"
+            }
+        fi
+    fi
+}
+
 # Main
 case "${1:-}" in
     --path)
@@ -563,6 +650,10 @@ case "${1:-}" in
     build-edit)
         cmd_build_edit
         ;;
+    archive)
+        shift
+        cmd_archive "$@"
+        ;;
     -h|--help|help)
         cat << 'HELPEOF'
 Usage: branch-note [command]
@@ -584,6 +675,7 @@ Commands:
   refresh-all                      Refresh all main worktrees
   build-init                       Create build.sh template for repo
   build-edit                       Open build.sh in \$EDITOR
+  archive [--days N] [--dry-run]   Archive closed notes older than N days (default 30)
 
 Sections: todo, blocker, decision, research, collab, ask
 HELPEOF
