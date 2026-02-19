@@ -69,94 +69,75 @@ if [[ "$action" == "Create worktree" ]]; then
 # Remove worktree
 #============================================================================
 elif [[ "$action" == "Remove worktree" ]]; then
-    # 1. Gather worktrees from all bare repos
-    typeset -A wt_display_to_path  # display name → full path
-    display_names=()
+    removed=0
 
-    for bare in "$BARE_DIR"/*.git(N/); do
-        local repo_name=$(basename "$bare" .git)
-
-        # Get worktree paths (skip the bare repo entry itself)
-        git --git-dir="$bare" worktree list --porcelain | while IFS= read -r line; do
-            if [[ "$line" == worktree\ * ]]; then
+    while true; do
+        # 1. Gather worktrees from all bare repos
+        entries=()
+        for bare in "$BARE_DIR"/*.git(N/); do
+            local repo_name=$(basename "$bare" .git)
+            local wt_lines=("${(@f)$(git --git-dir="$bare" worktree list --porcelain | grep '^worktree ')}")
+            for line in "${wt_lines[@]}"; do
                 local wt_path="${line#worktree }"
-                # Skip bare repo entries
                 [[ "$wt_path" == "$BARE_DIR"/* ]] && continue
-                # Derive display name as repo/branch from path
                 local branch_dir=$(basename "$wt_path")
-                local display="${repo_name}/${branch_dir}"
-                echo "${display}\t${wt_path}"
+                # Skip main/master — these should never be removed
+                [[ "$branch_dir" == "main" || "$branch_dir" == "master" ]] && continue
+                entries+=("${repo_name}/${branch_dir}\t${wt_path}")
+            done
+        done
+
+        [[ ${#entries[@]} -eq 0 ]] && { echo "No worktrees found"; break; }
+
+        # 2. Display in fzf picker
+        selected=$(printf '%s\n' "${entries[@]}" | cut -f1 | $FZF_CMD --prompt="Remove: " --reverse)
+        [[ -z "$selected" ]] && break
+
+        # Find the full path for the selected entry
+        selected_path=""
+        for entry in "${entries[@]}"; do
+            local display="${entry%%$'\t'*}"
+            local path="${entry#*$'\t'}"
+            if [[ "$display" == "$selected" ]]; then
+                selected_path="$path"
+                break
             fi
         done
-    done | while IFS=$'\t' read -r display path; do
-        display_names+=("$display")
-        wt_display_to_path[$display]="$path"
-    done
 
-    # Rebuild from subshell — pipe loses variable scope
-    entries=()
-    for bare in "$BARE_DIR"/*.git(N/); do
-        local repo_name=$(basename "$bare" .git)
-        local wt_lines=("${(@f)$(git --git-dir="$bare" worktree list --porcelain | grep '^worktree ')}")
-        for line in "${wt_lines[@]}"; do
-            local wt_path="${line#worktree }"
-            [[ "$wt_path" == "$BARE_DIR"/* ]] && continue
-            local branch_dir=$(basename "$wt_path")
-            entries+=("${repo_name}/${branch_dir}\t${wt_path}")
-        done
-    done
+        [[ -z "$selected_path" ]] && { echo "Error: could not resolve path"; break; }
 
-    [[ ${#entries[@]} -eq 0 ]] && { echo "No worktrees found"; read -sk1; exit 0; }
+        # 3. Find the bare repo for this worktree
+        local repo_name="${selected%%/*}"
+        local bare_repo="$BARE_DIR/${repo_name}.git"
 
-    # 2. Display in fzf picker
-    selected=$(printf '%s\n' "${entries[@]}" | cut -f1 | $FZF_CMD --prompt="Remove: " --reverse)
-    [[ -z "$selected" ]] && exit 0
-
-    # Find the full path for the selected entry
-    selected_path=""
-    for entry in "${entries[@]}"; do
-        local display="${entry%%$'\t'*}"
-        local path="${entry#*$'\t'}"
-        if [[ "$display" == "$selected" ]]; then
-            selected_path="$path"
+        if [[ ! -d "$bare_repo" ]]; then
+            echo "Error: bare repo not found: $bare_repo"
             break
         fi
+
+        # 4. Remove worktree
+        echo "Removing: $selected"
+        if ! git --git-dir="$bare_repo" worktree remove "$selected_path"; then
+            echo "Failed to remove worktree"
+            read -sk1 "?Press any key..."
+            break
+        fi
+
+        # 5. Clean up empty repo directory
+        local repo_dir=$(dirname "$selected_path")
+        if [[ "$repo_dir" == "$WORKTREE_DIR"/* ]] && [[ -d "$repo_dir" ]]; then
+            rmdir "$repo_dir" 2>/dev/null || true
+        fi
+
+        # 6. Kill tmux session if it exists
+        $TMUX_CMD kill-session -t "$selected" 2>/dev/null || true
+
+        echo "Removed: $selected"
+        removed=$((removed + 1))
     done
 
-    [[ -z "$selected_path" ]] && { echo "Error: could not resolve path"; read -sk1; exit 1; }
-
-    # 3. Find the bare repo for this worktree
-    # Derive repo name from display (repo/branch → repo)
-    local repo_name="${selected%%/*}"
-    local bare_repo="$BARE_DIR/${repo_name}.git"
-
-    if [[ ! -d "$bare_repo" ]]; then
-        echo "Error: bare repo not found: $bare_repo"
-        read -sk1 "?Press any key..."
-        exit 1
+    # 7. Prune orphaned branch notes (once, after all removals)
+    if (( removed > 0 )); then
+        "$HOME/.bin/branch-note.sh" prune
     fi
-
-    # 4. Remove worktree
-    echo "Removing worktree: $selected"
-    git --git-dir="$bare_repo" worktree remove "$selected_path"
-
-    if [[ $? -ne 0 ]]; then
-        echo "Failed to remove worktree"
-        read -sk1 "?Press any key..."
-        exit 1
-    fi
-
-    # 5. Clean up empty repo directory
-    local repo_dir=$(dirname "$selected_path")
-    if [[ "$repo_dir" == "$WORKTREE_DIR"/* ]] && [[ -d "$repo_dir" ]]; then
-        rmdir "$repo_dir" 2>/dev/null || true
-    fi
-
-    # 6. Kill tmux session if it exists
-    $TMUX_CMD kill-session -t "$selected" 2>/dev/null || true
-
-    # 7. Prune orphaned branch notes
-    "$HOME/.bin/branch-note.sh" prune
-
-    echo "Removed: $selected"
 fi
