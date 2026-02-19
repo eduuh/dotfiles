@@ -15,4 +15,4 @@ note_status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$note")
 [[ "$note_status" == "closed" ]] && exit 0
 
 count=$(grep -c '^\- \[ \]' "$note" 2>/dev/null)
-(( count > 0 )) && echo " [$count]"
+(( count > 0 )) && echo " TODO[$count]"
