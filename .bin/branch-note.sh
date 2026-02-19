@@ -6,8 +6,15 @@
 #   branch-note --cat [file]             # Print note.md contents (or specific file)
 #   branch-note --edit [file]            # Open note.md in $EDITOR (or specific file)
 #   branch-note add <section> <text>     # Add line to section
-#   branch-note list                     # List all notes across repos
+#   branch-note list [--all]             # List active notes (--all includes closed)
+#   branch-note active                   # List active notes
+#   branch-note close                    # Close current branch's note
+#   branch-note prune                    # Close notes whose worktrees no longer exist
 #   branch-note summary                  # Dashboard: open todos, blockers, per-branch detail
+#   branch-note refresh                  # Fetch, pull, build current branch
+#   branch-note refresh-all              # Refresh all main worktrees
+#   branch-note build-init               # Create build.sh for current repo
+#   branch-note build-edit               # Open build.sh in $EDITOR
 
 source "$HOME/.bin/tmux-lib.sh"
 
@@ -24,6 +31,7 @@ ensure_note() {
 repo: $NOTE_REPO
 branch: $NOTE_BRANCH
 created: $(date +%Y-%m-%d)
+status: active
 type:
 collaborators: []
 ---
@@ -55,6 +63,45 @@ collaborators: []
 ## Windows
 EOF
     fi
+}
+
+# Read status from frontmatter (defaults to "active" if missing)
+get_note_status() {
+    local note_file="$1"
+    local status
+    status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$note_file")
+    echo "${status:-active}"
+}
+
+# Set status in frontmatter
+set_note_status() {
+    local note_file="$1" new_status="$2"
+    if grep -q '^status:' "$note_file"; then
+        sed -i '' "s/^status: .*/status: $new_status/" "$note_file"
+    else
+        # Insert status after created line
+        sed -i '' "/^created:/a\\
+status: $new_status" "$note_file"
+    fi
+}
+
+# Resolve path to build.sh (always in main's note dir)
+resolve_build_sh() {
+    local repo="$1"
+    echo "$NOTES_DIR/$repo/main/build.sh"
+}
+
+# Run build.sh if it exists, with cwd set to given directory
+run_build_sh() {
+    local repo="$1" work_dir="$2"
+    local build_sh
+    build_sh=$(resolve_build_sh "$repo")
+    if [[ -x "$build_sh" ]]; then
+        echo "Running build.sh for $repo..."
+        (cd "$work_dir" && "$build_sh")
+        return $?
+    fi
+    return 0
 }
 
 # Map short section name to heading
@@ -123,12 +170,20 @@ cmd_add() {
     echo "Added to ${heading#\#\# }: $text"
 }
 
-# List all notes across repos
+# List notes across repos (active only by default)
 cmd_list() {
+    local show_all=false
+    [[ "$1" == "--all" ]] && show_all=true
+
     [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
 
     local found=false
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
+        local status=$(get_note_status "$note_file")
+        if ! $show_all && [[ "$status" == "closed" ]]; then
+            continue
+        fi
+
         found=true
         local note_dir=$(dirname "$note_file")
         local branch=$(basename "$note_dir")
@@ -144,10 +199,50 @@ cmd_list() {
         local created=""
         created=$(sed -n '/^---$/,/^---$/{ /^created:/s/^created: *//p; }' "$note_file")
 
-        printf "%-30s %-12s %d todos  %s\n" "$repo/$branch" "$type" "$todos" "$created"
+        local status_tag=""
+        [[ "$status" == "closed" ]] && status_tag=" (closed)"
+
+        printf "%-30s %-12s %d todos  %s%s\n" "$repo/$branch" "$type" "$todos" "$created" "$status_tag"
     done
 
     $found || echo "No branch notes found"
+}
+
+# Close current branch's note
+cmd_close() {
+    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    [[ ! -f "$note_file" ]] && { echo "No note for $NOTE_REPO/$NOTE_BRANCH" >&2; exit 1; }
+
+    set_note_status "$note_file" "closed"
+    echo "Closed note: $NOTE_REPO/$NOTE_BRANCH"
+}
+
+# Close notes whose worktrees no longer exist
+cmd_prune() {
+    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
+
+    local closed=0
+    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
+        local status=$(get_note_status "$note_file")
+        [[ "$status" == "closed" ]] && continue
+
+        local note_dir=$(dirname "$note_file")
+        local branch=$(basename "$note_dir")
+        local repo=$(basename "$(dirname "$note_dir")")
+
+        # Only prune worktree-based repos (those with a bare repo)
+        [[ ! -d "$BARE_DIR/${repo}.git" ]] && continue
+
+        local worktree_path="$WORKTREE_DIR/${repo}/${branch}"
+        if [[ ! -d "$worktree_path" ]]; then
+            set_note_status "$note_file" "closed"
+            echo "Closed: $repo/$branch (worktree removed)"
+            closed=$((closed + 1))
+        fi
+    done
+
+    (( closed == 0 )) && echo "Nothing to prune"
 }
 
 # Summary dashboard
@@ -160,6 +255,9 @@ cmd_summary() {
     local found=false
 
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
+        local status=$(get_note_status "$note_file")
+        [[ "$status" == "closed" ]] && continue
+
         found=true
         local note_dir=$(dirname "$note_file")
         local branch=$(basename "$note_dir")
@@ -208,6 +306,141 @@ cmd_summary() {
     fi
 }
 
+# Refresh current branch: fetch, pull, build
+cmd_refresh() {
+    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+
+    local bare_repo="$BARE_DIR/${NOTE_REPO}.git"
+    local worktree_path
+    worktree_path=$(pwd)
+
+    if [[ -d "$bare_repo" ]]; then
+        echo "Fetching origin for $NOTE_REPO..."
+        git --git-dir="$bare_repo" fetch origin
+
+        echo "Pulling $NOTE_BRANCH (ff-only)..."
+        git -C "$worktree_path" pull --ff-only
+    else
+        # Regular repo (not bare)
+        echo "Fetching origin for $NOTE_REPO..."
+        git -C "$worktree_path" fetch origin
+
+        echo "Pulling $NOTE_BRANCH (ff-only)..."
+        git -C "$worktree_path" pull --ff-only
+    fi
+
+    run_build_sh "$NOTE_REPO" "$worktree_path"
+    echo "Refresh complete: $NOTE_REPO/$NOTE_BRANCH"
+}
+
+# Refresh all main worktrees: parallel fetch, sequential update+build
+cmd_refresh_all() {
+    local bare_repos=("$BARE_DIR"/*.git(N/))
+    [[ ${#bare_repos[@]} -eq 0 ]] && { echo "No bare repos found"; exit 0; }
+
+    local updated=0 skipped=0 failed=0
+
+    # Phase 1: parallel fetch all bare repos
+    echo "Fetching all repos..."
+    local pids=()
+    for bare in "${bare_repos[@]}"; do
+        git --git-dir="$bare" fetch origin &
+        pids+=($!)
+    done
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+    echo "Fetch complete."
+
+    # Phase 2: sequential update + build
+    for bare in "${bare_repos[@]}"; do
+        local repo_name=$(basename "$bare" .git)
+        local main_wt="$WORKTREE_DIR/${repo_name}/main"
+
+        if [[ ! -d "$main_wt" ]]; then
+            echo "  $repo_name: no main worktree, skipping"
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        echo "  $repo_name: updating main..."
+
+        # Fast-forward the local main branch ref
+        git --git-dir="$bare" branch -f main origin/main 2>/dev/null
+
+        # Pull in the worktree
+        if git -C "$main_wt" pull --ff-only 2>/dev/null; then
+            if run_build_sh "$repo_name" "$main_wt"; then
+                updated=$((updated + 1))
+            else
+                echo "  $repo_name: build failed"
+                failed=$((failed + 1))
+            fi
+        else
+            echo "  $repo_name: pull failed (not fast-forwardable?)"
+            failed=$((failed + 1))
+        fi
+    done
+
+    echo ""
+    echo "Summary: $updated updated, $skipped skipped, $failed failed"
+}
+
+# Create build.sh template for current repo
+cmd_build_init() {
+    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+
+    local build_sh
+    build_sh=$(resolve_build_sh "$NOTE_REPO")
+
+    if [[ -f "$build_sh" ]]; then
+        echo "build.sh already exists: $build_sh" >&2
+        echo "Use 'bn build-edit' to modify it." >&2
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "$build_sh")"
+    cat > "$build_sh" << 'BUILDEOF'
+#!/usr/bin/env zsh
+set -e
+
+# Build script for this repo — runs after worktree create and on refresh.
+# Uncomment/modify the section that matches your project:
+
+# --- Rust ---
+# cargo build
+
+# --- Node ---
+# npm install
+
+# --- Go ---
+# go build ./...
+
+# --- Make ---
+# make
+
+echo "Build complete."
+BUILDEOF
+    chmod +x "$build_sh"
+    echo "Created: $build_sh"
+    echo "Edit with: bn build-edit"
+}
+
+# Open build.sh in editor
+cmd_build_edit() {
+    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+
+    local build_sh
+    build_sh=$(resolve_build_sh "$NOTE_REPO")
+
+    if [[ ! -f "$build_sh" ]]; then
+        echo "No build.sh for $NOTE_REPO. Create one with: bn build-init" >&2
+        exit 1
+    fi
+
+    ${EDITOR:-nvim} "$build_sh"
+}
+
 # Main
 case "${1:-}" in
     --path)
@@ -230,10 +463,32 @@ case "${1:-}" in
         cmd_add "$@"
         ;;
     list)
+        shift
+        cmd_list "$@"
+        ;;
+    active)
         cmd_list
+        ;;
+    close)
+        cmd_close
+        ;;
+    prune)
+        cmd_prune
         ;;
     summary)
         cmd_summary
+        ;;
+    refresh)
+        cmd_refresh
+        ;;
+    refresh-all)
+        cmd_refresh_all
+        ;;
+    build-init)
+        cmd_build_init
+        ;;
+    build-edit)
+        cmd_build_edit
         ;;
     -h|--help|help)
         cat << 'HELPEOF'
@@ -245,8 +500,15 @@ Commands:
   --cat [file]                    Print note.md (or specific file)
   --edit [file]                   Open note in $EDITOR
   add <section> <text>            Add line to section
-  list                            List all notes across repos
+  list [--all]                    List active notes (--all includes closed)
+  active                          List active notes (same as list)
+  close                           Close current branch's note
+  prune                           Close notes whose worktrees are gone
   summary                         Dashboard of active work
+  refresh                          Fetch, pull, build current branch
+  refresh-all                      Refresh all main worktrees
+  build-init                       Create build.sh template for repo
+  build-edit                       Open build.sh in \$EDITOR
 
 Sections: todo, blocker, decision, research, collab, ask
 HELPEOF
