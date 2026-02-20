@@ -6,6 +6,9 @@ if [ -f "/opt/homebrew/bin/brew" ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
     # Add GNU coreutils to PATH
     export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
+    alias kanata-restart="sudo launchctl unload /Library/LaunchDaemons/com.custom.kanata.plist && sudo launchctl load /Library/LaunchDaemons/com.custom.kanata.plist"
+    alias kanata-log="cat /tmp/kanata.out /tmp/kanata.err"
+
 elif [ -f "/usr/local/bin/brew" ]; then
     eval "$(/usr/local/bin/brew shellenv)"
     # Add GNU coreutils to PATH
@@ -46,15 +49,6 @@ case ":$PATH:" in
 esac
 # pnpm end
 
-# bun completions
-[ -s "/Users/edd/yes/_bun" ] && source "/Users/edd/yes/_bun"
-
-# bun
-export BUN_INSTALL="yes"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-# Starship
-eval "$(starship init zsh)"
 
 # Tmux integration: Update current path for splits/windows
 if [ -n "$TMUX" ]; then
@@ -85,13 +79,6 @@ r() { "$HOME/.bin/branch-note.sh" add research "$*" }
 c() { "$HOME/.bin/branch-note.sh" add collab "$*" }
 a() { "$HOME/.bin/branch-note.sh" add ask "$*" }
 
-# Kanata
-alias kanata-restart="sudo launchctl unload /Library/LaunchDaemons/com.custom.kanata.plist && sudo launchctl load /Library/LaunchDaemons/com.custom.kanata.plist"
-alias kanata-log="cat /tmp/kanata.out /tmp/kanata.err"
-# bun
-export BUN_INSTALL="yes"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
@@ -102,3 +89,6 @@ export KUBECONFIG=/Users/edd/projects/kube/kubeconfig.local
 export PATH="$HOME/.local/bin:$PATH"
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# Starship
+eval "$(starship init zsh)"
