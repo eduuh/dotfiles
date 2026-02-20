@@ -100,6 +100,7 @@ resolve_note_context() {
         NOTE_BRANCH=$(git -C "$dir" branch --show-current 2>/dev/null)
     fi
     [[ -z "$NOTE_REPO" || -z "$NOTE_BRANCH" ]] && return 1
+    NOTE_REPO="${NOTE_REPO:l}"
     NOTE_BRANCH="${NOTE_BRANCH//\//-}"
     return 0
 }
