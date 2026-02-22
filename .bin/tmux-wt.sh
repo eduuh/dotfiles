@@ -178,6 +178,6 @@ elif [[ "$action" == "Remove worktree" ]]; then
 
     # 7. Prune orphaned branch notes (once, after all removals)
     if (( removed > 0 )); then
-        "$HOME/.bin/branch-note.sh" prune
+        "$HOME/.bin/bn" prune
     fi
 fi

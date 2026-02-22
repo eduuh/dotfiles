@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# wt.sh - Git worktree manager for bare repo workflow
+# wt - Git worktree manager for bare repo workflow
 # Bare repos: ~/projects/bare/reponame.git
 # Worktrees: ~/projects/worktree/reponame/branchname
 

@@ -12,7 +12,7 @@ cd "$pane_path" 2>/dev/null || { echo "Invalid path: $pane_path"; read -sk1; exi
 resolve_note_context "$pane_path" || { echo "Not in a git repo"; read -sk1; exit 1; }
 
 # Ensure note exists (creates from template if needed)
-note_dir=$("$HOME/.bin/branch-note.sh")
+note_dir=$("$HOME/.bin/bn")
 note_file="$note_dir/note.md"
 
 # Sync window sections
