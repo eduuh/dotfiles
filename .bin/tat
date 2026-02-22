@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# tat.sh - Tmux Attach to project
+# tat - Tmux Attach to project
 # Simple session manager with zoxide frecency + fzf preview
 
 source "$HOME/.bin/tmux-lib.sh"

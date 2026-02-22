@@ -11,7 +11,7 @@ cd "$pane_path" 2>/dev/null || { echo "Invalid path: $pane_path"; read -sk1; exi
 resolve_note_context "$pane_path" || { echo "Not in a git repo"; read -sk1; exit 1; }
 
 # Ensure note exists
-"$HOME/.bin/branch-note.sh" >/dev/null
+"$HOME/.bin/bn" >/dev/null
 
 # fzf section picker
 section=$(printf "Todos\nBlockers\nDecisions\nTo Research\nCollaboration\nTo Ask" | $FZF_CMD --prompt="Section: " --height=8 --reverse)
@@ -35,4 +35,4 @@ read -r "input"
 
 # Add context tag and insert
 [[ -n "$window_name" ]] && input="$input *($window_name)*"
-"$HOME/.bin/branch-note.sh" add "$cmd_section" "$input"
+"$HOME/.bin/bn" add "$cmd_section" "$input"

@@ -65,19 +65,19 @@ command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
 wt() {
     if [[ "$1" == "go" ]]; then
         local dir
-        dir=$("$HOME/.bin/wt.sh" go "${@:2}")
+        dir=$("$HOME/.bin/wt" go "${@:2}")
         [[ -n "$dir" && -d "$dir" ]] && cd "$dir"
     else
-        "$HOME/.bin/wt.sh" "$@"
+        "$HOME/.bin/wt" "$@"
     fi
 }
 
 # Branch note quick-add
-t() { "$HOME/.bin/branch-note.sh" add todo "$*" }
+t() { "$HOME/.bin/bn" add todo "$*" }
 unalias r 2>/dev/null  # override zsh's default r=fc (repeat last command)
-r() { "$HOME/.bin/branch-note.sh" add research "$*" }
-c() { "$HOME/.bin/branch-note.sh" add collab "$*" }
-a() { "$HOME/.bin/branch-note.sh" add ask "$*" }
+r() { "$HOME/.bin/bn" add research "$*" }
+c() { "$HOME/.bin/bn" add collab "$*" }
+a() { "$HOME/.bin/bn" add ask "$*" }
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm

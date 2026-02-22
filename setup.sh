@@ -14,7 +14,7 @@ main() {
 
     # Run GitHub SSH setup script first to ensure we can clone repositories
     echo "Setting up GitHub CLI and SSH keys..."
-    if ! "$SCRIPT_DIR/.bin/gh_keys.sh"; then
+    if ! "$SCRIPT_DIR/.bin/gh-keys"; then
         track_failure "github" "Failed to setup GitHub CLI/SSH keys"
     fi
 
