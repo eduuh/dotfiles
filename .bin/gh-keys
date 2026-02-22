@@ -1,5 +1,5 @@
 #!/bin/zsh
-# GitHub SSH key setup script - Improved for seamless setup across platforms
+# gh-keys - GitHub SSH key setup script
 
 # Set up error handling
 set -e # Exit immediately if a command exits with a non-zero status
