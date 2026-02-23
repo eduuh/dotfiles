@@ -1,25 +1,9 @@
-[http]
-	postBuffer = 524288000
-	maxRequests = 100
+[credential "https://github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
 [user]
 	name = eduuh
 	email = 31909722+eduuh@users.noreply.github.com
-[credential "https://github.com"]
-	helper = 
-	helper = !gh auth git-credential
-[credential "https://gist.github.com"]
-	helper = 
-	helper = !gh auth git-credential
-[init]
-	defaultBranch = main
-[credential "https://dev.azure.com"]
-	useHttpPath = true
-
-[core]
-	editor = nvim
-[pull]
-	rebase = true
-
-# WSL-specific config (Windows credential manager)
-[includeIf "gitdir:/home/**"]
-	path = ~/.gitconfig-wsl
