@@ -61,11 +61,11 @@ print_failure_summary() {
 # Note: zoxide is NOT in Ubuntu apt repos, so it's installed separately via install_zoxide
 if [ "$CODESPACES" = "true" ]; then
     common_software=(
-        git stow fzf ripgrep tmux zsh unzip neovim tree jq
+        git stow ripgrep tmux zsh unzip tree jq
     )
 else
     common_software=(
-        git stow make cmake fzf ripgrep tmux zsh unzip neovim tree jq
+        git stow make cmake ripgrep tmux zsh unzip tree jq
     )
 fi
 
@@ -178,11 +178,14 @@ clone_repos() {
             "git@github.com:eduuh/eduuh.git"
         )
 
-        if [ "$is_wsl" = false ]; then
+        if [ "$is_wsl" = true ] && [ "$(hostname)" = "edwin" ]; then
+            REPOSITORIES+=(
+                "git@github.com:eduuh/wira360.git"
+            )
+        elif [ "$is_wsl" = false ]; then
             REPOSITORIES+=(
                 "git@github.com:eduuh/kube-homelab.git"
                 "git@github.com:eduuh/blog-2026.git"
-                "git@github.com:eduuh/tracker.git"
                 "git@github.com:eduuh/growatt_exporter.git"
                 "git@github.com:eduuh-private/byte_s.git"
                 "git@github.com:eduuh-private/bash.git"
@@ -289,6 +292,54 @@ install_tmux_plugins() {
     else
         track_failure "tmux" "Failed to clone TPM repository"
     fi
+}
+
+install_neovim() {
+    echo "Installing Neovim from GitHub releases..."
+    local install_dir="$HOME/.local/bin"
+    mkdir -p "$install_dir"
+
+    local arch=$(uname -m)
+    local tarball="nvim-linux-${arch}.tar.gz"
+    local url="https://github.com/neovim/neovim/releases/latest/download/${tarball}"
+
+    if ! curl -sL "$url" -o "/tmp/${tarball}"; then
+        track_failure "neovim" "Failed to download Neovim"
+        return 1
+    fi
+
+    tar -xzf "/tmp/${tarball}" -C /tmp
+    cp "/tmp/nvim-linux-${arch}/bin/nvim" "$install_dir/nvim"
+    chmod +x "$install_dir/nvim"
+    rm -rf "/tmp/${tarball}" "/tmp/nvim-linux-${arch}"
+
+    echo "Neovim $("$install_dir/nvim" --version | head -1) installed to $install_dir"
+}
+
+install_fzf() {
+    echo "Installing fzf from GitHub releases..."
+    local install_dir="$HOME/.local/bin"
+    mkdir -p "$install_dir"
+
+    local version
+    version=$(curl -s "https://api.github.com/repos/junegunn/fzf/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
+    if [[ -z "$version" ]]; then
+        track_failure "fzf" "Failed to fetch fzf version"
+        return 1
+    fi
+
+    local url="https://github.com/junegunn/fzf/releases/download/v${version}/fzf-${version}-linux_amd64.tar.gz"
+
+    if ! curl -sL "$url" -o /tmp/fzf.tar.gz; then
+        track_failure "fzf" "Failed to download fzf"
+        return 1
+    fi
+
+    tar -xzf /tmp/fzf.tar.gz -C "$install_dir" fzf
+    chmod +x "$install_dir/fzf"
+    rm -f /tmp/fzf.tar.gz
+
+    echo "fzf $("$install_dir/fzf" --version) installed to $install_dir"
 }
 
 install_lazygit() {

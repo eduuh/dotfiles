@@ -17,10 +17,10 @@ get_projects() {
 
     # Worktree entries: ~/projects/worktree/repo/branch → "repo/branch"
     if [[ -d "$WORKTREE_DIR" ]]; then
-        for repo_dir in "$WORKTREE_DIR"/*/; do
+        for repo_dir in "$WORKTREE_DIR"/*/(N); do
             [[ -d "$repo_dir" ]] || continue
             local repo_name=$(basename "$repo_dir")
-            for branch_dir in "$repo_dir"/*/; do
+            for branch_dir in "$repo_dir"/*/(N); do
                 [[ -d "$branch_dir" ]] || continue
                 local branch_name=$(basename "$branch_dir")
                 projects+=("${repo_name}/${branch_name}")
@@ -29,7 +29,7 @@ get_projects() {
     fi
 
     # Regular clones: ~/projects/*/ excluding bare/, worktree/, hidden dirs
-    for dir in "$PROJECT_ROOT"/*/; do
+    for dir in "$PROJECT_ROOT"/*/(N); do
         [[ -d "$dir" ]] || continue
         local name=$(basename "$dir")
         [[ "$name" == .* ]] && continue
