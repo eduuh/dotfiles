@@ -35,6 +35,7 @@ repo: $NOTE_REPO
 branch: $NOTE_BRANCH
 created: $(date +%Y-%m-%d)
 status: active
+machine: $(hostname)
 type:
 collaborators: []
 ---
@@ -79,6 +80,7 @@ ensure_global_note() {
 repo: $NOTE_REPO
 created: $(date +%Y-%m-%d)
 status: active
+machine: $(hostname)
 ---
 
 # $NOTE_REPO (global)
@@ -107,6 +109,20 @@ EOF
     fi
 }
 
+# Read machine from frontmatter (empty if missing)
+get_note_machine() {
+    local note_file="$1"
+    sed -n '/^---$/,/^---$/{ /^machine:/s/^machine: *//p; }' "$note_file"
+}
+
+# Check if note belongs to current machine (notes without machine field always match)
+is_local_note() {
+    local note_file="$1"
+    local machine
+    machine=$(get_note_machine "$note_file")
+    [[ -z "$machine" || "$machine" == "$(hostname)" ]]
+}
+
 # Read status from frontmatter (defaults to "active" if missing)
 get_note_status() {
     local note_file="$1"
@@ -119,10 +135,10 @@ get_note_status() {
 set_note_status() {
     local note_file="$1" new_status="$2"
     if grep -q '^status:' "$note_file"; then
-        sed -i '' "s/^status: .*/status: $new_status/" "$note_file"
+        sed -i "s/^status: .*/status: $new_status/" "$note_file"
     else
         # Insert status after created line
-        sed -i '' "/^created:/a\\
+        sed -i "/^created:/a\\
 status: $new_status" "$note_file"
     fi
 }
@@ -231,10 +247,17 @@ cmd_add() {
     echo "Added to ${heading#\#\# }: $text"
 }
 
-# List notes across repos (active only by default)
+# List notes across repos (active + local machine by default)
 cmd_list() {
     local show_all=false
-    [[ "$1" == "--all" ]] && show_all=true
+    local all_machines=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --all) show_all=true; shift ;;
+            --all-machines) all_machines=true; shift ;;
+            *) shift ;;
+        esac
+    done
 
     [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
 
@@ -242,6 +265,10 @@ cmd_list() {
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
         local note_status=$(get_note_status "$note_file")
         if ! $show_all && [[ "$note_status" == "closed" ]]; then
+            continue
+        fi
+
+        if ! $all_machines && ! is_local_note "$note_file"; then
             continue
         fi
 
@@ -260,10 +287,16 @@ cmd_list() {
         local created=""
         created=$(sed -n '/^---$/,/^---$/{ /^created:/s/^created: *//p; }' "$note_file")
 
+        local machine=""
+        machine=$(get_note_machine "$note_file")
+
         local note_status_tag=""
         [[ "$note_status" == "closed" ]] && note_status_tag=" (closed)"
 
-        printf "%-30s %-12s %d todos  %s%s\n" "$repo/$branch" "$type" "$todos" "$created" "$note_status_tag"
+        local machine_tag=""
+        [[ -n "$machine" ]] && machine_tag=" [$machine]"
+
+        printf "%-30s %-12s %d todos  %s%s%s\n" "$repo/$branch" "$type" "$todos" "$created" "$note_status_tag" "$machine_tag"
     done
 
     $found || echo "No branch notes found"
@@ -321,6 +354,7 @@ cmd_summary() {
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
         local note_status=$(get_note_status "$note_file")
         [[ "$note_status" == "closed" ]] && continue
+        is_local_note "$note_file" || continue
 
         found=true
         local note_dir=$(dirname "$note_file")
@@ -543,6 +577,7 @@ cmd_todo() {
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
         local note_status=$(get_note_status "$note_file")
         [[ "$note_status" == "closed" ]] && continue
+        is_local_note "$note_file" || continue
 
         local todos=()
         while IFS= read -r line; do
@@ -683,7 +718,7 @@ _clean_note() {
     local before after
     before=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
     (( before == 0 )) && return 0
-    sed -i '' -E '/^- \[ \]( test)?$/d; /^-$/d' "$note_file"
+    sed -i -E '/^- \[ \]( test)?$/d; /^-$/d' "$note_file"
     after=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
     echo "  Removed $(( before - after )) placeholder(s)"
 }
@@ -734,6 +769,7 @@ cmd_worktrees() {
     for note_file in "$NOTES_DIR"/*/*/note.md(N); do
         note_status=$(get_note_status "$note_file")
         [[ "$note_status" == "closed" ]] && continue
+        is_local_note "$note_file" || continue
 
         found=true
         note_dir=$(dirname "$note_file")
@@ -913,7 +949,7 @@ Commands:
   --cat [file]                    Print note.md (or specific file)
   --edit [file]                   Open note in $EDITOR
   add <section> <text>            Add line to section
-  list [--all]                    List active notes (--all includes closed)
+  list [--all] [--all-machines]    List active notes (--all includes closed, --all-machines shows all hosts)
   active                          List active notes (same as list)
   close                           Close current branch's note
   prune                           Close notes whose worktrees are gone
@@ -929,6 +965,11 @@ Commands:
   worktrees                        All active worktrees with their full todo lists
   global [--cat|--edit|--path]     Repo-level global note (not branch-specific)
   global add <section> <text>      Add to repo global note
+
+Filtering:
+  By default, list/summary/todo/worktrees only show notes for this machine.
+  Notes without a machine field are always shown.
+  Use --all-machines with list to see notes from all hosts.
 
 Notes:
   A placeholder build.sh is auto-created on first note access.
