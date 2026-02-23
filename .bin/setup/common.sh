@@ -181,6 +181,8 @@ clone_repos() {
         if [ "$is_wsl" = true ] && [ "$(hostname)" = "edwin" ]; then
             REPOSITORIES+=(
                 "git@github.com:eduuh/wira360.git"
+                "git@github.com:eduuh/kube-homelab.git"
+                "git@github.com:eduuh/bits-and-atoms.git"
             )
         elif [ "$is_wsl" = false ]; then
             REPOSITORIES+=(
