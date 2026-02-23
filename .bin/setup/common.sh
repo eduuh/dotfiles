@@ -176,10 +176,13 @@ clone_repos() {
             "git@github.com:eduuh/nvim.git"
             "git@github.com:eduuh-private/personal-notes.git"
             "git@github.com:eduuh/eduuh.git"
-            "git@github.com:eduuh/wira360.git"
         )
 
-        if [ "$is_wsl" = false ]; then
+        if [ "$is_wsl" = true ] && [ "$(hostname)" = "edwin" ]; then
+            REPOSITORIES+=(
+                "git@github.com:eduuh/wira360.git"
+            )
+        elif [ "$is_wsl" = false ]; then
             REPOSITORIES+=(
                 "git@github.com:eduuh/kube-homelab.git"
                 "git@github.com:eduuh/blog-2026.git"
