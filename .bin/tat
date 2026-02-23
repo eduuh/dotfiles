@@ -29,7 +29,7 @@ get_projects() {
     fi
 
     # Regular clones: ~/projects/*/ excluding bare/, worktree/, hidden dirs
-    for dir in "$PROJECT_ROOT"/*/; do
+    for dir in "$PROJECT_ROOT"/*/(N); do
         [[ -d "$dir" ]] || continue
         local name=$(basename "$dir")
         [[ "$name" == .* ]] && continue
