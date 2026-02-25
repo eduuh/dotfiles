@@ -79,6 +79,9 @@ r() { "$HOME/.bin/bn" add research "$*" }
 c() { "$HOME/.bin/bn" add collab "$*" }
 a() { "$HOME/.bin/bn" add ask "$*" }
 
+# bn tab completion
+[ -f "$HOME/.bin/_bn_completion.zsh" ] && source "$HOME/.bin/_bn_completion.zsh"
+
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
