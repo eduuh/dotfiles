@@ -226,6 +226,10 @@ cmd_add() {
         fi
     fi
 
+    # Pull latest into the new worktree
+    echo -e "${BLUE}Pulling latest...${NC}"
+    git -C "$worktree_path" pull --ff-only 2>/dev/null || true
+
     echo -e "${GREEN}Created worktree: $worktree_path${NC}"
     echo -e "cd $worktree_path"
 }
