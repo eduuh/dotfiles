@@ -6,7 +6,7 @@
 #   :  = panes only
 #   (no prefix) = show all
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 require_tmux
 tmux_init

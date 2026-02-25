@@ -2,14 +2,14 @@
 # tat - Tmux Attach to project
 # Simple session manager with zoxide frecency + fzf preview
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 require_tmux
 tmux_init
 require_fzf
 
-PREVIEW_SCRIPT="$HOME/.bin/tat-preview.sh"
-TEMPLATE_SCRIPT="$HOME/.bin/tat-template.sh"
+PREVIEW_SCRIPT="$HOME/.bin/tmux/tat-preview.sh"
+TEMPLATE_SCRIPT="$HOME/.bin/tmux/tat-template.sh"
 
 # Get all projects: worktree entries (repo/branch) + regular clones
 get_projects() {

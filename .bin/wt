@@ -5,7 +5,7 @@
 
 set -e
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 # Repositories that should NOT be cloned as bare (regular clone instead)
 # These repos will be cloned to ~/projects/reponame (without .git suffix)
