@@ -1659,10 +1659,11 @@ case "${1:-}" in
     prune)              cmd_prune ;;
     summary|s)          cmd_summary ;;
     status|st)          cmd_status ;;
-    todo|todos|t)       cmd_todo ;;
-    refresh|r)          cmd_refresh ;;
+    todo|todos|t)       shift; if [[ -n "$1" ]]; then cmd_add todo "$@"; else cmd_todo; fi ;;
+    refresh|r)          shift; if [[ -n "$1" ]]; then cmd_add research "$@"; else cmd_refresh; fi ;;
     refresh-all|ra)     cmd_refresh_all ;;
     main|m)             cmd_main ;;
+    blocker|x)          shift; cmd_add blocker "$@" ;;
     build|b)            shift; cmd_build "$@" ;;
     script|sc)          shift; cmd_script "$@" ;;
     archive)            shift; cmd_archive "$@" ;;
