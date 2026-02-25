@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
 # tmux-note-add.sh - Quick-add to branch note via fzf section picker
-# Called via: bind N display-popup -E ... "$HOME/.bin/tmux-note-add.sh '#{pane_current_path}'"
+# Called via: bind N display-popup -E ... "$HOME/.bin/tmux/tmux-note-add.sh '#{pane_current_path}'"
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 require_fzf
 
 # cd to pane path so branch-note.sh subcommands resolve correctly

@@ -2,7 +2,7 @@
 # tmux-rename-session.sh - Pick and rename any tmux session
 # Useful for renaming cloned project sessions (1js, 1js2, etc.) to meaningful names
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 require_tmux
 tmux_init

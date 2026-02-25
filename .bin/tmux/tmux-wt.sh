@@ -3,7 +3,7 @@
 # Bound to prefix+W in tmux
 # Usage: tmux-wt.sh [current_pane_path]
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 tmux_init
 require_fzf
 
@@ -115,7 +115,7 @@ if [[ "$action" == "Create worktree" ]]; then
 
     # 6. Open tmux session in new worktree
     session_name="${selected}/${sanitized}"
-    "$HOME/.bin/tat-template.sh" "$session_name" "$worktree_path"
+    "$HOME/.bin/tmux/tat-template.sh" "$session_name" "$worktree_path"
 
 #============================================================================
 # Remove worktree

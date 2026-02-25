@@ -27,7 +27,7 @@
 #   bn diff|d                       # Git diff stat + open todos
 #   bn global|g [subcmd]            # Repo-level global note
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 # --- Config ---
 

@@ -3,7 +3,7 @@
 # Output e.g. " [3]" if there are open todos, nothing otherwise.
 # Called every status-interval (5s) — must be fast and silent on failure.
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 resolve_note_context "${1:-$(pwd)}" || exit 0
 
