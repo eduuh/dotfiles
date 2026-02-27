@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # tat-preview.sh - fzf preview for project selection
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 project="$1"
 path=$(resolve_project_path "$project")

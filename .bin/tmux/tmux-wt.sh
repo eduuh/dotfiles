@@ -3,7 +3,7 @@
 # Bound to prefix+W in tmux
 # Usage: tmux-wt.sh [current_pane_path]
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 tmux_init
 require_fzf
 
@@ -104,18 +104,18 @@ if [[ "$action" == "Create worktree" ]]; then
         exit 1
     fi
 
-    # 5. Run build.sh if it exists for this repo
-    local build_sh="$NOTES_DIR/${selected}/main/build.sh"
-    if [[ -x "$build_sh" ]]; then
-        echo "Running build.sh..."
-        (cd "$worktree_path" && "$build_sh")
-    fi
+    # 5. Pull latest into the new worktree
+    echo "Pulling latest..."
+    git -C "$worktree_path" pull --ff-only 2>/dev/null || true
+
+    # 6. Run bn build script if it exists for this repo
+    (cd "$worktree_path" && "$HOME/.bin/bn" build 2>/dev/null) || true
 
     echo "Done!"
 
-    # 6. Open tmux session in new worktree
+    # 7. Open tmux session in new worktree
     session_name="${selected}/${sanitized}"
-    "$HOME/.bin/tat-template.sh" "$session_name" "$worktree_path"
+    "$HOME/.bin/tmux/tat-template.sh" "$session_name" "$worktree_path"
 
 #============================================================================
 # Remove worktree

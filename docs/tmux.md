@@ -87,7 +87,7 @@ Prefix is `Ctrl+Space`.
 ### Project Picker (`C-Space C-o`)
 
 ```
-~/.bin/tat.sh
+~/.bin/tmux/tat
 ```
 
 - Lists all directories in `~/projects`
@@ -98,7 +98,7 @@ Prefix is `Ctrl+Space`.
 ### Tmux Navigator (`C-Space C-n`)
 
 ```
-~/.bin/tmux-nav.sh
+~/.bin/tmux/tmux-nav.sh
 ```
 
 Unified fuzzy finder for all tmux objects. Use symbol prefixes to filter:
@@ -115,7 +115,7 @@ Example: Type `@work` to filter sessions containing "work".
 ### Session Templates
 
 ```
-~/.bin/tat-template.sh
+~/.bin/tmux/tat-template.sh
 ```
 
 Auto-detects project type and creates appropriate layout:
@@ -136,10 +136,10 @@ Override with `.tmux-template` file in project root containing template name.
 | File | Purpose |
 |------|---------|
 | `~/.tmux.conf` | Main tmux configuration |
-| `~/.bin/tat.sh` | Project picker script |
-| `~/.bin/tat-preview.sh` | fzf preview for projects |
-| `~/.bin/tat-template.sh` | Session template logic |
-| `~/.bin/tmux-nav.sh` | Unified tmux navigator |
+| `~/.bin/tmux/tat` | Project picker script |
+| `~/.bin/tmux/tat-preview.sh` | fzf preview for projects |
+| `~/.bin/tmux/tat-template.sh` | Session template logic |
+| `~/.bin/tmux/tmux-nav.sh` | Unified tmux navigator |
 
 ## Plugins
 

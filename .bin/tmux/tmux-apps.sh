@@ -2,7 +2,7 @@
 # tmux-apps.sh - Launch common applications via fzf popup
 # Supports both TUI (terminal) and GUI apps on Mac and WSL
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 APPS_FILE="$HOME/.apps.list"
 
