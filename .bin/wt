@@ -5,7 +5,7 @@
 
 set -e
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 # Repositories that should NOT be cloned as bare (regular clone instead)
 # These repos will be cloned to ~/projects/reponame (without .git suffix)
@@ -225,6 +225,10 @@ cmd_add() {
             git --git-dir="$bare_repo" worktree add -b "$branch" "$worktree_path" "main"
         fi
     fi
+
+    # Pull latest into the new worktree
+    echo -e "${BLUE}Pulling latest...${NC}"
+    git -C "$worktree_path" pull --ff-only 2>/dev/null || true
 
     echo -e "${GREEN}Created worktree: $worktree_path${NC}"
     echo -e "cd $worktree_path"

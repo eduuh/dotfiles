@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # tat-template.sh - Create simple tmux session
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 tmux_init
 

@@ -1,47 +1,203 @@
 #!/usr/bin/env zsh
 # bn - Universal branch note resolver
 # Usage:
-#   branch-note                          # Ensure note exists, print dir path
-#   branch-note --path                   # Print note dir path only (no create)
-#   branch-note --cat [file]             # Print note.md contents (or specific file)
-#   branch-note --edit [file]            # Open note.md in $EDITOR (or specific file)
-#   branch-note add <section> <text>     # Add line to section
-#   branch-note list [--all]             # List active notes (--all includes closed)
-#   branch-note active                   # List active notes
-#   branch-note close                    # Close current branch's note
-#   branch-note prune                    # Close notes whose worktrees no longer exist
-#   branch-note summary                  # Dashboard: open todos, blockers, per-branch detail
-#   branch-note status                   # One-line status for current branch
-#   branch-note todo                     # List open todos across all branches
-#   branch-note refresh                  # Fetch, pull, build current branch
-#   branch-note refresh-all              # Refresh all main worktrees
-#   branch-note build-init               # Create build.sh for current repo
-#   branch-note build-edit               # Open build.sh in $EDITOR
-#   branch-note archive [--days N] [--dry-run]  # Archive old closed notes
+#   bn                             # Ensure note exists, print dir path
+#   bn --path|-p                    # Print note dir path only (no create)
+#   bn --cat|-c [file]              # Print note.md contents (or specific file)
+#   bn --edit|-e [file]             # Open note.md in $EDITOR (or specific file)
+#   bn add|a <section> <text>       # Add line to section
+#   bn list|l [--all]               # List active notes (--all includes closed)
+#   bn active                       # List active notes
+#   bn close                        # Close current branch's note
+#   bn prune                        # Close notes whose worktrees no longer exist
+#   bn summary|s                    # Dashboard: open todos, blockers, per-branch detail
+#   bn status|st                    # One-line status for current branch
+#   bn todo|t                       # List open todos across all branches
+#   bn refresh|r                    # Fetch, pull, build current branch
+#   bn refresh-all|ra               # Refresh all main worktrees
+#   bn main|m                       # Print main note dir + list scripts
+#   bn build|b [name]               # Run a script (default: build)
+#   bn script|sc [new|edit|list]    # Manage repo scripts
+#   bn files|f [name|new|edit]       # Investigation file management
+#   bn archive [--days N] [--dry-run]  # Archive old closed notes
+#   bn clean [--all]                # Remove empty placeholder todos
+#   bn worktrees|w                  # All active worktrees with details
+#   bn pr [url] [--copy|--show]     # Link/open PR for current branch
+#   bn link|wi [id] [--copy|--show] # Link/open work item
+#   bn diff|d                       # Git diff stat + open todos
+#   bn global|g [subcmd]            # Repo-level global note
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
+
+# --- Config ---
 
 NOTES_DIR="$HOME/projects/personal-notes/branch-notes"
+_HOSTNAME=$(hostname)
 
-# Create note from template if it doesn't exist
-ensure_note() {
-    local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
-    local note_file="$note_dir/note.md"
-    if [[ ! -f "$note_file" ]]; then
-        mkdir -p "$note_dir"
-        cat > "$note_file" << EOF
+# --- Helpers: Git Context ---
+
+# Resolve git context and exit on failure. Use instead of bare resolve_note_context.
+require_git_context() {
+    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+}
+
+# --- Helpers: Git & Frontmatter ---
+
+# Read a single frontmatter field from a note file (pure zsh, no subprocesses).
+# Usage: _frontmatter_val "$note_file" "field_name"
+# Sets REPLY; returns empty string if not found.
+_frontmatter_val() {
+    local in_front=false
+    while IFS= read -r line; do
+        if [[ "$line" == "---" ]]; then
+            $in_front && break
+            in_front=true
+            continue
+        fi
+        $in_front && [[ "$line" == ${2}:* ]] && { REPLY="${line#${2}:}"; REPLY="${REPLY# }"; return 0; }
+    done < "$1"
+    REPLY=""
+    return 1
+}
+
+# Read machine from frontmatter (empty if missing)
+get_note_machine() {
+    _frontmatter_val "$1" "machine"
+    echo "$REPLY"
+}
+
+# Check if note belongs to current machine (notes without machine field always match)
+is_local_note() {
+    _frontmatter_val "$1" "machine"
+    [[ -z "$REPLY" || "$REPLY" == "$_HOSTNAME" ]]
+}
+
+# Read status from frontmatter (defaults to "active" if missing)
+get_note_status() {
+    _frontmatter_val "$1" "status"
+    echo "${REPLY:-active}"
+}
+
+# Set status in frontmatter
+set_note_status() {
+    local note_file="$1" new_status="$2"
+    if grep -q '^status:' "$note_file"; then
+        sed -i "s/^status: .*/status: $new_status/" "$note_file"
+    else
+        # Insert status after created line
+        sed -i "/^created:/a\\
+status: $new_status" "$note_file"
+    fi
+}
+
+# Set any frontmatter field (adds after status: if missing)
+_set_frontmatter() {
+    local note_file="$1" key="$2" value="$3"
+    if grep -q "^${key}:" "$note_file"; then
+        sed -i "s|^${key}:.*|${key}: ${value}|" "$note_file"
+    else
+        sed -i "/^status:/a\\
+${key}: ${value}" "$note_file"
+    fi
+}
+
+# --- Helpers: Platform ---
+
+# Open a URL in the default browser (macOS, WSL, Linux)
+_open_url() {
+    local url="$1"
+    if command -v open &>/dev/null; then
+        open "$url"
+    elif command -v wslview &>/dev/null; then
+        wslview "$url"
+    elif command -v xdg-open &>/dev/null; then
+        xdg-open "$url" 2>/dev/null &
+    elif [[ -x /mnt/c/Windows/explorer.exe ]]; then
+        /mnt/c/Windows/explorer.exe "$url"
+    else
+        echo "$url"
+        return 1
+    fi
+}
+
+# Copy text to clipboard (macOS, WSL, Linux)
+_copy_to_clipboard() {
+    local text="$1"
+    if command -v pbcopy &>/dev/null; then
+        echo -n "$text" | pbcopy
+    elif command -v wl-copy &>/dev/null; then
+        echo -n "$text" | wl-copy
+    elif command -v xclip &>/dev/null; then
+        echo -n "$text" | xclip -selection clipboard
+    elif [[ -x /mnt/c/Windows/System32/clip.exe ]]; then
+        echo -n "$text" | /mnt/c/Windows/System32/clip.exe
+    else
+        echo "$text"
+        echo "(no clipboard tool found)" >&2
+        return 1
+    fi
+}
+
+# --- Helpers: Note Templates ---
+
+TEMPLATE_DIR="$HOME/.config/bn/templates"
+
+# Render a template file with {{VAR}} substitution.
+# Usage: _render_template <template_name> [VAR=value ...]
+# Falls back to inline heredoc if template file is missing.
+_render_template() {
+    local tmpl_name="$1"; shift
+    local tmpl_file="$TEMPLATE_DIR/$tmpl_name"
+
+    # Build sed substitution from args
+    local -a subs
+    for pair in "$@"; do
+        local key="${pair%%=*}" val="${pair#*=}"
+        subs+=("-e" "s|{{${key}}}|${val}|g")
+    done
+
+    if [[ -f "$tmpl_file" ]]; then
+        sed "${subs[@]}" "$tmpl_file"
+    else
+        # Fallback: inline heredocs for backwards compat
+        case "$tmpl_name" in
+            branch-note.md) _branch_note_template_inline "${(@)@}" ;;
+            global-note.md) _global_note_template_inline "${(@)@}" ;;
+            investigation.md) _investigation_template_inline "${(@)@}" ;;
+            *) echo "Unknown template: $tmpl_name" >&2; return 1 ;;
+        esac
+    fi
+}
+
+# Inline fallbacks (used when template files are missing)
+_branch_note_template_inline() {
+    local repo="" branch="" date="" machine=""
+    for pair in "$@"; do
+        case "${pair%%=*}" in
+            REPO) repo="${pair#*=}" ;; BRANCH) branch="${pair#*=}" ;;
+            DATE) date="${pair#*=}" ;; MACHINE) machine="${pair#*=}" ;;
+        esac
+    done
+    cat << EOF
 ---
-repo: $NOTE_REPO
-branch: $NOTE_BRANCH
-created: $(date +%Y-%m-%d)
+repo: $repo
+branch: $branch
+created: $date
 status: active
+machine: $machine
 type:
+work_item:
+pr:
+tags: []
 collaborators: []
 ---
 
-# $NOTE_REPO / $NOTE_BRANCH
+# $repo / $branch
 
 ## Goal
+
+
+## Progress
 
 
 ## Todos
@@ -65,23 +221,24 @@ collaborators: []
 ---
 ## Windows
 EOF
-    fi
-    ensure_build_sh "$NOTE_REPO"
 }
 
-# Create repo-level global note if it doesn't exist
-ensure_global_note() {
-    local note_file="$NOTES_DIR/$NOTE_REPO/note.md"
-    if [[ ! -f "$note_file" ]]; then
-        mkdir -p "$NOTES_DIR/$NOTE_REPO"
-        cat > "$note_file" << EOF
+_global_note_template_inline() {
+    local repo="" date="" machine=""
+    for pair in "$@"; do
+        case "${pair%%=*}" in
+            REPO) repo="${pair#*=}" ;; DATE) date="${pair#*=}" ;; MACHINE) machine="${pair#*=}" ;;
+        esac
+    done
+    cat << EOF
 ---
-repo: $NOTE_REPO
-created: $(date +%Y-%m-%d)
+repo: $repo
+created: $date
 status: active
+machine: $machine
 ---
 
-# $NOTE_REPO (global)
+# $repo (global)
 
 ## Goal
 
@@ -104,66 +261,91 @@ status: active
 ## To Ask
 -
 EOF
-    fi
 }
 
-# Read status from frontmatter (defaults to "active" if missing)
-get_note_status() {
-    local note_file="$1"
-    local note_status
-    note_status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$note_file")
-    echo "${note_status:-active}"
-}
+_investigation_template_inline() {
+    local title="" date="" repo="" branch=""
+    for pair in "$@"; do
+        case "${pair%%=*}" in
+            TITLE) title="${pair#*=}" ;; DATE) date="${pair#*=}" ;;
+            REPO) repo="${pair#*=}" ;; BRANCH) branch="${pair#*=}" ;;
+        esac
+    done
+    cat << EOF
+# $title
+<!-- Created: $date | Branch: $repo/$branch -->
 
-# Set status in frontmatter
-set_note_status() {
-    local note_file="$1" new_status="$2"
-    if grep -q '^status:' "$note_file"; then
-        sed -i '' "s/^status: .*/status: $new_status/" "$note_file"
-    else
-        # Insert status after created line
-        sed -i '' "/^created:/a\\
-status: $new_status" "$note_file"
-    fi
-}
+## Summary
 
-# Resolve path to build.sh (always in main's note dir)
-resolve_build_sh() {
-    local repo="$1"
-    echo "$NOTES_DIR/$repo/main/build.sh"
-}
 
-# Auto-placeholder marker (checked by build-init to allow overwrite)
-_BUILD_SH_PLACEHOLDER_MARKER="# bn-placeholder: no build configured"
+## Findings
 
-# Ensure a placeholder build.sh exists (created if missing)
-ensure_build_sh() {
-    local repo="$1"
-    local build_sh
-    build_sh=$(resolve_build_sh "$repo")
-    if [[ ! -f "$build_sh" ]]; then
-        mkdir -p "$(dirname "$build_sh")"
-        cat > "$build_sh" << EOF
-#!/usr/bin/env zsh
-${_BUILD_SH_PLACEHOLDER_MARKER}
-echo "No build commands configured yet."
 EOF
-        chmod +x "$build_sh"
+}
+
+# Create note from template if it doesn't exist
+ensure_note() {
+    local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+    local note_file="$note_dir/note.md"
+    if [[ ! -f "$note_file" ]]; then
+        mkdir -p "$note_dir"
+        _render_template branch-note.md \
+            "REPO=$NOTE_REPO" "BRANCH=$NOTE_BRANCH" \
+            "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" > "$note_file"
+    fi
+    ensure_scripts_dir "$NOTE_REPO"
+}
+
+# Create repo-level global note if it doesn't exist
+ensure_global_note() {
+    local note_file="$NOTES_DIR/$NOTE_REPO/note.md"
+    if [[ ! -f "$note_file" ]]; then
+        mkdir -p "$NOTES_DIR/$NOTE_REPO"
+        _render_template global-note.md \
+            "REPO=$NOTE_REPO" "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" > "$note_file"
     fi
 }
 
-# Run build.sh if it exists, with cwd set to given directory
-run_build_sh() {
-    local repo="$1" work_dir="$2"
-    local build_sh
-    build_sh=$(resolve_build_sh "$repo")
-    if [[ -x "$build_sh" ]]; then
-        echo "Running build.sh for $repo..."
-        (cd "$work_dir" && "$build_sh")
+# --- Helpers: Scripts ---
+
+# Resolve path to a named script (always in main's note dir)
+resolve_script() {
+    REPLY="$NOTES_DIR/$1/main/scripts/$2"
+}
+
+# Ensure scripts/ dir exists; auto-migrate old build.sh on first access
+ensure_scripts_dir() {
+    local repo="$1"
+    local scripts_dir="$NOTES_DIR/$repo/main/scripts"
+    local old_build_sh="$NOTES_DIR/$repo/main/build.sh"
+
+    mkdir -p "$scripts_dir"
+
+    # Migrate old build.sh → scripts/build
+    if [[ -f "$old_build_sh" ]]; then
+        if grep -q "# bn-placeholder: no build configured" "$old_build_sh" 2>/dev/null; then
+            rm "$old_build_sh"
+        else
+            mv "$old_build_sh" "$scripts_dir/build"
+            echo "Migrated build.sh → scripts/build for $repo" >&2
+        fi
+    fi
+}
+
+# Run a named script if it exists, with cwd set to given directory
+run_script() {
+    local repo="$1" name="$2" work_dir="$3"
+    local script
+    resolve_script "$repo" "$name"; script=$REPLY
+    if [[ -x "$script" ]]; then
+        echo "Running scripts/$name for $repo..."
+        (cd "$work_dir" && "$script")
         return $?
     fi
     return 0
 }
+
+# --- Helpers: Section Manipulation ---
 
 # Map short section name to heading
 section_heading() {
@@ -208,6 +390,361 @@ insert_into_section() {
     fi
 }
 
+# Extract non-placeholder items from a named section of a note file.
+# Todos:   skips bare "- [ ]" and "- [ ] test"
+# Others:  skips bare "-" lines
+# Prints one item per line; returns 1 if section is empty/missing.
+_section_items() {
+    local note_file="$1" heading="$2"
+    local -a items
+    # Capture lines between the heading and the next heading/frontmatter fence
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && items+=("$line")
+    done <<< "$(awk "/^${heading}\$/{found=1; next} /^## |^---\$/{found=0} found && /^- /" "$note_file" 2>/dev/null)"
+
+    # Filter out placeholders
+    local -a real
+    for item in "${items[@]}"; do
+        # Skip bare todo placeholder and bare bullet
+        [[ "$item" =~ '^- \[ \]( test)?$' ]] && continue
+        [[ "$item" == "-" ]] && continue
+        real+=("$item")
+    done
+
+    (( ${#real[@]} == 0 )) && return 1
+    for item in "${real[@]}"; do
+        echo "  $item"
+    done
+}
+
+# Remove placeholder lines from a note file:
+#   todos:  bare "- [ ]" or "- [ ] test"
+#   others: bare "-" lines
+_clean_note() {
+    local note_file="$1"
+    local before after
+    before=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
+    (( before == 0 )) && return 0
+    sed -i -E '/^- \[ \]( test)?$/d; /^-$/d' "$note_file"
+    after=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
+    echo "  Removed $(( before - after )) placeholder(s)"
+}
+
+# --- Helpers: Single-pass Note Parser ---
+
+# Parse a note file in a single awk pass. Outputs key=value lines for frontmatter
+# fields and section content prefixed by section tag.
+# Usage: output=$(_parse_note "$note_file")
+# Then: echo "$output" | grep '^status=' etc.
+_parse_note() {
+    local note_file="$1"
+    awk '
+    BEGIN {
+        in_front = 0; front_count = 0
+        section = ""
+        todos = 0; open_todos = 0; blockers = 0; research = 0; asks = 0
+        decisions = 0; collab = 0
+    }
+    /^---$/ {
+        if (front_count == 0) { in_front = 1; front_count++; next }
+        if (in_front) { in_front = 0; next }
+    }
+    in_front {
+        # Extract frontmatter key: value
+        if (match($0, /^([a-z_]+): *(.*)$/, m)) {
+            print m[1] "=" m[2]
+        }
+        next
+    }
+    /^## Todos$/       { section = "TODO"; next }
+    /^## Blockers$/    { section = "BLOCKER"; next }
+    /^## To Research$/ { section = "RESEARCH"; next }
+    /^## To Ask$/      { section = "ASK"; next }
+    /^## Decisions$/   { section = "DECISION"; next }
+    /^## Collaboration$/ { section = "COLLAB"; next }
+    /^## / || /^---$/  { section = ""; next }
+
+    section != "" && /^- / {
+        line = $0
+        # Skip placeholders: bare "- [ ]", "- [ ] test", bare "-"
+        if (line == "- [ ]" || line == "- [ ] test" || line == "-") next
+
+        if (section == "TODO") {
+            todos++
+            if (line ~ /^- \[ \] /) { open_todos++; print "OPEN_TODO:" line }
+            else { print "TODO:" line }
+        }
+        else if (section == "BLOCKER")  { blockers++;  print "BLOCKER:" line }
+        else if (section == "RESEARCH") { research++;  print "RESEARCH:" line }
+        else if (section == "ASK")      { asks++;      print "ASK:" line }
+        else if (section == "DECISION") { decisions++; print "DECISION:" line }
+        else if (section == "COLLAB")   { collab++;    print "COLLAB:" line }
+    }
+
+    END {
+        print "todos=" todos
+        print "open_todos=" open_todos
+        print "blockers=" blockers
+        print "research=" research
+        print "asks=" asks
+        print "decisions=" decisions
+        print "collab=" collab
+    }
+    ' "$note_file"
+}
+
+# Extract a value from _parse_note output: _pn_val "$output" "key"
+# Pure zsh — no subprocesses.
+_pn_val() {
+    local match=${(M)${(f)1}:#${2}=*}
+    echo "${match#${2}=}"
+}
+
+# Extract section lines from _parse_note output: _pn_lines "$output" "PREFIX"
+# Pure zsh — no subprocesses.
+_pn_lines() {
+    local -a matches=("${(M@)${(f)1}:#${2}:*}")
+    local line
+    for line in "${matches[@]}"; do
+        [[ -n "$line" ]] && echo "${line#${2}:}"
+    done
+}
+
+# --- Helpers: Batch Note Parser ---
+
+# Parse ALL note files in a single awk invocation. Each line is prefixed with
+# the filename so we can split per-file afterwards.
+# Usage: _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+#        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+_parse_all_notes() {
+    (( $# == 0 )) && return
+    awk '
+    BEGIN {
+        in_front = 0; front_count = 0
+        section = ""
+        todos = 0; open_todos = 0; blockers = 0; research = 0; asks = 0
+        decisions = 0; collab = 0
+        cur_file = ""
+    }
+    FNR == 1 {
+        # Emit counts for previous file
+        if (cur_file != "") {
+            print cur_file "|todos=" todos
+            print cur_file "|open_todos=" open_todos
+            print cur_file "|blockers=" blockers
+            print cur_file "|research=" research
+            print cur_file "|asks=" asks
+            print cur_file "|decisions=" decisions
+            print cur_file "|collab=" collab
+        }
+        cur_file = FILENAME
+        in_front = 0; front_count = 0; section = ""
+        todos = 0; open_todos = 0; blockers = 0; research = 0; asks = 0
+        decisions = 0; collab = 0
+    }
+    /^---$/ {
+        if (front_count == 0) { in_front = 1; front_count++; next }
+        if (in_front) { in_front = 0; next }
+    }
+    in_front {
+        if (match($0, /^([a-z_]+): *(.*)$/, m)) {
+            print cur_file "|" m[1] "=" m[2]
+        }
+        next
+    }
+    /^## Todos$/       { section = "TODO"; next }
+    /^## Blockers$/    { section = "BLOCKER"; next }
+    /^## To Research$/ { section = "RESEARCH"; next }
+    /^## To Ask$/      { section = "ASK"; next }
+    /^## Decisions$/   { section = "DECISION"; next }
+    /^## Collaboration$/ { section = "COLLAB"; next }
+    /^## / || /^---$/  { section = ""; next }
+
+    section != "" && /^- / {
+        line = $0
+        if (line == "- [ ]" || line == "- [ ] test" || line == "-") next
+        if (section == "TODO") {
+            todos++
+            if (line ~ /^- \[ \] /) { open_todos++; print cur_file "|OPEN_TODO:" line }
+            else { print cur_file "|TODO:" line }
+        }
+        else if (section == "BLOCKER")  { blockers++;  print cur_file "|BLOCKER:" line }
+        else if (section == "RESEARCH") { research++;  print cur_file "|RESEARCH:" line }
+        else if (section == "ASK")      { asks++;      print cur_file "|ASK:" line }
+        else if (section == "DECISION") { decisions++; print cur_file "|DECISION:" line }
+        else if (section == "COLLAB")   { collab++;    print cur_file "|COLLAB:" line }
+    }
+
+    END {
+        if (cur_file != "") {
+            print cur_file "|todos=" todos
+            print cur_file "|open_todos=" open_todos
+            print cur_file "|blockers=" blockers
+            print cur_file "|research=" research
+            print cur_file "|asks=" asks
+            print cur_file "|decisions=" decisions
+            print cur_file "|collab=" collab
+        }
+    }
+    ' "$@"
+}
+
+# Extract lines for a specific file from batch output. Pure zsh.
+_pn_for_file() {
+    local all="$1" file="$2"
+    local prefix="${file}|"
+    local -a lines=("${(M@)${(f)all}:#${prefix}*}")
+    local line
+    for line in "${lines[@]}"; do
+        [[ -n "$line" ]] && echo "${line#${prefix}}"
+    done
+}
+
+# --- Commands ---
+
+cmd_path() {
+    require_git_context
+    echo "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+}
+
+cmd_cat() {
+    require_git_context
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    # Auto-prune: if note is active, repo is bare-based, and worktree is gone
+    if [[ -f "$note_file" && -d "$BARE_DIR/${NOTE_REPO}.git" ]]; then
+        local wt_path="$WORKTREE_DIR/${NOTE_REPO}/${NOTE_BRANCH}"
+        if [[ ! -d "$wt_path" ]] && [[ "$(get_note_status "$note_file")" == "active" ]]; then
+            set_note_status "$note_file" "closed"
+            echo "Auto-closed: $NOTE_REPO/$NOTE_BRANCH (worktree removed)" >&2
+        fi
+    fi
+    # Auto-discover PR link if empty and gh is available
+    if [[ -f "$note_file" ]]; then
+        _frontmatter_val "$note_file" "pr"
+        if [[ -z "$REPLY" ]] && command -v gh &>/dev/null; then
+            local auto_pr
+            auto_pr=$(gh pr view --json url -q .url 2>/dev/null)
+            if [[ -n "$auto_pr" ]]; then
+                _set_frontmatter "$note_file" "pr" "$auto_pr"
+                echo "Auto-linked PR: $auto_pr" >&2
+            fi
+        fi
+    fi
+
+    local file="${1:-note.md}"
+    cat "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/$file"
+
+    # Append footer with investigation files and scripts (only for default note.md)
+    if [[ "$file" == "note.md" ]]; then
+        local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+        local scripts_dir="$NOTES_DIR/$NOTE_REPO/main/scripts"
+
+        # Investigation files: .md files excluding note.md, skip scripts/ subdir
+        local -a inv_files
+        for f in "$note_dir"/*.md(N); do
+            [[ "${f:t}" == "note.md" ]] && continue
+            inv_files+=("$f")
+        done
+
+        if (( ${#inv_files[@]} > 0 )); then
+            echo ""
+            echo "--- Files ---"
+            for f in "${inv_files[@]}"; do
+                local lines
+                lines=$(wc -l < "$f" | tr -d ' ')
+                echo "  ${f:t} ($lines lines)"
+            done
+        fi
+
+        # Scripts from main's scripts dir
+        local -a scripts
+        for f in "$scripts_dir"/*(Nx); do
+            scripts+=("${f:t}")
+        done
+
+        if (( ${#scripts[@]} > 0 )); then
+            echo ""
+            echo "--- Scripts ---"
+            for s in "${scripts[@]}"; do
+                echo "  $s"
+            done
+        fi
+    fi
+}
+
+cmd_edit() {
+    require_git_context
+    ensure_note
+    local file="${1:-note.md}"
+    ${EDITOR:-nvim} "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/$file"
+}
+
+cmd_files() {
+    require_git_context
+    local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+    local subcmd="${1:-}"
+
+    case "$subcmd" in
+        new)
+            local name="$2"
+            [[ -z "$name" ]] && { echo "Usage: bn files new <name>" >&2; exit 1; }
+            [[ "$name" != *.md ]] && name="${name}.md"
+            local filepath="$note_dir/$name"
+            if [[ -f "$filepath" ]]; then
+                echo "File already exists: $filepath" >&2
+                exit 1
+            fi
+            ensure_note
+            local title="${name%.md}"
+            _render_template investigation.md \
+                "TITLE=$title" "DATE=$(date +%Y-%m-%d)" \
+                "REPO=$NOTE_REPO" "BRANCH=$NOTE_BRANCH" > "$filepath"
+            echo "Created: $filepath"
+            ;;
+        edit)
+            local name="$2"
+            [[ -z "$name" ]] && { echo "Usage: bn files edit <name>" >&2; exit 1; }
+            [[ "$name" != *.md ]] && name="${name}.md"
+            local filepath="$note_dir/$name"
+            [[ ! -f "$filepath" ]] && { echo "File not found: $name" >&2; exit 1; }
+            ${EDITOR:-nvim} "$filepath"
+            ;;
+        "")
+            # List investigation files
+            local -a inv_files
+            for f in "$note_dir"/*.md(N); do
+                [[ "${f:t}" == "note.md" ]] && continue
+                inv_files+=("$f")
+            done
+            if (( ${#inv_files[@]} == 0 )); then
+                echo "No investigation files in $NOTE_REPO/$NOTE_BRANCH"
+                echo "Create one with: bn files new <name>"
+                return
+            fi
+            echo "Investigation files ($NOTE_REPO/$NOTE_BRANCH):"
+            for f in "${inv_files[@]}"; do
+                local lines
+                lines=$(wc -l < "$f" | tr -d ' ')
+                echo "  ${f:t} ($lines lines)"
+            done
+            ;;
+        *)
+            # View a specific file
+            local name="$subcmd"
+            [[ "$name" != *.md ]] && name="${name}.md"
+            local filepath="$note_dir/$name"
+            [[ ! -f "$filepath" ]] && { echo "File not found: $name" >&2; exit 1; }
+            cat "$filepath"
+            ;;
+    esac
+}
+
+cmd_default() {
+    require_git_context
+    ensure_note
+    echo "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+}
+
 # Add a line to a section
 cmd_add() {
     local section="$1"
@@ -220,7 +757,7 @@ cmd_add() {
     heading=$(section_heading "$section")
     [[ -z "$heading" ]] && { echo "Unknown section: $section (use: todo, blocker, decision, research, collab, ask)" >&2; exit 1; }
 
-    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    require_git_context
     ensure_note
 
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
@@ -231,39 +768,61 @@ cmd_add() {
     echo "Added to ${heading#\#\# }: $text"
 }
 
-# List notes across repos (active only by default)
+# List notes across repos (active + local machine by default)
 cmd_list() {
     local show_all=false
-    [[ "$1" == "--all" ]] && show_all=true
+    local all_machines=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --all) show_all=true; shift ;;
+            --all-machines) all_machines=true; shift ;;
+            *) shift ;;
+        esac
+    done
 
     [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
 
+    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
+    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
+    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+
     local found=false
-    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        local note_status=$(get_note_status "$note_file")
+    for note_file in "${note_files[@]}"; do
+        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+        local note_status=$(_pn_val "$parsed" "status")
+        [[ -z "$note_status" ]] && note_status="active"
+
         if ! $show_all && [[ "$note_status" == "closed" ]]; then
             continue
         fi
 
-        found=true
-        local note_dir=$(dirname "$note_file")
-        local branch=$(basename "$note_dir")
-        local repo=$(basename "$(dirname "$note_dir")")
+        local machine=$(_pn_val "$parsed" "machine")
+        if ! $all_machines && [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]]; then
+            continue
+        fi
 
-        local type=""
-        type=$(sed -n '/^---$/,/^---$/{ /^type:/s/^type: *//p; }' "$note_file")
+        found=true
+        local note_dir=${note_file:h}
+        local branch=${note_dir:t}
+        local repo=${note_dir:h:t}
+
+        local type=$(_pn_val "$parsed" "type")
         [[ -z "$type" ]] && type="-"
 
-        local todos=0
-        todos=$(grep -c '^\- \[ \]' "$note_file" 2>/dev/null || true)
-
-        local created=""
-        created=$(sed -n '/^---$/,/^---$/{ /^created:/s/^created: *//p; }' "$note_file")
+        local todos=$(_pn_val "$parsed" "open_todos")
+        local blockers=$(_pn_val "$parsed" "blockers")
+        local created=$(_pn_val "$parsed" "created")
 
         local note_status_tag=""
         [[ "$note_status" == "closed" ]] && note_status_tag=" (closed)"
 
-        printf "%-30s %-12s %d todos  %s%s\n" "$repo/$branch" "$type" "$todos" "$created" "$note_status_tag"
+        local machine_tag=""
+        [[ -n "$machine" ]] && machine_tag=" [$machine]"
+
+        local counts="${todos} todos"
+        (( blockers > 0 )) && counts="$counts, $blockers blockers"
+
+        printf "%-30s %-12s %s  %s%s%s\n" "$repo/$branch" "$type" "$counts" "$created" "$note_status_tag" "$machine_tag"
     done
 
     $found || echo "No branch notes found"
@@ -271,7 +830,7 @@ cmd_list() {
 
 # Close current branch's note
 cmd_close() {
-    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    require_git_context
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
     [[ ! -f "$note_file" ]] && { echo "No note for $NOTE_REPO/$NOTE_BRANCH" >&2; exit 1; }
 
@@ -288,9 +847,9 @@ cmd_prune() {
         local note_status=$(get_note_status "$note_file")
         [[ "$note_status" == "closed" ]] && continue
 
-        local note_dir=$(dirname "$note_file")
-        local branch=$(basename "$note_dir")
-        local repo=$(basename "$(dirname "$note_dir")")
+        local note_dir=${note_file:h}
+        local branch=${note_dir:t}
+        local repo=${note_dir:h:t}
 
         # Only prune worktree-based repos (those with a bare repo)
         [[ ! -d "$BARE_DIR/${repo}.git" ]] && continue
@@ -315,46 +874,59 @@ cmd_summary() {
 
     local total_todos=0
     local total_blockers=0
+    local total_research=0
+    local total_asks=0
     local details=""
     local found=false
 
-    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        local note_status=$(get_note_status "$note_file")
+    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
+    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
+    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+
+    for note_file in "${note_files[@]}"; do
+        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+        local note_status=$(_pn_val "$parsed" "status")
+        [[ -z "$note_status" ]] && note_status="active"
         [[ "$note_status" == "closed" ]] && continue
 
-        found=true
-        local note_dir=$(dirname "$note_file")
-        local branch=$(basename "$note_dir")
-        local repo=$(basename "$(dirname "$note_dir")")
+        local machine=$(_pn_val "$parsed" "machine")
+        [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && continue
 
-        local type=""
-        type=$(sed -n '/^---$/,/^---$/{ /^type:/s/^type: *//p; }' "$note_file")
+        found=true
+        local note_dir=${note_file:h}
+        local branch=${note_dir:t}
+        local repo=${note_dir:h:t}
+
+        local type=$(_pn_val "$parsed" "type")
         [[ -z "$type" ]] && type="-"
 
-        local todos=0
-        todos=$(grep -c '^\- \[ \]' "$note_file" 2>/dev/null || true)
-        total_todos=$((total_todos + todos))
+        local todos=$(_pn_val "$parsed" "open_todos")
+        local blockers=$(_pn_val "$parsed" "blockers")
+        local research=$(_pn_val "$parsed" "research")
+        local asks=$(_pn_val "$parsed" "asks")
 
-        # Count non-empty blocker lines
-        local blockers=0
-        blockers=$(awk '/^## Blockers$/{found=1; next} /^## |^---$/{found=0} found && /^- ./' "$note_file" | wc -l | tr -d ' ')
+        total_todos=$((total_todos + todos))
         total_blockers=$((total_blockers + blockers))
+        total_research=$((total_research + research))
+        total_asks=$((total_asks + asks))
 
         # Build per-branch detail
         local header="\n$repo/$branch ($type, $todos todos"
         (( blockers > 0 )) && header="$header, $blockers blockers"
+        (( research > 0 )) && header="$header, $research research"
+        (( asks > 0 )) && header="$header, $asks asks"
         header="$header)"
 
         local items=""
-        # Collect open todos
+        # Collect open todos from parsed output
         while IFS= read -r line; do
             [[ -n "$line" ]] && items="$items\n  ${line#- }"
-        done <<< "$(grep '^\- \[ \]' "$note_file" 2>/dev/null)"
+        done <<< "$(_pn_lines "$parsed" "OPEN_TODO")"
 
-        # Collect blockers
+        # Collect blockers from parsed output
         while IFS= read -r line; do
             [[ -n "$line" ]] && items="$items\n  [!] ${line#- }"
-        done <<< "$(awk '/^## Blockers$/{found=1; next} /^## |^---$/{found=0} found && /^- ./' "$note_file" 2>/dev/null)"
+        done <<< "$(_pn_lines "$parsed" "BLOCKER")"
 
         if (( todos > 0 )) || (( blockers > 0 )); then
             details="$details$header$items"
@@ -364,6 +936,8 @@ cmd_summary() {
     if $found; then
         echo "Open todos across all branches: $total_todos"
         echo "Blockers: $total_blockers"
+        (( total_research > 0 )) && echo "To Research: $total_research"
+        (( total_asks > 0 )) && echo "To Ask: $total_asks"
         [[ -n "$details" ]] && print "$details"
     else
         echo "No branch notes found"
@@ -372,28 +946,23 @@ cmd_summary() {
 
 # Refresh current branch: fetch, pull, build
 cmd_refresh() {
-    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    require_git_context
 
-    local bare_repo="$BARE_DIR/${NOTE_REPO}.git"
     local worktree_path
     worktree_path=$(pwd)
+    local bare_repo="$BARE_DIR/${NOTE_REPO}.git"
 
+    echo "Fetching origin for $NOTE_REPO..."
     if [[ -d "$bare_repo" ]]; then
-        echo "Fetching origin for $NOTE_REPO..."
         git --git-dir="$bare_repo" fetch origin
-
-        echo "Pulling $NOTE_BRANCH (ff-only)..."
-        git -C "$worktree_path" pull --ff-only
     else
-        # Regular repo (not bare)
-        echo "Fetching origin for $NOTE_REPO..."
         git -C "$worktree_path" fetch origin
-
-        echo "Pulling $NOTE_BRANCH (ff-only)..."
-        git -C "$worktree_path" pull --ff-only
     fi
 
-    run_build_sh "$NOTE_REPO" "$worktree_path"
+    echo "Pulling $NOTE_BRANCH (ff-only)..."
+    git -C "$worktree_path" pull --ff-only
+
+    run_script "$NOTE_REPO" "build" "$worktree_path"
     echo "Refresh complete: $NOTE_REPO/$NOTE_BRANCH"
 }
 
@@ -424,7 +993,7 @@ cmd_refresh_all() {
 
     # Phase 2: sequential update + build
     for bare in "${bare_repos[@]}"; do
-        local repo_name=$(basename "$bare" .git)
+        local repo_name=${${bare:t}%.git}
         local main_wt="$WORKTREE_DIR/${repo_name}/main"
 
         if [[ ! -d "$main_wt" ]]; then
@@ -436,7 +1005,7 @@ cmd_refresh_all() {
         echo -e "  ${BLUE}${repo_name}: updating main...${NC}"
 
         if git -C "$main_wt" merge --ff-only origin/main 2>/dev/null; then
-            if run_build_sh "$repo_name" "$main_wt"; then
+            if run_script "$repo_name" "build" "$main_wt"; then
                 echo -e "  ${GREEN}${repo_name}: updated${NC}"
                 updated=$((updated + 1))
             else
@@ -453,68 +1022,128 @@ cmd_refresh_all() {
     echo -e "Summary: ${GREEN}$updated updated${NC}, ${YELLOW}$skipped skipped${NC}, ${RED}$failed failed${NC}"
 }
 
-# Create build.sh template for current repo
-cmd_build_init() {
-    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+# Print main note dir path + list available scripts
+cmd_main() {
+    require_git_context
+    ensure_scripts_dir "$NOTE_REPO"
+    local main_dir="$NOTES_DIR/$NOTE_REPO/main"
+    echo "$main_dir"
 
-    local build_sh
-    build_sh=$(resolve_build_sh "$NOTE_REPO")
+    local scripts_dir="$main_dir/scripts"
+    local -a scripts
+    for f in "$scripts_dir"/*(Nx); do
+        scripts+=("$(basename "$f")")
+    done
+    if (( ${#scripts[@]} > 0 )); then
+        echo ""
+        echo "Scripts:"
+        for s in "${scripts[@]}"; do
+            echo "  $s"
+        done
+    else
+        echo ""
+        echo "No scripts yet. Create one with: bn script new <name>"
+    fi
+}
 
-    if [[ -f "$build_sh" ]]; then
-        if grep -q "$_BUILD_SH_PLACEHOLDER_MARKER" "$build_sh" 2>/dev/null; then
-            echo "Replacing placeholder build.sh with full template..."
-        else
-            echo "build.sh already exists and has been customized: $build_sh" >&2
-            echo "Use 'bn build-edit' to modify it." >&2
-            exit 1
-        fi
+# Run a named script (default: build)
+cmd_build() {
+    local name="${1:-build}"
+    require_git_context
+    ensure_scripts_dir "$NOTE_REPO"
+
+    local script
+    resolve_script "$NOTE_REPO" "$name"; script=$REPLY
+    if [[ ! -f "$script" ]]; then
+        echo "No script '$name' for $NOTE_REPO" >&2
+        echo "Create one with: bn script new $name" >&2
+        exit 1
+    fi
+    if [[ ! -x "$script" ]]; then
+        chmod +x "$script"
     fi
 
-    mkdir -p "$(dirname "$build_sh")"
-    cat > "$build_sh" << 'BUILDEOF'
+    local work_dir
+    work_dir=$(pwd)
+    echo "Running scripts/$name for $NOTE_REPO..."
+    (cd "$work_dir" && "$script")
+}
+
+# Script management: new, edit, list
+cmd_script() {
+    local subcmd="${1:-}"
+    shift 2>/dev/null || true
+
+    case "$subcmd" in
+        new)
+            local name="$1"
+            [[ -z "$name" ]] && { echo "Usage: bn script new <name>" >&2; exit 1; }
+            require_git_context
+            ensure_scripts_dir "$NOTE_REPO"
+
+            local script
+            resolve_script "$NOTE_REPO" "$name"; script=$REPLY
+            if [[ -f "$script" ]]; then
+                echo "Script '$name' already exists: $script" >&2
+                echo "Use 'bn script edit $name' to modify it." >&2
+                exit 1
+            fi
+
+            cat > "$script" << SCRIPTEOF
 #!/usr/bin/env zsh
 set -e
 
-# Build script for this repo — runs after worktree create and on refresh.
-# Uncomment/modify the section that matches your project:
+# $name script for $NOTE_REPO
+# Runs with cwd set to the repo/worktree directory.
 
-# --- Rust ---
-# cargo build
+SCRIPTEOF
+            chmod +x "$script"
+            echo "Created: $script"
+            echo "Edit with: bn script edit $name"
+            ;;
+        edit)
+            local name="$1"
+            [[ -z "$name" ]] && { echo "Usage: bn script edit <name>" >&2; exit 1; }
+            require_git_context
+            ensure_scripts_dir "$NOTE_REPO"
 
-# --- Node ---
-# npm install
+            local script
+            resolve_script "$NOTE_REPO" "$name"; script=$REPLY
+            if [[ ! -f "$script" ]]; then
+                echo "No script '$name' for $NOTE_REPO. Create one with: bn script new $name" >&2
+                exit 1
+            fi
+            ${EDITOR:-nvim} "$script"
+            ;;
+        list|l|"")
+            require_git_context
+            ensure_scripts_dir "$NOTE_REPO"
 
-# --- Go ---
-# go build ./...
-
-# --- Make ---
-# make
-
-echo "Build complete."
-BUILDEOF
-    chmod +x "$build_sh"
-    echo "Created: $build_sh"
-    echo "Edit with: bn build-edit"
-}
-
-# Open build.sh in editor
-cmd_build_edit() {
-    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
-
-    local build_sh
-    build_sh=$(resolve_build_sh "$NOTE_REPO")
-
-    if [[ ! -f "$build_sh" ]]; then
-        echo "No build.sh for $NOTE_REPO. Create one with: bn build-init" >&2
-        exit 1
-    fi
-
-    ${EDITOR:-nvim} "$build_sh"
+            local scripts_dir="$NOTES_DIR/$NOTE_REPO/main/scripts"
+            local -a scripts
+            for f in "$scripts_dir"/*(Nx); do
+                scripts+=("${f:t}")
+            done
+            if (( ${#scripts[@]} > 0 )); then
+                echo "Scripts for $NOTE_REPO:"
+                for s in "${scripts[@]}"; do
+                    echo "  $s"
+                done
+            else
+                echo "No scripts for $NOTE_REPO"
+                echo "Create one with: bn script new <name>"
+            fi
+            ;;
+        *)
+            echo "Usage: bn script [new <name>|edit <name>|list]" >&2
+            exit 1
+            ;;
+    esac
 }
 
 # Status: one-line summary for current branch
 cmd_status() {
-    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    require_git_context
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
     if [[ ! -f "$note_file" ]]; then
         echo "$NOTE_REPO/$NOTE_BRANCH: no note"
@@ -539,27 +1168,32 @@ cmd_status() {
 cmd_todo() {
     [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
 
+    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
+    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
+    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+
     local found=false
-    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        local note_status=$(get_note_status "$note_file")
+    for note_file in "${note_files[@]}"; do
+        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+        local note_status=$(_pn_val "$parsed" "status")
+        [[ -z "$note_status" ]] && note_status="active"
         [[ "$note_status" == "closed" ]] && continue
 
-        local todos=()
-        while IFS= read -r line; do
-            [[ -n "$line" ]] && todos+=("$line")
-        done <<< "$(grep '^\- \[ \]' "$note_file" 2>/dev/null)"
+        local machine=$(_pn_val "$parsed" "machine")
+        [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && continue
 
-        [[ ${#todos[@]} -eq 0 ]] && continue
+        local open_todos=$(_pn_val "$parsed" "open_todos")
+        (( open_todos == 0 )) && continue
 
         found=true
-        local note_dir=$(dirname "$note_file")
-        local branch=$(basename "$note_dir")
-        local repo=$(basename "$(dirname "$note_dir")")
+        local note_dir=${note_file:h}
+        local branch=${note_dir:t}
+        local repo=${note_dir:h:t}
 
         echo -e "${BLUE}${repo}/${branch}${NC}"
-        for todo in "${todos[@]}"; do
-            echo "  $todo"
-        done
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && echo "  $line"
+        done <<< "$(_pn_lines "$parsed" "OPEN_TODO")"
     done
 
     $found || echo "No open todos"
@@ -599,9 +1233,9 @@ cmd_archive() {
         [[ -z "$created" ]] && continue
         [[ "$created" > "$cutoff" ]] && continue
 
-        local note_dir=$(dirname "$note_file")
-        local branch=$(basename "$note_dir")
-        local repo=$(basename "$(dirname "$note_dir")")
+        local note_dir=${note_file:h}
+        local branch=${note_dir:t}
+        local repo=${note_dir:h:t}
 
         local dest="$NOTES_DIR/archive/$repo/$branch"
 
@@ -613,7 +1247,7 @@ cmd_archive() {
         echo -e "${YELLOW}Archive: $repo/$branch${NC} (created $created)"
 
         if ! $dry_run; then
-            mkdir -p "$(dirname "$dest")"
+            mkdir -p "${dest:h}"
             mv "$note_dir" "$dest"
             archived=$((archived + 1))
             affected_paths+=("$repo/$branch")
@@ -648,46 +1282,6 @@ cmd_archive() {
     fi
 }
 
-# Extract non-placeholder items from a named section of a note file.
-# Todos:   skips bare "- [ ]" and "- [ ] test"
-# Others:  skips bare "-" lines
-# Prints one item per line; returns 1 if section is empty/missing.
-_section_items() {
-    local note_file="$1" heading="$2"
-    local -a items
-    # Capture lines between the heading and the next heading/frontmatter fence
-    while IFS= read -r line; do
-        [[ -n "$line" ]] && items+=("$line")
-    done <<< "$(awk "/^${heading}\$/{found=1; next} /^## |^---\$/{found=0} found && /^- /" "$note_file" 2>/dev/null)"
-
-    # Filter out placeholders
-    local -a real
-    for item in "${items[@]}"; do
-        # Skip bare todo placeholder and bare bullet
-        [[ "$item" =~ '^- \[ \]( test)?$' ]] && continue
-        [[ "$item" == "-" ]] && continue
-        real+=("$item")
-    done
-
-    (( ${#real[@]} == 0 )) && return 1
-    for item in "${real[@]}"; do
-        echo "  $item"
-    done
-}
-
-# Remove placeholder lines from a note file:
-#   todos:  bare "- [ ]" or "- [ ] test"
-#   others: bare "-" lines
-_clean_note() {
-    local note_file="$1"
-    local before after
-    before=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
-    (( before == 0 )) && return 0
-    sed -i '' -E '/^- \[ \]( test)?$/d; /^-$/d' "$note_file"
-    after=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
-    echo "  Removed $(( before - after )) placeholder(s)"
-}
-
 # Strip placeholder lines from notes
 cmd_clean() {
     local all=false
@@ -699,9 +1293,9 @@ cmd_clean() {
         for note_file in "$NOTES_DIR"/*/*/note.md(N); do
             note_status=$(get_note_status "$note_file")
             [[ "$note_status" == "closed" ]] && continue
-            note_dir=$(dirname "$note_file")
-            branch=$(basename "$note_dir")
-            repo=$(basename "$(dirname "$note_dir")")
+            note_dir=${note_file:h}
+            branch=${note_dir:t}
+            repo=${note_dir:h:t}
             count=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
             (( count == 0 )) && continue
             echo "${repo}/${branch}:"
@@ -710,7 +1304,7 @@ cmd_clean() {
         done
         (( cleaned == 0 )) && echo "No placeholders found" || print "\nTotal removed: $cleaned"
     else
-        resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+        require_git_context
         local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md" count
         [[ ! -f "$note_file" ]] && { echo "No note for $NOTE_REPO/$NOTE_BRANCH" >&2; exit 1; }
         count=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
@@ -727,54 +1321,81 @@ cmd_clean() {
 cmd_worktrees() {
     [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
 
-    local found=false total_todos=0 out
-    local note_status note_dir branch repo created type meta todo_count
-    local -a todos
+    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
+    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
+    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
 
-    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        note_status=$(get_note_status "$note_file")
+    local found=false total_todos=0
+    local note_dir branch repo created type meta
+    local parsed note_status machine
+    local todo_count blockers_count research_count decisions_count asks_count
+
+    for note_file in "${note_files[@]}"; do
+        parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+        note_status=$(_pn_val "$parsed" "status")
+        [[ -z "$note_status" ]] && note_status="active"
         [[ "$note_status" == "closed" ]] && continue
 
+        machine=$(_pn_val "$parsed" "machine")
+        [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && continue
+
         found=true
-        note_dir=$(dirname "$note_file")
-        branch=$(basename "$note_dir")
-        repo=$(basename "$(dirname "$note_dir")")
-        created=$(sed -n '/^---$/,/^---$/{ /^created:/s/^created: *//p; }' "$note_file")
-        type=$(sed -n '/^---$/,/^---$/{ /^type:/s/^type: *//p; }' "$note_file")
+        note_dir=${note_file:h}
+        branch=${note_dir:t}
+        repo=${note_dir:h:t}
+        created=$(_pn_val "$parsed" "created")
+        type=$(_pn_val "$parsed" "type")
 
-        todos=()
-        while IFS= read -r line; do
-            [[ -n "$line" ]] && todos+=("$line")
-        done <<< "$(_section_items "$note_file" "## Todos" 2>/dev/null)"
+        todo_count=$(_pn_val "$parsed" "todos")
+        total_todos=$(( total_todos + $(_pn_val "$parsed" "open_todos") ))
 
-        todo_count=${#todos[@]}
-        total_todos=$(( total_todos + todo_count ))
+        local pr=$(_pn_val "$parsed" "pr")
 
         meta="${created}"
         [[ -n "$type" ]] && meta="${meta}  ${type}"
+        [[ -n "$pr" ]] && meta="${meta}  ${GREEN}PR${NC} $pr"
         echo -e "${BLUE}${repo}/${branch}${NC}  ${meta}"
 
-        if (( todo_count > 0 )); then
+        # Todos (both open and completed, from _parse_note)
+        local open_todos=$(_pn_val "$parsed" "open_todos")
+        if (( open_todos > 0 )); then
             echo -e "  ${YELLOW}Todos${NC}"
-            for todo in "${todos[@]}"; do echo "$todo"; done
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "  $line"
+            done <<< "$(_pn_lines "$parsed" "OPEN_TODO")"
         fi
 
-        out=$(_section_items "$note_file" "## Blockers") && {
+        blockers_count=$(_pn_val "$parsed" "blockers")
+        if (( blockers_count > 0 )); then
             echo -e "  ${RED}Blockers${NC}"
-            echo "$out"
-        }
-        out=$(_section_items "$note_file" "## To Research") && {
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "  $line"
+            done <<< "$(_pn_lines "$parsed" "BLOCKER")"
+        fi
+
+        research_count=$(_pn_val "$parsed" "research")
+        if (( research_count > 0 )); then
             echo -e "  ${GREEN}Research${NC}"
-            echo "$out"
-        }
-        out=$(_section_items "$note_file" "## Decisions") && {
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "  $line"
+            done <<< "$(_pn_lines "$parsed" "RESEARCH")"
+        fi
+
+        decisions_count=$(_pn_val "$parsed" "decisions")
+        if (( decisions_count > 0 )); then
             echo -e "  ${YELLOW}Decisions${NC}"
-            echo "$out"
-        }
-        out=$(_section_items "$note_file" "## To Ask") && {
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "  $line"
+            done <<< "$(_pn_lines "$parsed" "DECISION")"
+        fi
+
+        asks_count=$(_pn_val "$parsed" "asks")
+        if (( asks_count > 0 )); then
             echo -e "  ${NC}To Ask${NC}"
-            echo "$out"
-        }
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "  $line"
+            done <<< "$(_pn_lines "$parsed" "ASK")"
+        fi
         echo ""
     done
 
@@ -787,7 +1408,7 @@ cmd_worktrees() {
 
 # Repo-level global note (not branch-specific)
 cmd_global() {
-    resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    require_git_context
     local subcmd="${1:-}"
     shift 2>/dev/null || true
 
@@ -824,126 +1445,236 @@ cmd_global() {
     esac
 }
 
-# Main
-case "${1:-}" in
-    --path)
-        resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
-        echo "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
-        ;;
-    --cat)
-        resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
-        local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
-        # Auto-prune: if note is active, repo is bare-based, and worktree is gone
-        if [[ -f "$note_file" && -d "$BARE_DIR/${NOTE_REPO}.git" ]]; then
-            local wt_path="$WORKTREE_DIR/${NOTE_REPO}/${NOTE_BRANCH}"
-            if [[ ! -d "$wt_path" ]] && [[ "$(get_note_status "$note_file")" == "active" ]]; then
-                set_note_status "$note_file" "closed"
-                echo "Auto-closed: $NOTE_REPO/$NOTE_BRANCH (worktree removed)" >&2
-            fi
-        fi
-        local file="${2:-note.md}"
-        cat "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/$file"
-        ;;
-    --edit)
-        resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+# PR link management: store, open, or show PR URL
+cmd_pr() {
+    require_git_context
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    local action="open"
+    local url=""
+
+    # Parse args
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --copy|-c) action="copy"; shift ;;
+            --show|-s) action="show"; shift ;;
+            *) url="$1"; shift ;;
+        esac
+    done
+
+    if [[ -n "$url" ]]; then
+        # Setting a PR link
         ensure_note
-        local file="${2:-note.md}"
-        ${EDITOR:-nvim} "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/$file"
-        ;;
-    add)
-        shift
-        cmd_add "$@"
-        ;;
-    list)
-        shift
-        cmd_list "$@"
-        ;;
-    active)
-        cmd_list
-        ;;
-    close)
-        cmd_close
-        ;;
-    prune)
-        cmd_prune
-        ;;
-    summary)
-        cmd_summary
-        ;;
-    status)
-        cmd_status
-        ;;
-    todo|todos)
-        cmd_todo
-        ;;
-    refresh)
-        cmd_refresh
-        ;;
-    refresh-all)
-        cmd_refresh_all
-        ;;
-    build-init)
-        cmd_build_init
-        ;;
-    build-edit)
-        cmd_build_edit
-        ;;
-    archive)
-        shift
-        cmd_archive "$@"
-        ;;
-    clean)
-        shift
-        cmd_clean "$@"
-        ;;
-    worktrees)
-        cmd_worktrees
-        ;;
-    global)
-        shift
-        cmd_global "$@"
-        ;;
-    -h|--help|help)
-        cat << 'HELPEOF'
+        _set_frontmatter "$note_file" "pr" "$url"
+        echo "PR linked: $url"
+        return
+    fi
+
+    # No URL arg: resolve from note or gh
+    if [[ ! -f "$note_file" ]]; then
+        echo "No note for $NOTE_REPO/$NOTE_BRANCH" >&2
+        exit 1
+    fi
+
+    _frontmatter_val "$note_file" "pr"
+    local pr_url="$REPLY"
+
+    if [[ -z "$pr_url" ]]; then
+        # No PR stored — try to find one via gh
+        if command -v gh &>/dev/null; then
+            pr_url=$(gh pr view --json url -q .url 2>/dev/null)
+        fi
+        if [[ -z "$pr_url" ]]; then
+            echo "No PR linked for $NOTE_REPO/$NOTE_BRANCH"
+            echo "Usage: bn pr <url>"
+            return 1
+        fi
+        # Auto-save the discovered PR
+        _set_frontmatter "$note_file" "pr" "$pr_url"
+        echo "Auto-linked: $pr_url"
+    fi
+
+    case "$action" in
+        copy)
+            _copy_to_clipboard "$pr_url" && echo "Copied: $pr_url"
+            ;;
+        show)
+            echo "$pr_url"
+            ;;
+        open)
+            _open_url "$pr_url"
+            echo "Opened: $pr_url"
+            ;;
+    esac
+}
+
+# Work item link management
+cmd_link() {
+    require_git_context
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    local action="open"
+    local id=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --copy|-c) action="copy"; shift ;;
+            --show|-s) action="show"; shift ;;
+            *) id="$1"; shift ;;
+        esac
+    done
+
+    if [[ -n "$id" ]]; then
+        ensure_note
+        _set_frontmatter "$note_file" "work_item" "$id"
+        echo "Work item linked: $id"
+        return
+    fi
+
+    # Read existing work_item
+    if [[ ! -f "$note_file" ]]; then
+        echo "No note for $NOTE_REPO/$NOTE_BRANCH" >&2
+        exit 1
+    fi
+
+    _frontmatter_val "$note_file" "work_item"
+    local wi="$REPLY"
+
+    if [[ -z "$wi" ]]; then
+        echo "No work item linked for $NOTE_REPO/$NOTE_BRANCH"
+        echo "Usage: bn link <id>"
+        return 1
+    fi
+
+    # Build URL (Azure DevOps)
+    local wi_url="https://dev.azure.com/office/Office/_workitems/edit/${wi}"
+
+    case "$action" in
+        copy) _copy_to_clipboard "$wi_url" && echo "Copied: $wi_url" ;;
+        show) echo "$wi_url" ;;
+        open) _open_url "$wi_url" && echo "Opened: $wi_url" || echo "$wi_url" ;;
+    esac
+}
+
+# Show git diff stat alongside open todos
+cmd_diff() {
+    require_git_context
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+
+    echo -e "${BLUE}Changes ($NOTE_REPO/$NOTE_BRANCH vs main)${NC}"
+    local diff_stat
+    diff_stat=$(git diff --stat origin/main..HEAD 2>/dev/null)
+    if [[ -z "$diff_stat" ]]; then
+        echo "  (no changes vs main)"
+    else
+        echo "$diff_stat" | sed 's/^/  /'
+    fi
+
+    if [[ -f "$note_file" ]]; then
+        local parsed=$(_parse_note "$note_file")
+        local open_todos=$(_pn_val "$parsed" "open_todos")
+        if (( open_todos > 0 )); then
+            echo ""
+            echo -e "${YELLOW}Open todos${NC}"
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "  $line"
+            done <<< "$(_pn_lines "$parsed" "OPEN_TODO")"
+        fi
+
+        local blockers=$(_pn_val "$parsed" "blockers")
+        if (( blockers > 0 )); then
+            echo ""
+            echo -e "${RED}Blockers${NC}"
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "  $line"
+            done <<< "$(_pn_lines "$parsed" "BLOCKER")"
+        fi
+    fi
+
+    echo ""
+    local commits
+    commits=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
+    echo -e "${GREEN}${commits} commit(s) ahead of main${NC}"
+}
+
+cmd_help() {
+    cat << 'HELPEOF'
 Usage: bn [command]
 
 Commands:
   (none)                          Ensure note exists, print dir path
-  --path                          Print note dir path (no create)
-  --cat [file]                    Print note.md (or specific file)
-  --edit [file]                   Open note in $EDITOR
-  add <section> <text>            Add line to section
-  list [--all]                    List active notes (--all includes closed)
+  --path, -p                      Print note dir path (no create)
+  --cat, -c [file]                Print note.md (or specific file)
+  --edit, -e [file]               Open note in $EDITOR
+  add, a <section> <text>         Add line to section
+  list, l [--all] [--all-machines] List active notes
   active                          List active notes (same as list)
   close                           Close current branch's note
   prune                           Close notes whose worktrees are gone
-  summary                         Dashboard of active work
-  status                          One-line status for current branch
-  todo                            List open todos across all branches
-  refresh                          Fetch, pull, build current branch
-  refresh-all                      Refresh all main worktrees
-  build-init                       Create build.sh template for repo (replaces placeholder)
-  build-edit                       Open build.sh in \$EDITOR
-  archive [--days N] [--dry-run]   Archive closed notes older than N days (default 30)
-  clean [--all]                    Remove empty placeholder todos (current note, or all active)
-  worktrees                        All active worktrees with their full todo lists
-  global [--cat|--edit|--path]     Repo-level global note (not branch-specific)
-  global add <section> <text>      Add to repo global note
+  summary, s                      Dashboard of active work
+  status, st                      One-line status for current branch
+  todo, t                         List open todos across all branches
+  refresh, r                      Fetch, pull, build current branch
+  refresh-all, ra                 Refresh all main worktrees
+  main, m                         Print main note dir + list scripts
+  build, b [name]                 Run a script (default: build)
+  script, sc [new|edit|list]      Manage repo scripts
+  files, f                        List investigation files in current branch
+  files <name>                    Print contents of investigation file
+  files new <name>                Create new investigation file
+  files edit <name>               Open investigation file in $EDITOR
+  archive [--days N] [--dry-run]  Archive closed notes older than N days (default 30)
+  clean [--all]                   Remove empty placeholder todos
+  worktrees, w                    All active worktrees with full todo lists
+  pr [url]                        Link PR url, or open linked PR in browser
+  pr --copy                       Copy PR url to clipboard
+  pr --show                       Print PR url without opening
+  link, wi [id]                   Link work item ID, or open linked work item
+  link --copy                     Copy work item url to clipboard
+  diff, d                         Git diff stat vs main + open todos
+  global, g [--cat|--edit|--path] Repo-level global note (not branch-specific)
+  global add <section> <text>     Add to repo global note
 
-Notes:
-  A placeholder build.sh is auto-created on first note access.
-  Use 'bn build-init' to replace it with a full template.
+Scripts:
+  Scripts live in <notes>/<repo>/main/scripts/ and run with cwd = repo dir.
+  Use 'bn script new <name>' to create, 'bn script edit <name>' to modify.
+
+Filtering:
+  By default, list/summary/todo/worktrees only show notes for this machine.
+  Notes without a machine field are always shown.
+  Use --all-machines with list to see notes from all hosts.
 
 Sections: todo, blocker, decision, research, collab, ask
 HELPEOF
-        ;;
-    "")
-        resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
-        ensure_note
-        echo "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
-        ;;
-    *)
-        echo "Unknown command: $1" >&2
-        exit 1
-        ;;
+}
+
+# --- Dispatch ---
+
+case "${1:-}" in
+    --path|-p)          cmd_path ;;
+    --cat|-c)           shift; cmd_cat "$@" ;;
+    --edit|-e)          shift; cmd_edit "$@" ;;
+    add|a)              shift; cmd_add "$@" ;;
+    list|l)             shift; cmd_list "$@" ;;
+    active)             cmd_list ;;
+    close)              cmd_close ;;
+    prune)              cmd_prune ;;
+    summary|s)          cmd_summary ;;
+    status|st)          cmd_status ;;
+    todo|todos|t)       shift; if [[ -n "$1" ]]; then cmd_add todo "$@"; else cmd_todo; fi ;;
+    refresh|r)          shift; if [[ -n "$1" ]]; then cmd_add research "$@"; else cmd_refresh; fi ;;
+    refresh-all|ra)     cmd_refresh_all ;;
+    main|m)             cmd_main ;;
+    blocker|x)          shift; cmd_add blocker "$@" ;;
+    build|b)            shift; cmd_build "$@" ;;
+    script|sc)          shift; cmd_script "$@" ;;
+    archive)            shift; cmd_archive "$@" ;;
+    clean)              shift; cmd_clean "$@" ;;
+    files|f)            shift; cmd_files "$@" ;;
+    worktrees|w)        cmd_worktrees ;;
+    pr)                 shift; cmd_pr "$@" ;;
+    link|wi)            shift; cmd_link "$@" ;;
+    diff|d)             cmd_diff ;;
+    global|g)           shift; cmd_global "$@" ;;
+    -h|--help|help)     cmd_help ;;
+    "")                 cmd_default ;;
+    *)                  echo "Unknown command: $1" >&2; exit 1 ;;
 esac

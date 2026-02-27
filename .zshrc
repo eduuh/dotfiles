@@ -39,7 +39,7 @@ export NVM_DIR="$HOME/.nvm"
 # Load Lazy Load
 [ -f "$HOME/projects/dotfiles/.zsh_lazy_load" ] && source "$HOME/projects/dotfiles/.zsh_lazy_load"
 
-[ -f "$HOME/projects/personal-notes/scripts/ws.zsh" ] && source "$HOME/projects/personal-notes/scripts/ws.zsh"
+[ -f "$HOME/.zsh/ws.zsh" ] && source "$HOME/.zsh/ws.zsh"
 
 # pnpm
 export PNPM_HOME="/Users/edd/Library/pnpm"
@@ -78,6 +78,9 @@ unalias r 2>/dev/null  # override zsh's default r=fc (repeat last command)
 r() { "$HOME/.bin/bn" add research "$*" }
 c() { "$HOME/.bin/bn" add collab "$*" }
 a() { "$HOME/.bin/bn" add ask "$*" }
+
+# bn tab completion
+[ -f "$HOME/.bin/_bn_completion.zsh" ] && source "$HOME/.bin/_bn_completion.zsh"
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm

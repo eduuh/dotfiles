@@ -3,7 +3,7 @@
 # Usage: tmux-sync-repos.sh <prefix> [base_dir]
 # When prefix matches a repo name in worktree/, opens all its branch worktrees as synced panes
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 require_tmux
 tmux_init

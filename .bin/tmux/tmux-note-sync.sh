@@ -3,7 +3,7 @@
 # Called by tmux hooks (after-new-window, window-renamed) via run-shell -b
 # Never auto-creates notes — only appends to existing ones.
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 NOTES_DIR="$HOME/projects/personal-notes/branch-notes"
 

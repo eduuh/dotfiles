@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
 # tmux-note.sh - Open branch note in tmux popup
-# Called via: bind n display-popup -E ... "$HOME/.bin/tmux-note.sh '#{pane_current_path}'"
+# Called via: bind n display-popup -E ... "$HOME/.bin/tmux/tmux-note.sh '#{pane_current_path}'"
 
-source "$HOME/.bin/tmux-lib.sh"
+source "$HOME/.bin/tmux/tmux-lib.sh"
 
 NOTES_DIR="$HOME/projects/personal-notes/branch-notes"
 
