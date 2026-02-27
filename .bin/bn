@@ -450,9 +450,13 @@ _parse_note() {
         if (in_front) { in_front = 0; next }
     }
     in_front {
-        # Extract frontmatter key: value
-        if (match($0, /^([a-z_]+): *(.*)$/, m)) {
-            print m[1] "=" m[2]
+        # Extract frontmatter key: value (BSD awk compatible)
+        if ($0 ~ /^[a-z_]+: ?/) {
+            match($0, /^[a-z_]+/)
+            key = substr($0, RSTART, RLENGTH)
+            val = substr($0, RSTART + RLENGTH)
+            sub(/^: */, "", val)
+            print key "=" val
         }
         next
     }
@@ -547,8 +551,13 @@ _parse_all_notes() {
         if (in_front) { in_front = 0; next }
     }
     in_front {
-        if (match($0, /^([a-z_]+): *(.*)$/, m)) {
-            print cur_file "|" m[1] "=" m[2]
+        # BSD awk compatible frontmatter parsing (no 3-arg match)
+        if ($0 ~ /^[a-z_]+: ?/) {
+            match($0, /^[a-z_]+/)
+            key = substr($0, RSTART, RLENGTH)
+            val = substr($0, RSTART + RLENGTH)
+            sub(/^: */, "", val)
+            print cur_file "|" key "=" val
         }
         next
     }
