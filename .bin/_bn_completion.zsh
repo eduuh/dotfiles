@@ -128,4 +128,4 @@ _bn() {
     esac
 }
 
-compdef _bn bn
+(( $+functions[compdef] )) && compdef _bn bn
