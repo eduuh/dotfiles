@@ -602,20 +602,29 @@ change_shell_to_zsh() {
         return 0
     fi
 
-    if [[ "$SHELL" != "/bin/zsh" ]]; then
-        echo "Changing default shell to zsh..."
+    local zsh_path
+    zsh_path=$(command -v zsh)
+
+    if [[ "$SHELL" != "$zsh_path" ]]; then
+        echo "Changing default shell to zsh ($zsh_path)..."
 
         # Handle platform-specific shell change commands
         case "$(detect_distro)" in
             darwin)
                 # macOS doesn't need sudo for chsh
-                if ! chsh -s /bin/zsh; then
+                if ! chsh -s "$zsh_path"; then
+                    track_failure "shell" "Failed to change shell to zsh"
+                fi
+                ;;
+            termux)
+                # Termux has no sudo; chsh works directly
+                if ! chsh -s "$zsh_path"; then
                     track_failure "shell" "Failed to change shell to zsh"
                 fi
                 ;;
             *)
                 # Linux distributions typically need sudo
-                if ! sudo chsh -s /bin/zsh $USER; then
+                if ! sudo chsh -s "$zsh_path" "$USER"; then
                     track_failure "shell" "Failed to change shell to zsh"
                 fi
                 ;;
