@@ -169,6 +169,7 @@ clone_repos() {
     if [ "$CODESPACES" = "true" ]; then
         REPOSITORIES=(
             "https://github.com/eduuh/dotfiles.git"
+            "git@github.com:eduuh-private/personal-notes.git"
         )
     else
         REPOSITORIES=(
