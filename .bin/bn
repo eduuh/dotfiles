@@ -24,7 +24,10 @@
 #   bn worktrees|w                  # All active worktrees with details
 #   bn pr [url] [--copy|--show]     # Link/open PR for current branch
 #   bn link|wi [id] [--copy|--show] # Link/open work item
+#   bn review|rv [pr-id|new|edit]    # PR review management
 #   bn diff|d                       # Git diff stat + open todos
+#   bn achieve|ac "<title>"          # Log an achievement
+#   bn achieve --list|--edit|--path  # Manage achievements
 #   bn global|g [subcmd]            # Repo-level global note
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
@@ -164,6 +167,9 @@ _render_template() {
             branch-note.md) _branch_note_template_inline "${(@)@}" ;;
             global-note.md) _global_note_template_inline "${(@)@}" ;;
             investigation.md) _investigation_template_inline "${(@)@}" ;;
+            pr-review.md) _pr_review_template_inline "${(@)@}" ;;
+            achievement.md) _achievement_template_inline "${(@)@}" ;;
+            achievements-header.md) _achievements_header_template_inline "${(@)@}" ;;
             *) echo "Unknown template: $tmpl_name" >&2; return 1 ;;
         esac
     fi
@@ -280,6 +286,86 @@ _investigation_template_inline() {
 
 ## Findings
 
+EOF
+}
+
+_pr_review_template_inline() {
+    local pr_id="" title="" author="" url="" date="" repo="" branch=""
+    for pair in "$@"; do
+        case "${pair%%=*}" in
+            PR_ID) pr_id="${pair#*=}" ;; TITLE) title="${pair#*=}" ;;
+            AUTHOR) author="${pair#*=}" ;; URL) url="${pair#*=}" ;;
+            DATE) date="${pair#*=}" ;; REPO) repo="${pair#*=}" ;;
+            BRANCH) branch="${pair#*=}" ;;
+        esac
+    done
+    cat << EOF
+# PR Review: ${title:-#$pr_id}
+<!-- Created: $date | Branch: $repo/$branch -->
+<!-- PR: $url -->
+
+## Overview
+
+| Field | Value |
+|-------|-------|
+| PR | #$pr_id |
+| Author | $author |
+| Status | |
+
+## Summary
+
+
+## Review Findings
+
+
+## Verdict
+
+EOF
+}
+
+_achievement_template_inline() {
+    local title="" date="" branch="" pr="" work_item=""
+    for pair in "$@"; do
+        case "${pair%%=*}" in
+            TITLE) title="${pair#*=}" ;; DATE) date="${pair#*=}" ;;
+            BRANCH) branch="${pair#*=}" ;; PR) pr="${pair#*=}" ;;
+            WORK_ITEM) work_item="${pair#*=}" ;;
+        esac
+    done
+    cat << EOF
+### $title
+<!-- $date | branch: $branch | PR: $pr | WI: $work_item -->
+
+**Goal:**
+
+
+**Why it matters:**
+
+
+**What I did:**
+-
+
+**Impact/Strengths demonstrated:**
+-
+EOF
+}
+
+_achievements_header_template_inline() {
+    local repo="" date=""
+    for pair in "$@"; do
+        case "${pair%%=*}" in
+            REPO) repo="${pair#*=}" ;; DATE) date="${pair#*=}" ;;
+        esac
+    done
+    cat << EOF
+---
+repo: $repo
+created: $date
+---
+
+# Achievements — $repo
+
+<!-- Reverse-chronological log of completed work. Use for promotion docs, 1:1s, and performance reviews. -->
 EOF
 }
 
@@ -838,6 +924,94 @@ cmd_list() {
 }
 
 # Close current branch's note
+# --- Achievements ---
+
+# Ensure achievements.md exists for a repo, creating with header if needed.
+_ensure_achievements_file() {
+    local achievements_file="$NOTES_DIR/$NOTE_REPO/achievements.md"
+    if [[ ! -f "$achievements_file" ]]; then
+        mkdir -p "$NOTES_DIR/$NOTE_REPO"
+        _render_template achievements-header.md \
+            "REPO=$NOTE_REPO" "DATE=$(date +%Y-%m-%d)" > "$achievements_file"
+    fi
+    REPLY="$achievements_file"
+}
+
+# Append an achievement entry. Opens $EDITOR with pre-filled template, then appends to achievements.md.
+# Usage: _append_achievement "Title" [note_file]
+_append_achievement() {
+    local title="$1"
+    local note_file="${2:-}"
+    local date=$(date +%Y-%m-%d)
+    local branch="${NOTE_BRANCH:-}"
+    local pr="" work_item=""
+
+    # Extract metadata from branch note if available
+    if [[ -n "$note_file" && -f "$note_file" ]]; then
+        _frontmatter_val "$note_file" "pr"; pr="$REPLY"
+        _frontmatter_val "$note_file" "work_item"; work_item="$REPLY"
+    fi
+
+    # Render the entry template to a temp file
+    local tmpfile=$(mktemp /tmp/bn-achieve-XXXXXX.md)
+    _render_template achievement.md \
+        "TITLE=$title" "DATE=$date" "BRANCH=$branch" \
+        "PR=$pr" "WORK_ITEM=$work_item" > "$tmpfile"
+
+    # Open in editor
+    ${EDITOR:-nvim} "$tmpfile"
+
+    # Check if user actually wrote something (beyond the template skeleton)
+    if ! grep -qvE '^\s*$|^###|^<!--|^\*\*|^-$' "$tmpfile"; then
+        echo "Achievement entry empty, discarded."
+        rm -f "$tmpfile"
+        return 1
+    fi
+
+    # Ensure achievements file exists
+    _ensure_achievements_file
+    local achievements_file="$REPLY"
+
+    # Append entry with a blank line separator
+    echo "" >> "$achievements_file"
+    cat "$tmpfile" >> "$achievements_file"
+    rm -f "$tmpfile"
+
+    echo "Achievement logged to: $achievements_file"
+}
+
+cmd_achieve() {
+    require_git_context
+    local subcmd="${1:-}"
+
+    case "$subcmd" in
+        --list|-l)
+            _ensure_achievements_file
+            cat "$REPLY"
+            ;;
+        --edit|-e)
+            _ensure_achievements_file
+            ${EDITOR:-nvim} "$REPLY"
+            ;;
+        --path|-p)
+            echo "$NOTES_DIR/$NOTE_REPO/achievements.md"
+            ;;
+        "")
+            echo "Usage: bn achieve \"<title>\"" >&2
+            echo "       bn achieve --list    # Show achievements" >&2
+            echo "       bn achieve --edit    # Edit achievements.md" >&2
+            echo "       bn achieve --path    # Print path" >&2
+            return 1
+            ;;
+        *)
+            # Positional arg is the title
+            local title="$*"
+            local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+            _append_achievement "$title" "$note_file"
+            ;;
+    esac
+}
+
 cmd_close() {
     require_git_context
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
@@ -845,6 +1019,31 @@ cmd_close() {
 
     set_note_status "$note_file" "closed"
     echo "Closed note: $NOTE_REPO/$NOTE_BRANCH"
+
+    # Prompt to log as achievement if there are completed todos
+    local completed_todos=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && completed_todos+=("$line")
+    done < <(awk '/^## Todos$/{found=1; next} /^## |^---$/{found=0} found && /^- \[x\] /' "$note_file" 2>/dev/null)
+
+    if (( ${#completed_todos[@]} > 0 )); then
+        echo ""
+        echo -e "${GREEN}Completed work:${NC}"
+        for item in "${completed_todos[@]}"; do
+            echo "  $item"
+        done
+        echo ""
+        echo -n "Log this as an achievement? [y/N] "
+        read -r answer
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
+            # Use first completed todo (stripped of checkbox) as suggested title
+            local suggested="${completed_todos[1]#- \[x\] }"
+            echo -n "Title [$suggested]: "
+            read -r custom_title
+            local title="${custom_title:-$suggested}"
+            _append_achievement "$title" "$note_file"
+        fi
+    fi
 }
 
 # Close notes whose worktrees no longer exist
@@ -1564,6 +1763,83 @@ cmd_link() {
 }
 
 # Show git diff stat alongside open todos
+cmd_review() {
+    require_git_context
+    local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+    local subcmd="${1:-}"
+
+    case "$subcmd" in
+        new)
+            local pr_id="$2"
+            [[ -z "$pr_id" ]] && { echo "Usage: bn review new <pr-id> [--title <title>] [--author <author>] [--url <url>]" >&2; exit 1; }
+            # Extract numeric ID from URL if needed
+            if [[ "$pr_id" == *pullrequest/* ]]; then
+                pr_id="${pr_id##*/}"
+            fi
+            local title="" author="" url=""
+            shift 2
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --title|-t) title="$2"; shift 2 ;;
+                    --author|-a) author="$2"; shift 2 ;;
+                    --url|-u) url="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            local filename="pr-review-${pr_id}.md"
+            local filepath="$note_dir/$filename"
+            if [[ -f "$filepath" ]]; then
+                echo "Review already exists: $filepath"
+                echo "Use: bn review $pr_id"
+                return 1
+            fi
+            ensure_note
+            _render_template pr-review.md \
+                "PR_ID=$pr_id" "TITLE=$title" "AUTHOR=$author" "URL=$url" \
+                "DATE=$(date +%Y-%m-%d)" "REPO=$NOTE_REPO" "BRANCH=$NOTE_BRANCH" > "$filepath"
+            echo "Created: $filepath"
+            ;;
+        edit)
+            local pr_id="$2"
+            [[ -z "$pr_id" ]] && { echo "Usage: bn review edit <pr-id>" >&2; exit 1; }
+            [[ "$pr_id" == *pullrequest/* ]] && pr_id="${pr_id##*/}"
+            local filepath="$note_dir/pr-review-${pr_id}.md"
+            [[ ! -f "$filepath" ]] && { echo "No review found for PR #$pr_id" >&2; exit 1; }
+            ${EDITOR:-nvim} "$filepath"
+            ;;
+        "")
+            # List all PR reviews
+            local -a review_files
+            for f in "$note_dir"/pr-review-*.md(N); do
+                review_files+=("$f")
+            done
+            if (( ${#review_files[@]} == 0 )); then
+                echo "No PR reviews in $NOTE_REPO/$NOTE_BRANCH"
+                echo "Create one with: bn review new <pr-id>"
+                return
+            fi
+            echo "PR reviews ($NOTE_REPO/$NOTE_BRANCH):"
+            for f in "${review_files[@]}"; do
+                local fname="${f:t}"
+                local rid="${fname#pr-review-}"
+                rid="${rid%.md}"
+                # Extract title from first line
+                local rtitle
+                rtitle=$(head -1 "$f" | sed 's/^# //')
+                echo "  #${rid}  ${rtitle}"
+            done
+            ;;
+        *)
+            # View a specific review by PR ID
+            local pr_id="$subcmd"
+            [[ "$pr_id" == *pullrequest/* ]] && pr_id="${pr_id##*/}"
+            local filepath="$note_dir/pr-review-${pr_id}.md"
+            [[ ! -f "$filepath" ]] && { echo "No review found for PR #$pr_id" >&2; exit 1; }
+            cat "$filepath"
+            ;;
+    esac
+}
+
 cmd_diff() {
     require_git_context
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
@@ -1638,7 +1914,15 @@ Commands:
   pr --show                       Print PR url without opening
   link, wi [id]                   Link work item ID, or open linked work item
   link --copy                     Copy work item url to clipboard
+  review                          List PR reviews in current branch
+  review <pr-id>                  Print contents of a PR review
+  review new <pr-id> [opts]       Create new PR review (--title, --author, --url)
+  review edit <pr-id>             Open PR review in $EDITOR
   diff, d                         Git diff stat vs main + open todos
+  achieve, ac "<title>"           Log an achievement (opens editor with template)
+  achieve --list                  Print achievements for current repo
+  achieve --edit                  Open achievements.md in $EDITOR
+  achieve --path                  Print path to achievements.md
   global, g [--cat|--edit|--path] Repo-level global note (not branch-specific)
   global add <section> <text>     Add to repo global note
 
@@ -1681,7 +1965,9 @@ case "${1:-}" in
     worktrees|w)        cmd_worktrees ;;
     pr)                 shift; cmd_pr "$@" ;;
     link|wi)            shift; cmd_link "$@" ;;
+    review|rv)          shift; cmd_review "$@" ;;
     diff|d)             cmd_diff ;;
+    achieve|ac)         shift; cmd_achieve "$@" ;;
     global|g)           shift; cmd_global "$@" ;;
     -h|--help|help)     cmd_help ;;
     "")                 cmd_default ;;
