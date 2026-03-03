@@ -86,10 +86,10 @@ get_note_status() {
 set_note_status() {
     local note_file="$1" new_status="$2"
     if grep -q '^status:' "$note_file"; then
-        sed -i "s/^status: .*/status: $new_status/" "$note_file"
+        sed -i '' "s/^status: .*/status: $new_status/" "$note_file"
     else
         # Insert status after created line
-        sed -i "/^created:/a\\
+        sed -i '' "/^created:/a\\
 status: $new_status" "$note_file"
     fi
 }
@@ -98,9 +98,9 @@ status: $new_status" "$note_file"
 _set_frontmatter() {
     local note_file="$1" key="$2" value="$3"
     if grep -q "^${key}:" "$note_file"; then
-        sed -i "s|^${key}:.*|${key}: ${value}|" "$note_file"
+        sed -i '' "s|^${key}:.*|${key}: ${value}|" "$note_file"
     else
-        sed -i "/^status:/a\\
+        sed -i '' "/^status:/a\\
 ${key}: ${value}" "$note_file"
     fi
 }
@@ -470,9 +470,9 @@ insert_into_section() {
 
     if [[ -n "$next_heading_rel" ]]; then
         local insert_at=$((heading_line + next_heading_rel - 1))
-        # Insert blank line + content before the next heading
-        sed -i "${insert_at}i\\
-${line}" "$note_file"
+        # Use awk for safe insertion — avoids sed injection via / or \ in user text
+        awk -v n="$insert_at" -v text="$line" 'NR==n{print text} {print}' "$note_file" > "${note_file}.tmp" \
+            && mv "${note_file}.tmp" "$note_file"
     else
         echo "$line" >> "$note_file"
     fi
@@ -513,7 +513,7 @@ _clean_note() {
     local before after
     before=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
     (( before == 0 )) && return 0
-    sed -i -E '/^- \[ \]( test)?$/d; /^-$/d' "$note_file"
+    sed -i '' -E '/^- \[ \]( test)?$/d; /^-$/d' "$note_file"
     after=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
     echo "  Removed $(( before - after )) placeholder(s)"
 }

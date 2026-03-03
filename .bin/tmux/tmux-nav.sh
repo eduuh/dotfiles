@@ -51,6 +51,8 @@ build_list() {
 
 # Create temp preview script (fzf preview can't use shell functions)
 preview_script=$(mktemp)
+rename_script=$(mktemp)
+trap 'rm -f "$preview_script" "$rename_script"' EXIT INT TERM
 cat > "$preview_script" << 'PREVIEW'
 #!/usr/bin/env zsh
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
@@ -90,7 +92,6 @@ PREVIEW
 chmod +x "$preview_script"
 
 # Create rename helper script for fzf execute binding
-rename_script=$(mktemp)
 cat > "$rename_script" << 'RENAME'
 #!/usr/bin/env zsh
 sel="$1"
@@ -118,9 +119,6 @@ selected=$(build_list | "$FZF_CMD" \
     --bind="ctrl-w:reload(tmux list-windows -a -F '##{session_name}:#{window_index} #{window_name}')" \
     --bind="ctrl-p:reload(tmux list-panes -a -F ':#{session_name}:#{window_index}.#{pane_index} #{pane_current_command}')" \
     --bind="ctrl-r:execute-silent($rename_script {})+reload(sleep 0.2 && $0)")
-
-# Cleanup
-rm -f "$preview_script" "$rename_script"
 
 # Exit if nothing selected
 [[ -z "$selected" ]] && exit 0

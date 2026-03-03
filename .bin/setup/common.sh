@@ -129,7 +129,7 @@ _clone_single_repo() {
 
         if [ -d "$BARE_PATH" ]; then
             echo "[$REPO_NAME] Updating (bare)..."
-            cd "$BARE_PATH"
+            cd "$BARE_PATH" || return 1
             git fetch origin
             local DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
             local CURRENT_WORKTREE="$WT_BASE/$DEFAULT_BRANCH"
@@ -143,7 +143,7 @@ _clone_single_repo() {
             echo "[$REPO_NAME] Cloning (bare)..."
             git clone --bare "$REPO" "$BARE_PATH" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
 
-            cd "$BARE_PATH"
+            cd "$BARE_PATH" || return 1
             git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
             git fetch origin
             local DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
@@ -368,12 +368,15 @@ install_lazygit() {
         return 0
     fi
 
-    if curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/lazygit_${lazygit_version}_Linux_x86_64.tar.gz" && \
-       tar xf lazygit.tar.gz lazygit && \
-       sudo install -D lazygit -t /usr/local/bin/; then
-        rm -f lazygit lazygit.tar.gz
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    trap 'rm -rf "$tmpdir"' RETURN
+
+    if curl -Lo "$tmpdir/lazygit.tar.gz" "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/lazygit_${lazygit_version}_Linux_x86_64.tar.gz" && \
+       tar xf "$tmpdir/lazygit.tar.gz" -C "$tmpdir" lazygit && \
+       sudo install -D "$tmpdir/lazygit" -t /usr/local/bin/; then
+        echo "LazyGit $lazygit_version installed."
     else
-        rm -f lazygit lazygit.tar.gz
         track_failure "lazygit" "Failed to download/install lazygit"
     fi
 }

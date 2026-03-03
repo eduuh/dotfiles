@@ -41,6 +41,7 @@ old_name=$(echo "$selected" | sed 's/\x1b\[[0-9;]*m//g' | awk '{print $1}' | sed
 # Prompt for new name using tmux command-prompt
 # We use a temp file to pass the new name since command-prompt runs asynchronously
 tmpfile=$(mktemp)
+trap 'rm -f "$tmpfile"' EXIT
 
 $TMUX_CMD command-prompt -p "Rename '$old_name' to:" \
-    "run-shell \"echo '%1' > $tmpfile && tmux rename-session -t '$old_name' '%1' && rm -f $tmpfile\" "
+    "run-shell \"echo '%1' > '$tmpfile' && tmux rename-session -t '$old_name' '%1'\" "
