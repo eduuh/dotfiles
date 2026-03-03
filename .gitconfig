@@ -7,3 +7,5 @@
 [user]
 	name = eduuh
 	email = 31909722+eduuh@users.noreply.github.com
+[include]
+	path = ~/.gitconfig-wsl
