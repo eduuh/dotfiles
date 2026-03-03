@@ -32,7 +32,17 @@ On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
 - **`tat`** — Tmux session picker with zoxide frecency and fzf preview
 - **`wt`** — Git worktree manager for bare repos (`wt clone`, `wt add`, `wt list`, `wt remove`)
+- **`bn`** — Branch notes manager for per-branch task tracking
+- **`ssh-export`** — Copy SSH key setup script to clipboard for bootstrapping new environments
 - **Tmux** (`Ctrl+Space` prefix) — [keybinding reference](docs/tmux.md)
+
+## Codespaces
+
+Setup auto-detects Codespaces (`$CODESPACES=true`) and adjusts:
+
+- Skips changing default shell to zsh
+- Skips Rust, PNPM, Python venv, Starship installs
+- Clones `personal-notes` (requires SSH key — run `ssh-export` on your main machine first)
 
 ## What's Managed
 
