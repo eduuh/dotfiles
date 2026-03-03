@@ -542,6 +542,22 @@ setup_symlinks() {
     fi
 }
 
+setup_personal_notes_stow() {
+    local stow_dir=~/projects/personal-notes/stow
+
+    if [ ! -d "$stow_dir" ]; then
+        echo "personal-notes stow directory not found at $stow_dir — skipping."
+        echo "Run setup-projects.sh first to clone personal-notes."
+        return 0
+    fi
+
+    echo "Stowing personal-notes from $stow_dir..."
+    cd "$stow_dir"
+    if ! stow -vt "$HOME" home; then
+        track_failure "personal-notes-stow" "Failed to stow personal-notes"
+    fi
+}
+
 setup_git_hooks() {
     echo "Setting up git hooks for all projects..."
     local hook_source="$HOME/projects/dotfiles/.bin/git-hooks/pre-push"

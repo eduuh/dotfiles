@@ -6,4 +6,5 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/.bin/setup/common.sh"
 
 clone_repos
+setup_personal_notes_stow
 setup_git_hooks
