@@ -56,7 +56,9 @@ find_bare_repo() {
 
     # If cwd is inside ~/projects/worktree/reponame/branch/, derive from .git file
     if [[ "$cwd" == "$WORKTREE_DIR"/* ]] && [[ -f "$cwd/.git" ]]; then
-        local gitdir=$(cat "$cwd/.git" | sed 's/gitdir: //')
+        local gitdir=$(<"$cwd/.git")
+        gitdir="${gitdir#gitdir: }"
+        gitdir="${gitdir%$'\r'}"  # strip Windows CRLF if present
         # Resolve to absolute path if relative
         if [[ "$gitdir" != /* ]]; then
             gitdir="$cwd/$gitdir"
@@ -83,7 +85,9 @@ find_bare_repo() {
     local dir="$cwd"
     while [[ "$dir" != "/" && "$dir" != "$HOME" ]]; do
         if [[ -f "$dir/.git" ]]; then
-            local gitdir=$(cat "$dir/.git" | sed 's/gitdir: //')
+            local gitdir=$(<"$dir/.git")
+            gitdir="${gitdir#gitdir: }"
+            gitdir="${gitdir%$'\r'}"  # strip Windows CRLF if present
             if [[ "$gitdir" != /* ]]; then
                 gitdir="$dir/$gitdir"
             fi
@@ -314,7 +318,7 @@ cmd_remove() {
     echo -e "${GREEN}Removed worktree${NC}"
 
     # Close any orphaned branch notes
-    "$HOME/.bin/branch-note.sh" prune
+    "$HOME/.bin/bn" prune
 }
 
 # Go to a worktree (for shell functions)

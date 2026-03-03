@@ -3,12 +3,22 @@
 add_kanatakeyboardprev() {
     local current_user=$(whoami)
     local kanata_path="/home/$current_user/.bin/kanata"
+    local sudoers_file="/etc/sudoers.d/kanata"
 
-    if ! sudo grep -q "$kanata_path" /etc/sudoers; then
-        if ! echo "$current_user ALL=(ALL) NOPASSWD: $kanata_path" | sudo tee -a /etc/sudoers > /dev/null; then
-            track_failure "kanata" "Failed to add sudoers entry for kanata"
+    # Write to sudoers.d (safer than appending to /etc/sudoers directly)
+    if [[ ! -f "$sudoers_file" ]] || ! sudo grep -q "$kanata_path" "$sudoers_file"; then
+        local entry="$current_user ALL=(ALL) NOPASSWD: $kanata_path"
+        if ! echo "$entry" | sudo tee "$sudoers_file" > /dev/null; then
+            track_failure "kanata" "Failed to write sudoers entry for kanata"
             return 0
         fi
+        # Validate syntax before leaving in place
+        if ! sudo visudo -cf "$sudoers_file" > /dev/null; then
+            sudo rm -f "$sudoers_file"
+            track_failure "kanata" "sudoers entry for kanata failed validation — removed"
+            return 0
+        fi
+        sudo chmod 440 "$sudoers_file"
         echo "Sudoers entry added for $current_user to run $kanata_path without a password."
     else
         echo "Sudoers entry already exists for $current_user."

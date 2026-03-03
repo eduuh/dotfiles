@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 # tmux-sync-repos.sh - Open matching repos in synchronized vertical panes
 # Usage: tmux-sync-repos.sh <prefix> [base_dir]
 # When prefix matches a repo name in worktree/, opens all its branch worktrees as synced panes
@@ -16,17 +16,14 @@ if [[ -z "$PREFIX" ]]; then
     exit 1
 fi
 
-# Find matching repo directories in worktree/
+# Find matching repo directories in worktree/ — (N/) = nullglob + dirs only, (#i) = case-insensitive
 matches=()
-shopt -s nocaseglob nullglob
-for repo_dir in "$WORKTREE_BASE"/"$PREFIX"*/; do
-    [[ -d "$repo_dir" ]] || continue
+for repo_dir in "$WORKTREE_BASE"/(#i)${PREFIX}*/(N/); do
     # Collect all branch worktrees within the matching repo
-    for branch_dir in "$repo_dir"/*/; do
-        [[ -d "$branch_dir" ]] && matches+=("${branch_dir%/}")
+    for branch_dir in "$repo_dir"/(N/); do
+        matches+=("${branch_dir%/}")
     done
 done
-shopt -u nocaseglob nullglob
 
 if [[ ${#matches[@]} -eq 0 ]]; then
     $TMUX_CMD display-message "No worktrees matching '$PREFIX*' in $WORKTREE_BASE"
@@ -34,13 +31,13 @@ if [[ ${#matches[@]} -eq 0 ]]; then
 fi
 
 if [[ ${#matches[@]} -eq 1 ]]; then
-    $TMUX_CMD display-message "Only one match found: ${matches[0]##*/}"
+    $TMUX_CMD display-message "Only one match found: ${matches[1]##*/}"
     exit 1
 fi
 
-# Create new window with first directory
+# Create new window with first directory (zsh arrays are 1-indexed)
 window_name="sync:$PREFIX"
-$TMUX_CMD new-window -n "$window_name" -c "${matches[0]}"
+$TMUX_CMD new-window -n "$window_name" -c "${matches[1]}"
 
 # Split vertically for remaining directories
 for dir in "${matches[@]:1}"; do

@@ -86,9 +86,9 @@ if [[ "$action" == "Create worktree" ]]; then
     if [[ "$branch_mode" == "Existing branch" ]]; then
         # Check if local branch exists, otherwise track from remote
         if git --git-dir="$bare_repo" show-ref --verify --quiet "refs/heads/$branch_name"; then
-            git --git-dir="$bare_repo" worktree add "$worktree_path" "$branch_name"
+            git --git-dir="$bare_repo" worktree add "$worktree_path" "$branch_name" || { echo "Failed to create worktree"; read -sk1 "?Press any key..."; exit 1; }
         elif git --git-dir="$bare_repo" show-ref --verify --quiet "refs/remotes/origin/$branch_name"; then
-            git --git-dir="$bare_repo" worktree add "$worktree_path" "$branch_name"
+            git --git-dir="$bare_repo" worktree add "$worktree_path" "$branch_name" || { echo "Failed to create worktree"; read -sk1 "?Press any key..."; exit 1; }
         else
             echo "Branch '$branch_name' not found"
             read -sk1 "?Press any key..."

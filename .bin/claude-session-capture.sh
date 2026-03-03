@@ -190,4 +190,6 @@ $ENTRY")
     ;;
 esac
 
-echo "$CONTENT" > "$TASKS_FILE"
+# Atomic write — prevents partial file if process is killed mid-write
+_tmp=$(mktemp "${TASKS_FILE}.XXXXXX")
+echo "$CONTENT" > "$_tmp" && mv "$_tmp" "$TASKS_FILE" || rm -f "$_tmp"
