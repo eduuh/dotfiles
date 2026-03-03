@@ -1,0 +1,56 @@
+#!/bin/zsh
+# Generate a self-contained script to set up SSH keys on another machine.
+# Copies the script to clipboard for easy pasting.
+
+set -euo pipefail
+
+KEY_PRIVATE="$HOME/.ssh/id_ed25519"
+KEY_PUBLIC="$HOME/.ssh/id_ed25519.pub"
+
+if [[ ! -f "$KEY_PRIVATE" || ! -f "$KEY_PUBLIC" ]]; then
+    echo "SSH key pair not found at $KEY_PRIVATE" >&2
+    exit 1
+fi
+
+private_key=$(<"$KEY_PRIVATE")
+public_key=$(<"$KEY_PUBLIC")
+
+script=$(cat <<SCRIPT
+#!/bin/bash
+# SSH key setup — paste and run in target environment
+set -euo pipefail
+
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+
+cat <<'KEY' > ~/.ssh/id_ed25519
+${private_key}
+KEY
+chmod 600 ~/.ssh/id_ed25519
+
+cat <<'KEY' > ~/.ssh/id_ed25519.pub
+${public_key}
+KEY
+chmod 644 ~/.ssh/id_ed25519.pub
+
+echo "SSH keys installed. Testing GitHub..."
+ssh -T git@github.com 2>&1 || true
+SCRIPT
+)
+
+# Copy to clipboard
+if command -v clip.exe &>/dev/null; then
+    echo "$script" | clip.exe
+elif command -v pbcopy &>/dev/null; then
+    echo "$script" | pbcopy
+elif command -v xclip &>/dev/null; then
+    echo "$script" | xclip -selection clipboard
+elif command -v wl-copy &>/dev/null; then
+    echo "$script" | wl-copy
+else
+    echo "No clipboard command found. Printing script instead:" >&2
+    echo ""
+    echo "$script"
+    exit 0
+fi
+
+echo "SSH setup script copied to clipboard. Paste and run in the target environment."
