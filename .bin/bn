@@ -13,7 +13,8 @@
 #   bn summary|s                    # Dashboard: open todos, blockers, per-branch detail
 #   bn status|st                    # One-line status for current branch
 #   bn todo|t                       # List open todos across all branches
-#   bn refresh|r                    # Fetch, pull, build current branch
+#   bn research|r [text]             # Add research item or list all research
+#   bn refresh|rf                    # Fetch, pull, build current branch
 #   bn refresh-all|ra               # Refresh all main worktrees
 #   bn main|m                       # Print main note dir + list scripts
 #   bn build|b [name]               # Run a script (default: build)
@@ -470,7 +471,8 @@ insert_into_section() {
     if [[ -n "$next_heading_rel" ]]; then
         local insert_at=$((heading_line + next_heading_rel - 1))
         # Insert blank line + content before the next heading
-        perl -i -pe "print \"${line}\n\" if \$. == ${insert_at}" "$note_file"
+        sed -i "${insert_at}i\\
+${line}" "$note_file"
     else
         echo "$line" >> "$note_file"
     fi
@@ -524,63 +526,12 @@ _clean_note() {
 # Then: echo "$output" | grep '^status=' etc.
 _parse_note() {
     local note_file="$1"
-    awk '
-    BEGIN {
-        in_front = 0; front_count = 0
-        section = ""
-        todos = 0; open_todos = 0; blockers = 0; research = 0; asks = 0
-        decisions = 0; collab = 0
-    }
-    /^---$/ {
-        if (front_count == 0) { in_front = 1; front_count++; next }
-        if (in_front) { in_front = 0; next }
-    }
-    in_front {
-        # Extract frontmatter key: value (BSD awk compatible)
-        if ($0 ~ /^[a-z_]+: ?/) {
-            match($0, /^[a-z_]+/)
-            key = substr($0, RSTART, RLENGTH)
-            val = substr($0, RSTART + RLENGTH)
-            sub(/^: */, "", val)
-            print key "=" val
-        }
-        next
-    }
-    /^## Todos$/       { section = "TODO"; next }
-    /^## Blockers$/    { section = "BLOCKER"; next }
-    /^## To Research$/ { section = "RESEARCH"; next }
-    /^## To Ask$/      { section = "ASK"; next }
-    /^## Decisions$/   { section = "DECISION"; next }
-    /^## Collaboration$/ { section = "COLLAB"; next }
-    /^## / || /^---$/  { section = ""; next }
-
-    section != "" && /^- / {
-        line = $0
-        # Skip placeholders: bare "- [ ]", "- [ ] test", bare "-"
-        if (line == "- [ ]" || line == "- [ ] test" || line == "-") next
-
-        if (section == "TODO") {
-            todos++
-            if (line ~ /^- \[ \] /) { open_todos++; print "OPEN_TODO:" line }
-            else { print "TODO:" line }
-        }
-        else if (section == "BLOCKER")  { blockers++;  print "BLOCKER:" line }
-        else if (section == "RESEARCH") { research++;  print "RESEARCH:" line }
-        else if (section == "ASK")      { asks++;      print "ASK:" line }
-        else if (section == "DECISION") { decisions++; print "DECISION:" line }
-        else if (section == "COLLAB")   { collab++;    print "COLLAB:" line }
-    }
-
-    END {
-        print "todos=" todos
-        print "open_todos=" open_todos
-        print "blockers=" blockers
-        print "research=" research
-        print "asks=" asks
-        print "decisions=" decisions
-        print "collab=" collab
-    }
-    ' "$note_file"
+    local raw=$(_parse_all_notes "$note_file")
+    local prefix="${note_file}|"
+    local line
+    for line in "${(f)raw}"; do
+        [[ -n "$line" ]] && echo "${line#${prefix}}"
+    done
 }
 
 # Extract a value from _parse_note output: _pn_val "$output" "key"
@@ -713,19 +664,6 @@ cmd_cat() {
             echo "Auto-closed: $NOTE_REPO/$NOTE_BRANCH (worktree removed)" >&2
         fi
     fi
-    # Auto-discover PR link if empty and gh is available
-    if [[ -f "$note_file" ]]; then
-        _frontmatter_val "$note_file" "pr"
-        if [[ -z "$REPLY" ]] && command -v gh &>/dev/null; then
-            local auto_pr
-            auto_pr=$(gh pr view --json url -q .url 2>/dev/null)
-            if [[ -n "$auto_pr" ]]; then
-                _set_frontmatter "$note_file" "pr" "$auto_pr"
-                echo "Auto-linked PR: $auto_pr" >&2
-            fi
-        fi
-    fi
-
     local file="${1:-note.md}"
     cat "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/$file"
 
@@ -1021,10 +959,11 @@ cmd_close() {
     echo "Closed note: $NOTE_REPO/$NOTE_BRANCH"
 
     # Prompt to log as achievement if there are completed todos
+    local parsed=$(_parse_note "$note_file")
     local completed_todos=()
     while IFS= read -r line; do
         [[ -n "$line" ]] && completed_todos+=("$line")
-    done < <(awk '/^## Todos$/{found=1; next} /^## |^---$/{found=0} found && /^- \[x\] /' "$note_file" 2>/dev/null)
+    done <<< "$(_pn_lines "$parsed" "TODO")"
 
     if (( ${#completed_todos[@]} > 0 )); then
         echo ""
@@ -1050,9 +989,15 @@ cmd_close() {
 cmd_prune() {
     [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
 
+    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
+    (( ${#note_files[@]} == 0 )) && { echo "Nothing to prune"; exit 0; }
+    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+
     local closed=0
-    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        local note_status=$(get_note_status "$note_file")
+    for note_file in "${note_files[@]}"; do
+        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+        local note_status=$(_pn_val "$parsed" "status")
+        [[ -z "$note_status" ]] && note_status="active"
         [[ "$note_status" == "closed" ]] && continue
 
         local note_dir=${note_file:h}
@@ -1358,13 +1303,17 @@ cmd_status() {
         return
     fi
 
-    local todos=0 blockers=0
-    todos=$(grep -c '^\- \[ \]' "$note_file" 2>/dev/null || true)
-    blockers=$(awk '/^## Blockers$/{found=1; next} /^## |^---$/{found=0} found && /^- ./' "$note_file" | wc -l | tr -d ' ')
+    local parsed=$(_parse_note "$note_file")
+    local todos=$(_pn_val "$parsed" "open_todos")
+    local blockers=$(_pn_val "$parsed" "blockers")
+    local research=$(_pn_val "$parsed" "research")
+    local asks=$(_pn_val "$parsed" "asks")
 
     local parts=()
     (( todos > 0 )) && parts+=("${todos} todo$( (( todos != 1 )) && echo s)")
     (( blockers > 0 )) && parts+=("${blockers} blocker$( (( blockers != 1 )) && echo s)")
+    (( research > 0 )) && parts+=("${research} research")
+    (( asks > 0 )) && parts+=("${asks} ask$( (( asks != 1 )) && echo s)")
     if [[ ${#parts[@]} -eq 0 ]]; then
         echo "$NOTE_REPO/$NOTE_BRANCH: clear"
     else
@@ -1407,6 +1356,41 @@ cmd_todo() {
     $found || echo "No open todos"
 }
 
+# List open research items across all active branches
+cmd_todo_research() {
+    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
+
+    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
+    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
+    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+
+    local found=false
+    for note_file in "${note_files[@]}"; do
+        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+        local note_status=$(_pn_val "$parsed" "status")
+        [[ -z "$note_status" ]] && note_status="active"
+        [[ "$note_status" == "closed" ]] && continue
+
+        local machine=$(_pn_val "$parsed" "machine")
+        [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && continue
+
+        local research=$(_pn_val "$parsed" "research")
+        (( research == 0 )) && continue
+
+        found=true
+        local note_dir=${note_file:h}
+        local branch=${note_dir:t}
+        local repo=${note_dir:h:t}
+
+        echo -e "${BLUE}${repo}/${branch}${NC}"
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && echo "  $line"
+        done <<< "$(_pn_lines "$parsed" "RESEARCH")"
+    done
+
+    $found || echo "No open research items"
+}
+
 # Archive closed notes older than N days
 cmd_archive() {
     local days=30
@@ -1423,7 +1407,11 @@ cmd_archive() {
     [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
 
     local cutoff
-    cutoff=$(date -v-${days}d '+%Y-%m-%d')
+    if date -v-1d &>/dev/null 2>&1; then
+        cutoff=$(date -v-${days}d '+%Y-%m-%d')  # macOS
+    else
+        cutoff=$(date -d "-${days} days" '+%Y-%m-%d')  # Linux/GNU
+    fi
 
     local archived=0
     local -a affected_paths=()
@@ -1897,7 +1885,8 @@ Commands:
   summary, s                      Dashboard of active work
   status, st                      One-line status for current branch
   todo, t                         List open todos across all branches
-  refresh, r                      Fetch, pull, build current branch
+  research, r [text]              Add research item, or list all research
+  refresh, rf                     Fetch, pull, build current branch
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
   build, b [name]                 Run a script (default: build)
@@ -1953,7 +1942,8 @@ case "${1:-}" in
     summary|s)          cmd_summary ;;
     status|st)          cmd_status ;;
     todo|todos|t)       shift; if [[ -n "$1" ]]; then cmd_add todo "$@"; else cmd_todo; fi ;;
-    refresh|r)          shift; if [[ -n "$1" ]]; then cmd_add research "$@"; else cmd_refresh; fi ;;
+    research|r)         shift; if [[ -n "$1" ]]; then cmd_add research "$@"; else cmd_todo_research; fi ;;
+    refresh|rf)         shift; cmd_refresh "$@" ;;
     refresh-all|ra)     cmd_refresh_all ;;
     main|m)             cmd_main ;;
     blocker|x)          shift; cmd_add blocker "$@" ;;
