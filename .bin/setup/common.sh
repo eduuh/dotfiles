@@ -72,6 +72,8 @@ fi
 detect_distro() {
     if [ "$CODESPACES" = "true" ]; then
         echo "codespace"
+    elif [ -n "$TERMUX_VERSION" ] || [ -d "/data/data/com.termux" ]; then
+        echo "termux"
     elif [ -f /etc/os-release ]; then
         . /etc/os-release
         echo "$ID"

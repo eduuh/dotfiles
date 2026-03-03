@@ -44,6 +44,10 @@ main() {
             # mac.sh is already sourced; finish configuration
             setup_mac
             ;;
+        termux)
+            source "$SCRIPT_DIR/.bin/setup/termux.sh"
+            setup_termux
+            ;;
         *)
             track_failure "distro" "Unsupported distribution: $distro"
             print_failure_summary
@@ -51,13 +55,15 @@ main() {
             ;;
     esac
 
-    install_tmux_plugins
-    install_zoxide
-    install_starship
-    install_pnpm
-    install_talosctl
-    setup_git_hooks
-    change_shell_to_zsh
+    if [ "$distro" != "termux" ]; then
+        install_tmux_plugins
+        install_zoxide
+        install_starship
+        install_pnpm
+        install_talosctl
+        setup_git_hooks
+        change_shell_to_zsh
+    fi
 
     echo ""
     echo "To clone project repos:  ./setup-projects.sh"
