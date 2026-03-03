@@ -576,6 +576,11 @@ setup_git_hooks() {
 }
 
 change_shell_to_zsh() {
+    if [[ "$CODESPACES" == "true" ]]; then
+        echo "Skipping shell change in Codespaces environment."
+        return 0
+    fi
+
     if [[ "$SHELL" != "/bin/zsh" ]]; then
         echo "Changing default shell to zsh..."
 
