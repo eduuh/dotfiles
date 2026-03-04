@@ -1868,6 +1868,115 @@ cmd_diff() {
     echo -e "${GREEN}${commits} commit(s) ahead of main${NC}"
 }
 
+cmd_blog() {
+    local BLOG_BARE="$HOME/projects/bare/bits-and-atoms.git"
+    local BLOG_DRAFTS="$HOME/projects/worktree/bits-and-atoms/drafts"
+    local BLOG_MAIN="$HOME/projects/worktree/bits-and-atoms/main"
+    local subcmd="${1:-list}"
+    shift 2>/dev/null || true
+
+    case "$subcmd" in
+        list|l)
+            local drafts_dir="$BLOG_DRAFTS/posts"
+            [[ ! -d "$drafts_dir" ]] && { echo "Drafts worktree not found: $drafts_dir" >&2; return 1; }
+            printf "%-50s %s\n" "SLUG" "STATUS"
+            printf "%-50s %s\n" "----" "------"
+            for f in "$drafts_dir"/*.mdx(N); do
+                local slug="${f:t:r}"
+                local post_status="draft"
+                grep -q '^published: true' "$f" && post_status="published"
+                printf "%-50s %s\n" "$slug" "$post_status"
+            done
+            ;;
+        drafts|d)
+            local drafts_dir="$BLOG_DRAFTS/posts"
+            [[ ! -d "$drafts_dir" ]] && { echo "Drafts worktree not found: $drafts_dir" >&2; return 1; }
+            for f in "$drafts_dir"/*.mdx(N); do
+                grep -q '^published: true' "$f" || echo "${f:t:r}"
+            done
+            ;;
+        new|n)
+            local slug="$1"
+            [[ -z "$slug" ]] && { echo "Usage: bn blog new <slug>" >&2; return 1; }
+            local post_file="$BLOG_DRAFTS/posts/${slug}.mdx"
+            [[ -f "$post_file" ]] && { echo "Post already exists: $post_file" >&2; return 1; }
+            local date=$(date +%Y-%m-%d)
+            # Capitalise each word of slug for title
+            local title="${(C)${slug//-/ }}"
+            cat > "$post_file" <<POSTEOF
+---
+title: $title
+slug: $slug
+publishedAt: '$date'
+summary:
+tags:
+  -
+published: false
+# series:
+#   title: Series Name
+#   order: 1
+---
+
+POSTEOF
+            echo "Created: $post_file"
+            ${EDITOR:-nvim} "$post_file"
+            ;;
+        publish|p)
+            local slug="$1"
+            [[ -z "$slug" ]] && { echo "Usage: bn blog publish <slug>" >&2; return 1; }
+            local post_file="$BLOG_DRAFTS/posts/${slug}.mdx"
+            [[ ! -f "$post_file" ]] && { echo "Post not found: $post_file" >&2; return 1; }
+
+            # Read title from frontmatter
+            local title=""
+            while IFS= read -r line; do
+                [[ "$line" == title:* ]] && { title="${line#title: }"; break; }
+            done < "$post_file"
+            [[ -z "$title" ]] && title="$slug"
+
+            # Mark published
+            sed -i '' 's/^published: false/published: true/' "$post_file"
+            echo "Marked as published: $slug"
+
+            # Commit
+            (
+                cd "$BLOG_DRAFTS"
+                git add "posts/${slug}.mdx"
+                git commit -m "post: $title"
+                git push origin drafts
+            )
+
+            # Create draft PR (skip if one already exists for this branch)
+            local existing_pr
+            existing_pr=$(GIT_DIR="$BLOG_BARE" gh pr list --repo eduuh/bits-and-atoms \
+                --head drafts --base main --json number --jq '.[0].number' 2>/dev/null)
+            if [[ -n "$existing_pr" ]]; then
+                echo "Draft PR already open: https://github.com/eduuh/bits-and-atoms/pull/$existing_pr"
+            else
+                gh pr create \
+                    --repo eduuh/bits-and-atoms \
+                    --draft \
+                    --base main \
+                    --head drafts \
+                    --title "post: $title" \
+                    --body "Publishes: \`posts/${slug}.mdx\`"
+            fi
+            ;;
+        open|o)
+            local slug="$1"
+            [[ -z "$slug" ]] && { echo "Usage: bn blog open <slug>" >&2; return 1; }
+            local post_file="$BLOG_DRAFTS/posts/${slug}.mdx"
+            [[ ! -f "$post_file" ]] && post_file="$BLOG_MAIN/posts/${slug}.mdx"
+            [[ ! -f "$post_file" ]] && { echo "Post not found: $slug" >&2; return 1; }
+            ${EDITOR:-nvim} "$post_file"
+            ;;
+        *)
+            echo "Usage: bn blog <list|drafts|new|publish|open>" >&2
+            return 1
+            ;;
+    esac
+}
+
 cmd_help() {
     cat << 'HELPEOF'
 Usage: bn [command]
@@ -1924,6 +2033,13 @@ Filtering:
   Notes without a machine field are always shown.
   Use --all-machines with list to see notes from all hosts.
 
+Blog (bits-and-atoms):
+  blog list               List all posts with published/draft status
+  blog drafts             List only unpublished posts
+  blog new <slug>         Create new draft post and open in $EDITOR
+  blog publish <slug>     Mark published, commit, push drafts, open draft PR to main
+  blog open <slug>        Open a post in $EDITOR
+
 Sections: todo, blocker, decision, research, collab, ask
 HELPEOF
 }
@@ -1959,6 +2075,7 @@ case "${1:-}" in
     diff|d)             cmd_diff ;;
     achieve|ac)         shift; cmd_achieve "$@" ;;
     global|g)           shift; cmd_global "$@" ;;
+    blog)               shift; cmd_blog "$@" ;;
     -h|--help|help)     cmd_help ;;
     "")                 cmd_default ;;
     *)                  echo "Unknown command: $1" >&2; exit 1 ;;
