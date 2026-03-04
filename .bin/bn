@@ -1878,15 +1878,26 @@ cmd_blog() {
     case "$subcmd" in
         list|l)
             local drafts_dir="$BLOG_DRAFTS/posts"
-            [[ ! -d "$drafts_dir" ]] && { echo "Drafts worktree not found: $drafts_dir" >&2; return 1; }
             printf "%-50s %s\n" "SLUG" "STATUS"
             printf "%-50s %s\n" "----" "------"
-            for f in "$drafts_dir"/*.mdx(N); do
-                local slug="${f:t:r}"
-                local post_status="draft"
-                grep -q '^published: true' "$f" && post_status="published"
-                printf "%-50s %s\n" "$slug" "$post_status"
-            done
+            if [[ -d "$drafts_dir" ]]; then
+                # Local: read frontmatter
+                for f in "$drafts_dir"/*.mdx(N); do
+                    local slug="${f:t:r}"
+                    local post_status="draft"
+                    grep -q '^published: true' "$f" && post_status="published"
+                    printf "%-50s %s\n" "$slug" "$post_status"
+                done
+            else
+                # Fallback: parse live sitemap
+                echo "(local worktree unavailable — fetching from eduuh.com)" >&2
+                curl -s https://eduuh.com/sitemap.xml \
+                    | grep -o 'eduuh\.com/blog/[^<]*' \
+                    | sed 's|eduuh\.com/blog/||' \
+                    | while read -r slug; do
+                        printf "%-50s %s\n" "$slug" "published (live)"
+                    done
+            fi
             ;;
         drafts|d)
             local drafts_dir="$BLOG_DRAFTS/posts"
