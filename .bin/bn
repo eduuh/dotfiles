@@ -1877,34 +1877,32 @@ cmd_blog() {
 
     case "$subcmd" in
         list|l)
+            local filter="${1:-all}"
             local drafts_dir="$BLOG_DRAFTS/posts"
             printf "%-50s %s\n" "SLUG" "STATUS"
             printf "%-50s %s\n" "----" "------"
             if [[ -d "$drafts_dir" ]]; then
-                # Local: read frontmatter
                 for f in "$drafts_dir"/*.mdx(N); do
                     local slug="${f:t:r}"
                     local post_status="draft"
                     grep -q '^published: true' "$f" && post_status="published"
-                    printf "%-50s %s\n" "$slug" "$post_status"
+                    case "$filter" in
+                        published) [[ "$post_status" == "published" ]] && printf "%-50s %s\n" "$slug" "$post_status" ;;
+                        drafts)    [[ "$post_status" == "draft" ]]     && printf "%-50s %s\n" "$slug" "$post_status" ;;
+                        *)         printf "%-50s %s\n" "$slug" "$post_status" ;;
+                    esac
                 done
             else
-                # Fallback: parse live sitemap
+                # Fallback: parse live sitemap (published only)
                 echo "(local worktree unavailable — fetching from eduuh.com)" >&2
                 curl -s https://eduuh.com/sitemap.xml \
                     | grep -o 'eduuh\.com/blog/[^<]*' \
                     | sed 's|eduuh\.com/blog/||' \
                     | while read -r slug; do
+                        [[ "$filter" == "drafts" ]] && continue
                         printf "%-50s %s\n" "$slug" "published (live)"
                     done
             fi
-            ;;
-        drafts|d)
-            local drafts_dir="$BLOG_DRAFTS/posts"
-            [[ ! -d "$drafts_dir" ]] && { echo "Drafts worktree not found: $drafts_dir" >&2; return 1; }
-            for f in "$drafts_dir"/*.mdx(N); do
-                grep -q '^published: true' "$f" || echo "${f:t:r}"
-            done
             ;;
         new|n)
             local slug="$1"
@@ -2046,7 +2044,8 @@ Filtering:
 
 Blog (bits-and-atoms):
   blog list               List all posts with published/draft status
-  blog drafts             List only unpublished posts
+  blog list published     List only published posts (falls back to eduuh.com)
+  blog list drafts        List only unpublished posts
   blog new <slug>         Create new draft post and open in $EDITOR
   blog publish <slug>     Mark published, commit, push drafts, open draft PR to main
   blog open <slug>        Open a post in $EDITOR
