@@ -35,7 +35,7 @@ source "$HOME/.bin/tmux/tmux-lib.sh"
 
 # --- Config ---
 
-NOTES_DIR="$HOME/projects/personal-notes/branch-notes"
+NOTES_DIR="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes"
 _HOSTNAME=$(hostname)
 
 # --- Helpers: Git Context ---
@@ -1986,6 +1986,78 @@ POSTEOF
     esac
 }
 
+cmd_learn() {
+    local LEARN_DIR="$HOME/projects/worktree/personal-notes/learning"
+    local subcmd="${1:-list}"
+    shift 2>/dev/null || true
+
+    case "$subcmd" in
+        new|n)
+            local topic="$1"
+            [[ -z "$topic" ]] && { echo "Usage: bn learn new <topic-name>" >&2; return 1; }
+            local note_file="$LEARN_DIR/${topic}.md"
+            [[ -f "$note_file" ]] && { echo "Topic already exists: $note_file" >&2; return 1; }
+            local date=$(date +%Y-%m-%d)
+            local title="${(C)${topic//-/ }}"
+            cat > "$note_file" <<LEARNEOF
+# $title
+
+> Created: $date
+
+## Topic
+
+What you're learning and why.
+
+## Resources
+
+-
+
+## Key Concepts
+
+-
+
+## Questions
+
+-
+
+## Practice
+
+-
+
+## Links
+
+-
+LEARNEOF
+            echo "Created: $note_file"
+            ${EDITOR:-nvim} "$note_file"
+            ;;
+        list|l)
+            if [[ ! -d "$LEARN_DIR" ]]; then
+                echo "Learning directory not found: $LEARN_DIR" >&2
+                return 1
+            fi
+            local found=0
+            for f in "$LEARN_DIR"/*.md(N); do
+                [[ "${f:t}" == "README.md" ]] && continue
+                printf "%s\n" "${f:t:r}"
+                found=1
+            done
+            (( found )) || echo "(no learning notes yet)"
+            ;;
+        open|o)
+            local topic="$1"
+            [[ -z "$topic" ]] && { echo "Usage: bn learn open <topic>" >&2; return 1; }
+            local note_file="$LEARN_DIR/${topic}.md"
+            [[ ! -f "$note_file" ]] && { echo "Topic not found: $topic" >&2; return 1; }
+            ${EDITOR:-nvim} "$note_file"
+            ;;
+        *)
+            echo "Usage: bn learn <list|new|open>" >&2
+            return 1
+            ;;
+    esac
+}
+
 cmd_help() {
     cat << 'HELPEOF'
 Usage: bn [command]
@@ -2050,6 +2122,11 @@ Blog (bits-and-atoms):
   blog publish <slug>     Mark published, commit, push drafts, open draft PR to main
   blog open <slug>        Open a post in $EDITOR
 
+Learning:
+  learn list              List learning notes
+  learn new <topic>       Create new learning note and open in $EDITOR
+  learn open <topic>      Open a learning note in $EDITOR
+
 Sections: todo, blocker, decision, research, collab, ask
 HELPEOF
 }
@@ -2086,6 +2163,7 @@ case "${1:-}" in
     achieve|ac)         shift; cmd_achieve "$@" ;;
     global|g)           shift; cmd_global "$@" ;;
     blog)               shift; cmd_blog "$@" ;;
+    learn)              shift; cmd_learn "$@" ;;
     -h|--help|help)     cmd_help ;;
     "")                 cmd_default ;;
     *)                  echo "Unknown command: $1" >&2; exit 1 ;;
