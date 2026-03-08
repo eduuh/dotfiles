@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-TASKS_FILE="$HOME/projects/personal-notes/active-claude-tasks.md"
+TASKS_FILE="$HOME/projects/worktree/personal-notes/main/active-claude-tasks.md"
 CACHE_DIR="$HOME/.cache/claude-sessions"
 TODAY=$(date +%Y-%m-%d)
 ACTION="${1:-start}"

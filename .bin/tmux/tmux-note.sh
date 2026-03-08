@@ -4,7 +4,7 @@
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
 
-NOTES_DIR="$HOME/projects/personal-notes/branch-notes"
+NOTES_DIR="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes"
 
 # cd to pane path so branch-note.sh subcommands resolve correctly
 pane_path="${1:-$(pwd)}"

@@ -5,7 +5,7 @@
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
 
-NOTES_DIR="$HOME/projects/personal-notes/branch-notes"
+NOTES_DIR="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes"
 
 # Get active pane path from current session
 pane_path=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null)

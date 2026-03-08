@@ -548,7 +548,7 @@ setup_symlinks() {
 }
 
 setup_personal_notes_stow() {
-    local stow_dir=~/projects/personal-notes/stow
+    local stow_dir=~/projects/worktree/personal-notes/main/stow
 
     if [ ! -d "$stow_dir" ]; then
         echo "personal-notes stow directory not found at $stow_dir — skipping."
