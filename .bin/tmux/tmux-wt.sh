@@ -7,7 +7,7 @@ source "$HOME/.bin/tmux/tmux-lib.sh"
 tmux_init
 require_fzf
 
-NOTES_DIR="$HOME/projects/personal-notes/branch-notes"
+NOTES_DIR="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes"
 CURRENT_PATH="${1:-}"
 
 # Auto-detect repo from current path (if inside a worktree)

@@ -7,7 +7,7 @@ source "$HOME/.bin/tmux/tmux-lib.sh"
 
 resolve_note_context "${1:-$(pwd)}" || exit 0
 
-note="$HOME/projects/personal-notes/branch-notes/$NOTE_REPO/$NOTE_BRANCH/note.md"
+note="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes/$NOTE_REPO/$NOTE_BRANCH/note.md"
 [[ -f "$note" ]] || exit 0
 
 # Skip closed notes
