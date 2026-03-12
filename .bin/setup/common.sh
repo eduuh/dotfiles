@@ -474,6 +474,49 @@ install_pnpm() {
     fi
 }
 
+install_famtask_mcp() {
+    if command -v famtask-mcp &> /dev/null; then
+        echo "famtask-mcp is already installed."
+        return 0
+    fi
+
+    echo "Installing famtask-mcp..."
+    local install_dir="$HOME/.local/bin"
+    mkdir -p "$install_dir"
+
+    local os arch binary
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arch="$(uname -m)"
+    case "$os" in
+        darwin) os="darwin" ;;
+        linux)  os="linux" ;;
+        *)      track_failure "famtask-mcp" "Unsupported OS: $os"; return 0 ;;
+    esac
+    case "$arch" in
+        arm64|aarch64) arch="arm64" ;;
+        x86_64|amd64)  arch="x64" ;;
+        *)             track_failure "famtask-mcp" "Unsupported arch: $arch"; return 0 ;;
+    esac
+    binary="famtask-mcp-${os}-${arch}"
+
+    local tag
+    tag=$(curl -fsSL "https://api.github.com/repos/eduuh/wira360/releases?per_page=10" \
+        | grep -o '"tag_name": *"famtask-mcp-v[^"]*"' | head -1 | cut -d'"' -f4)
+
+    if [[ -z "$tag" ]]; then
+        track_failure "famtask-mcp" "No famtask-mcp release found on GitHub"
+        return 0
+    fi
+
+    local url="https://github.com/eduuh/wira360/releases/download/${tag}/${binary}"
+    if ! curl -fSL "$url" -o "${install_dir}/famtask-mcp"; then
+        track_failure "famtask-mcp" "Failed to download famtask-mcp binary"
+        return 0
+    fi
+    chmod +x "${install_dir}/famtask-mcp"
+    echo "famtask-mcp ($tag) installed to ${install_dir}/famtask-mcp"
+}
+
 install_talosctl() {
     # Skip on WSL - talosctl should be installed on Windows host
     if grep -qi microsoft /proc/version 2>/dev/null; then
