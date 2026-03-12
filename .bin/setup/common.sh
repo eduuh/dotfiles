@@ -499,17 +499,20 @@ install_famtask_mcp() {
     esac
     binary="famtask-mcp-${os}-${arch}"
 
+    if ! command -v gh &> /dev/null; then
+        track_failure "famtask-mcp" "gh CLI required for private repo download"
+        return 0
+    fi
+
     local tag
-    tag=$(curl -fsSL "https://api.github.com/repos/eduuh/wira360/releases?per_page=10" \
-        | grep -o '"tag_name": *"famtask-mcp-v[^"]*"' | head -1 | cut -d'"' -f4)
+    tag=$(gh release list --repo eduuh/wira360 --limit 10 --json tagName --jq '[.[] | select(.tagName | startswith("famtask-mcp-v"))][0].tagName' 2>/dev/null)
 
     if [[ -z "$tag" ]]; then
         track_failure "famtask-mcp" "No famtask-mcp release found on GitHub"
         return 0
     fi
 
-    local url="https://github.com/eduuh/wira360/releases/download/${tag}/${binary}"
-    if ! curl -fSL "$url" -o "${install_dir}/famtask-mcp"; then
+    if ! gh release download "$tag" --repo eduuh/wira360 --pattern "$binary" --output "${install_dir}/famtask-mcp" --clobber; then
         track_failure "famtask-mcp" "Failed to download famtask-mcp binary"
         return 0
     fi
