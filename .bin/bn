@@ -9,6 +9,8 @@
 #   bn list|l [--all]               # List active notes (--all includes closed)
 #   bn active                       # List active notes
 #   bn close                        # Close current branch's note
+#   bn reopen                       # Reopen a closed note
+#   bn done <text>                  # Mark a todo as done by substring match
 #   bn prune                        # Close notes whose worktrees no longer exist
 #   bn summary|s                    # Dashboard: open todos, blockers, per-branch detail
 #   bn status|st                    # One-line status for current branch
@@ -29,9 +31,17 @@
 #   bn diff|d                       # Git diff stat + open todos
 #   bn achieve|ac "<title>"          # Log an achievement
 #   bn achieve --list|--edit|--path  # Manage achievements
+#   bn reset [--force]              # Remove all non-main worktrees + close notes
+#   bn search <text>                # Search across all active notes
+#   bn stale [--days N]             # Show notes with no recent modifications
 #   bn global|g [subcmd]            # Repo-level global note
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
+
+# Disable colors when stdout is not a terminal (piped output)
+if [[ ! -t 1 ]]; then
+    RED='' GREEN='' YELLOW='' BLUE='' NC=''
+fi
 
 # --- Config ---
 
@@ -98,7 +108,9 @@ status: $new_status" "$note_file"
 _set_frontmatter() {
     local note_file="$1" key="$2" value="$3"
     if grep -q "^${key}:" "$note_file"; then
-        sed -i '' "s|^${key}:.*|${key}: ${value}|" "$note_file"
+        awk -v key="$key" -v val="$value" \
+            '$0 ~ "^"key":" { print key": "val; next } { print }' \
+            "$note_file" > "${note_file}.tmp" && mv "${note_file}.tmp" "$note_file"
     else
         sed -i '' "/^status:/a\\
 ${key}: ${value}" "$note_file"
@@ -646,6 +658,38 @@ _pn_for_file() {
     done
 }
 
+# --- Helpers: Note Iteration ---
+
+# Load and batch-parse all note files. Sets:
+#   _BN_FILES  — array of note file paths
+#   _BN_PARSED — raw batch parse output
+# Returns 1 (and prints message) if no notes found.
+_load_all_notes() {
+    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; return 1; }
+    _BN_FILES=("$NOTES_DIR"/*/*/note.md(N))
+    (( ${#_BN_FILES[@]} == 0 )) && { echo "No branch notes found"; return 1; }
+    _BN_PARSED=$(_parse_all_notes "${_BN_FILES[@]}")
+}
+
+# Check if a parsed note is active and belongs to the current machine.
+# Usage: _is_active_local "$parsed" || continue
+_is_active_local() {
+    local parsed="$1"
+    local note_status=$(_pn_val "$parsed" "status")
+    [[ -z "$note_status" ]] && note_status="active"
+    [[ "$note_status" == "closed" ]] && return 1
+    local machine=$(_pn_val "$parsed" "machine")
+    [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && return 1
+    return 0
+}
+
+# Extract repo and branch from a note file path. Sets _repo and _branch.
+_note_context() {
+    local note_dir=${1:h}
+    _branch=${note_dir:t}
+    _repo=${note_dir:h:t}
+}
+
 # --- Commands ---
 
 cmd_path() {
@@ -813,15 +857,11 @@ cmd_list() {
         esac
     done
 
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
-
-    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
-    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
-    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+    _load_all_notes || exit 0
 
     local found=false
-    for note_file in "${note_files[@]}"; do
-        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+    for note_file in "${_BN_FILES[@]}"; do
+        local parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
         local note_status=$(_pn_val "$parsed" "status")
         [[ -z "$note_status" ]] && note_status="active"
 
@@ -835,9 +875,7 @@ cmd_list() {
         fi
 
         found=true
-        local note_dir=${note_file:h}
-        local branch=${note_dir:t}
-        local repo=${note_dir:h:t}
+        _note_context "$note_file"
 
         local type=$(_pn_val "$parsed" "type")
         [[ -z "$type" ]] && type="-"
@@ -855,7 +893,7 @@ cmd_list() {
         local counts="${todos} todos"
         (( blockers > 0 )) && counts="$counts, $blockers blockers"
 
-        printf "%-30s %-12s %s  %s%s%s\n" "$repo/$branch" "$type" "$counts" "$created" "$note_status_tag" "$machine_tag"
+        printf "%-30s %-12s %s  %s%s%s\n" "$_repo/$_branch" "$type" "$counts" "$created" "$note_status_tag" "$machine_tag"
     done
 
     $found || echo "No branch notes found"
@@ -985,32 +1023,174 @@ cmd_close() {
     fi
 }
 
+# Mark a todo as done by substring match
+cmd_done() {
+    local query="$*"
+    [[ -z "$query" ]] && { echo "Usage: bn done <text>" >&2; exit 1; }
+
+    require_git_context
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    [[ ! -f "$note_file" ]] && { echo "No note for $NOTE_REPO/$NOTE_BRANCH" >&2; exit 1; }
+
+    # Find matching open todos
+    local -a matches=()
+    local -a line_nums=()
+    local lnum=0
+    while IFS= read -r line; do
+        lnum=$((lnum + 1))
+        if [[ "$line" == "- [ ] "* ]] && [[ "${line:l}" == *"${query:l}"* ]]; then
+            matches+=("$line")
+            line_nums+=("$lnum")
+        fi
+    done < "$note_file"
+
+    if (( ${#matches[@]} == 0 )); then
+        echo "No open todo matching '$query'" >&2
+        return 1
+    fi
+
+    if (( ${#matches[@]} > 1 )); then
+        echo "Multiple matches for '$query':"
+        for m in "${matches[@]}"; do
+            echo "  $m"
+        done
+        echo "Be more specific." >&2
+        return 1
+    fi
+
+    # Single match — check it off
+    local target_line=${line_nums[1]}
+    sed -i "${target_line}s/^- \[ \] /- [x] /" "$note_file"
+    echo "Done: ${matches[1]#- \[ \] }"
+}
+
+# Reopen a closed note
+cmd_reopen() {
+    require_git_context
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    [[ ! -f "$note_file" ]] && { echo "No note for $NOTE_REPO/$NOTE_BRANCH" >&2; exit 1; }
+
+    local current_status=$(get_note_status "$note_file")
+    if [[ "$current_status" == "active" ]]; then
+        echo "$NOTE_REPO/$NOTE_BRANCH is already active"
+        return
+    fi
+
+    set_note_status "$note_file" "active"
+    echo "Reopened: $NOTE_REPO/$NOTE_BRANCH"
+}
+
+# Search across all active notes and investigation files
+cmd_search() {
+    local query="$*"
+    [[ -z "$query" ]] && { echo "Usage: bn search <text>" >&2; exit 1; }
+
+    _load_all_notes || exit 0
+
+    local found=false parsed note_dir results
+    local -a search_files
+    for note_file in "${_BN_FILES[@]}"; do
+        parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+        _is_active_local "$parsed" || continue
+
+        _note_context "$note_file"
+        note_dir=${note_file:h}
+
+        # Search note.md and all .md files in the branch dir
+        search_files=("$note_dir"/*.md(N))
+        for f in "${search_files[@]}"; do
+            results=$(grep -in "$query" "$f" 2>/dev/null) || continue
+            [[ -z "$results" ]] && continue
+            found=true
+            while IFS= read -r hit; do
+                echo -e "${BLUE}${_repo}/${_branch}${NC}/${f:t}:${hit}"
+            done <<< "$results"
+        done
+    done
+
+    $found || echo "No matches for '$query'"
+}
+
+# Show stale notes (no file modifications in N days)
+cmd_stale() {
+    local days=14
+    [[ "${1:-}" == "--days" ]] && days="$2"
+
+    _load_all_notes || exit 0
+
+    local cutoff_ts
+    if date -v-1d &>/dev/null 2>&1; then
+        cutoff_ts=$(date -v-${days}d '+%s')
+    else
+        cutoff_ts=$(date -d "-${days} days" '+%s')
+    fi
+
+    local found=false parsed mod_ts mod_date open_todos
+    for note_file in "${_BN_FILES[@]}"; do
+        parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+        _is_active_local "$parsed" || continue
+
+        mod_ts=$(stat -c '%Y' "$note_file" 2>/dev/null || stat -f '%m' "$note_file" 2>/dev/null)
+        [[ -z "$mod_ts" ]] && continue
+        (( mod_ts > cutoff_ts )) && continue
+
+        found=true
+        _note_context "$note_file"
+        if date -v-1d &>/dev/null 2>&1; then
+            mod_date=$(date -r "$mod_ts" '+%Y-%m-%d')
+        else
+            mod_date=$(date -d "@$mod_ts" '+%Y-%m-%d')
+        fi
+        open_todos=$(_pn_val "$parsed" "open_todos")
+        echo -e "${YELLOW}${_repo}/${_branch}${NC}  last modified: $mod_date  (${open_todos} open todos)"
+    done
+
+    $found || echo "No stale notes (all modified within ${days} days)"
+}
+
+# List open blockers across all active branches
+cmd_todo_blockers() {
+    _load_all_notes || exit 0
+
+    local found=false
+    for note_file in "${_BN_FILES[@]}"; do
+        local parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+        _is_active_local "$parsed" || continue
+
+        local blockers=$(_pn_val "$parsed" "blockers")
+        (( blockers == 0 )) && continue
+
+        found=true
+        _note_context "$note_file"
+        echo -e "${BLUE}${_repo}/${_branch}${NC}"
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && echo "  $line"
+        done <<< "$(_pn_lines "$parsed" "BLOCKER")"
+    done
+
+    $found || echo "No open blockers"
+}
+
 # Close notes whose worktrees no longer exist
 cmd_prune() {
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
-
-    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
-    (( ${#note_files[@]} == 0 )) && { echo "Nothing to prune"; exit 0; }
-    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+    _load_all_notes || exit 0
 
     local closed=0
-    for note_file in "${note_files[@]}"; do
-        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
+    for note_file in "${_BN_FILES[@]}"; do
+        local parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
         local note_status=$(_pn_val "$parsed" "status")
         [[ -z "$note_status" ]] && note_status="active"
         [[ "$note_status" == "closed" ]] && continue
 
-        local note_dir=${note_file:h}
-        local branch=${note_dir:t}
-        local repo=${note_dir:h:t}
+        _note_context "$note_file"
 
         # Only prune worktree-based repos (those with a bare repo)
-        [[ ! -d "$BARE_DIR/${repo}.git" ]] && continue
+        [[ ! -d "$BARE_DIR/${_repo}.git" ]] && continue
 
-        local worktree_path="$WORKTREE_DIR/${repo}/${branch}"
+        local worktree_path="$WORKTREE_DIR/${_repo}/${_branch}"
         if [[ ! -d "$worktree_path" ]]; then
             set_note_status "$note_file" "closed"
-            echo "Closed: $repo/$branch (worktree removed)"
+            echo "Closed: $_repo/$_branch (worktree removed)"
             closed=$((closed + 1))
         fi
     done
@@ -1021,9 +1201,100 @@ cmd_prune() {
     cmd_archive
 }
 
+cmd_reset() {
+    local force=false
+    [[ "${1:-}" == "--force" ]] && force=true
+
+    local bare_repos=("$BARE_DIR"/*.git(N/))
+    (( ${#bare_repos[@]} == 0 )) && { echo "No bare repos found"; return; }
+
+    local -a to_remove=()
+
+    for bare in "${bare_repos[@]}"; do
+        local repo_name=$(basename "$bare" .git)
+        local wt_list
+        wt_list=$(git --git-dir="$bare" worktree list --porcelain 2>/dev/null) || continue
+
+        # Parse worktree paths (skip bare repo itself)
+        while IFS= read -r line; do
+            [[ "$line" != "worktree "* ]] && continue
+            local wt_path="${line#worktree }"
+            # Skip the bare repo dir itself
+            [[ "$wt_path" == "$BARE_DIR"/* ]] && continue
+
+            local branch_name="${wt_path:t}"
+            [[ "$branch_name" == "main" ]] && continue
+
+            to_remove+=("$wt_path")
+        done <<< "$wt_list"
+    done
+
+    if (( ${#to_remove[@]} == 0 )); then
+        echo "No worktrees to remove (main worktrees are preserved)"
+        return
+    fi
+
+    echo -e "${RED}Worktrees to remove:${NC}"
+    for wt in "${to_remove[@]}"; do
+        if [[ -d "$wt" ]] && [[ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]]; then
+            echo -e "  $wt ${YELLOW}(has uncommitted changes)${NC}"
+        else
+            echo "  $wt"
+        fi
+    done
+    echo ""
+    echo "${#to_remove[@]} worktree(s) will be removed"
+
+    if ! $force; then
+        echo -e "\n${YELLOW}Dry run. Use 'bn reset --force' to execute.${NC}"
+        return
+    fi
+
+    # Rebase main worktrees with remote
+    echo -e "\n${BLUE}Rebasing main worktrees...${NC}"
+    for bare in "${bare_repos[@]}"; do
+        local repo_name=$(basename "$bare" .git)
+        local main_wt="$WORKTREE_DIR/${repo_name}/main"
+        [[ ! -d "$main_wt" ]] && continue
+
+        echo -e "  ${BLUE}${repo_name}: fetching + updating main...${NC}"
+        git --git-dir="$bare" fetch origin 2>/dev/null
+        if git -C "$main_wt" merge --ff-only origin/main 2>/dev/null; then
+            echo -e "  ${GREEN}${repo_name}: main updated${NC}"
+        else
+            echo -e "  ${YELLOW}${repo_name}: main not fast-forwardable, skipped${NC}"
+        fi
+    done
+
+    echo ""
+    for wt in "${to_remove[@]}"; do
+        local repo_name="${wt:h:t}"
+        local branch_name="${wt:t}"
+
+        echo -e "${YELLOW}Removing: $wt${NC}"
+        local bare="$BARE_DIR/${repo_name}.git"
+        git --git-dir="$bare" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+
+        # Close the branch note if it exists
+        local note_file="$NOTES_DIR/${repo_name}/${branch_name}/note.md"
+        if [[ -f "$note_file" ]]; then
+            set_note_status "$note_file" "closed"
+            echo "  Closed note: ${repo_name}/${branch_name}"
+        fi
+    done
+
+    # Prune stale git worktree refs and archive old notes
+    for bare in "$BARE_DIR"/*.git(N/); do
+        git --git-dir="$bare" worktree prune 2>/dev/null
+    done
+    cmd_archive
+
+    echo -e "${GREEN}Reset complete. Removed ${#to_remove[@]} worktree(s).${NC}"
+}
+
 # Summary dashboard
 cmd_summary() {
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
+    _load_all_notes || exit 0
 
     local total_todos=0
     local total_blockers=0
@@ -1032,23 +1303,12 @@ cmd_summary() {
     local details=""
     local found=false
 
-    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
-    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
-    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
-
-    for note_file in "${note_files[@]}"; do
-        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
-        local note_status=$(_pn_val "$parsed" "status")
-        [[ -z "$note_status" ]] && note_status="active"
-        [[ "$note_status" == "closed" ]] && continue
-
-        local machine=$(_pn_val "$parsed" "machine")
-        [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && continue
+    for note_file in "${_BN_FILES[@]}"; do
+        local parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+        _is_active_local "$parsed" || continue
 
         found=true
-        local note_dir=${note_file:h}
-        local branch=${note_dir:t}
-        local repo=${note_dir:h:t}
+        _note_context "$note_file"
 
         local type=$(_pn_val "$parsed" "type")
         [[ -z "$type" ]] && type="-"
@@ -1064,7 +1324,7 @@ cmd_summary() {
         total_asks=$((total_asks + asks))
 
         # Build per-branch detail
-        local header="\n$repo/$branch ($type, $todos todos"
+        local header="\n$_repo/$_branch ($type, $todos todos"
         (( blockers > 0 )) && header="$header, $blockers blockers"
         (( research > 0 )) && header="$header, $research research"
         (( asks > 0 )) && header="$header, $asks asks"
@@ -1323,31 +1583,19 @@ cmd_status() {
 
 # Todo: list open todos across all active branches
 cmd_todo() {
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
-
-    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
-    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
-    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+    _load_all_notes || exit 0
 
     local found=false
-    for note_file in "${note_files[@]}"; do
-        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
-        local note_status=$(_pn_val "$parsed" "status")
-        [[ -z "$note_status" ]] && note_status="active"
-        [[ "$note_status" == "closed" ]] && continue
-
-        local machine=$(_pn_val "$parsed" "machine")
-        [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && continue
+    for note_file in "${_BN_FILES[@]}"; do
+        local parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+        _is_active_local "$parsed" || continue
 
         local open_todos=$(_pn_val "$parsed" "open_todos")
         (( open_todos == 0 )) && continue
 
         found=true
-        local note_dir=${note_file:h}
-        local branch=${note_dir:t}
-        local repo=${note_dir:h:t}
-
-        echo -e "${BLUE}${repo}/${branch}${NC}"
+        _note_context "$note_file"
+        echo -e "${BLUE}${_repo}/${_branch}${NC}"
         while IFS= read -r line; do
             [[ -n "$line" ]] && echo "  $line"
         done <<< "$(_pn_lines "$parsed" "OPEN_TODO")"
@@ -1358,31 +1606,19 @@ cmd_todo() {
 
 # List open research items across all active branches
 cmd_todo_research() {
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
-
-    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
-    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
-    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+    _load_all_notes || exit 0
 
     local found=false
-    for note_file in "${note_files[@]}"; do
-        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
-        local note_status=$(_pn_val "$parsed" "status")
-        [[ -z "$note_status" ]] && note_status="active"
-        [[ "$note_status" == "closed" ]] && continue
-
-        local machine=$(_pn_val "$parsed" "machine")
-        [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && continue
+    for note_file in "${_BN_FILES[@]}"; do
+        local parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+        _is_active_local "$parsed" || continue
 
         local research=$(_pn_val "$parsed" "research")
         (( research == 0 )) && continue
 
         found=true
-        local note_dir=${note_file:h}
-        local branch=${note_dir:t}
-        local repo=${note_dir:h:t}
-
-        echo -e "${BLUE}${repo}/${branch}${NC}"
+        _note_context "$note_file"
+        echo -e "${BLUE}${_repo}/${_branch}${NC}"
         while IFS= read -r line; do
             [[ -n "$line" ]] && echo "  $line"
         done <<< "$(_pn_lines "$parsed" "RESEARCH")"
@@ -1404,7 +1640,11 @@ cmd_archive() {
         esac
     done
 
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
+    _load_all_notes 2>/dev/null
+    if (( ${#_BN_FILES[@]:-0} == 0 )); then
+        echo -e "\n${GREEN}Archived: 0 note(s)${NC}"
+        return
+    fi
 
     local cutoff
     if date -v-1d &>/dev/null 2>&1; then
@@ -1421,35 +1661,35 @@ cmd_archive() {
         echo ""
     fi
 
-    for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-        local note_status=$(get_note_status "$note_file")
+    for note_file in "${_BN_FILES[@]}"; do
+        local parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+        local note_status=$(_pn_val "$parsed" "status")
+        [[ -z "$note_status" ]] && note_status="active"
         [[ "$note_status" != "closed" ]] && continue
 
-        local created=$(sed -n '/^---$/,/^---$/{ /^created:/s/^created: *//p; }' "$note_file")
+        local created=$(_pn_val "$parsed" "created")
         [[ -z "$created" ]] && continue
         [[ "$created" > "$cutoff" ]] && continue
 
+        _note_context "$note_file"
         local note_dir=${note_file:h}
-        local branch=${note_dir:t}
-        local repo=${note_dir:h:t}
-
-        local dest="$NOTES_DIR/archive/$repo/$branch"
+        local dest="$NOTES_DIR/archive/$_repo/$_branch"
 
         if [[ -d "$dest" ]]; then
-            echo -e "${RED}Already exists, skipping: archive/$repo/$branch${NC}" >&2
+            echo -e "${RED}Already exists, skipping: archive/$_repo/$_branch${NC}" >&2
             continue
         fi
 
-        echo -e "${YELLOW}Archive: $repo/$branch${NC} (created $created)"
+        echo -e "${YELLOW}Archive: $_repo/$_branch${NC} (created $created)"
 
         if ! $dry_run; then
             mkdir -p "${dest:h}"
             mv "$note_dir" "$dest"
             archived=$((archived + 1))
-            affected_paths+=("$repo/$branch")
+            affected_paths+=("$_repo/$_branch")
 
             # Clean up empty repo dir
-            local repo_dir="$NOTES_DIR/$repo"
+            local repo_dir="$NOTES_DIR/$_repo"
             if [[ -d "$repo_dir" ]] && [[ -z "$(ls -A "$repo_dir")" ]]; then
                 rmdir "$repo_dir"
             fi
@@ -1484,17 +1724,15 @@ cmd_clean() {
     [[ "${1:-}" == "--all" ]] && all=true
 
     if $all; then
-        [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
-        local cleaned=0 note_status note_dir branch repo count
-        for note_file in "$NOTES_DIR"/*/*/note.md(N); do
-            note_status=$(get_note_status "$note_file")
-            [[ "$note_status" == "closed" ]] && continue
-            note_dir=${note_file:h}
-            branch=${note_dir:t}
-            repo=${note_dir:h:t}
+        _load_all_notes || exit 0
+        local cleaned=0 count
+        for note_file in "${_BN_FILES[@]}"; do
+            local parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+            _is_active_local "$parsed" || continue
             count=$(grep -cE '^- \[ \]( test)?$|^-$' "$note_file" 2>/dev/null || true)
             (( count == 0 )) && continue
-            echo "${repo}/${branch}:"
+            _note_context "$note_file"
+            echo "${_repo}/${_branch}:"
             _clean_note "$note_file"
             cleaned=$(( cleaned + count ))
         done
@@ -1515,30 +1753,18 @@ cmd_clean() {
 
 # All active worktrees with todos, blockers, research, decisions, and questions
 cmd_worktrees() {
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; exit 0; }
-
-    local -a note_files=("$NOTES_DIR"/*/*/note.md(N))
-    (( ${#note_files[@]} == 0 )) && { echo "No branch notes found"; exit 0; }
-    local _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
+    _load_all_notes || exit 0
 
     local found=false total_todos=0
-    local note_dir branch repo created type meta
-    local parsed note_status machine
+    local created type meta parsed
     local todo_count blockers_count research_count decisions_count asks_count
 
-    for note_file in "${note_files[@]}"; do
-        parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
-        note_status=$(_pn_val "$parsed" "status")
-        [[ -z "$note_status" ]] && note_status="active"
-        [[ "$note_status" == "closed" ]] && continue
-
-        machine=$(_pn_val "$parsed" "machine")
-        [[ -n "$machine" && "$machine" != "$_HOSTNAME" ]] && continue
+    for note_file in "${_BN_FILES[@]}"; do
+        parsed=$(_pn_for_file "$_BN_PARSED" "$note_file")
+        _is_active_local "$parsed" || continue
 
         found=true
-        note_dir=${note_file:h}
-        branch=${note_dir:t}
-        repo=${note_dir:h:t}
+        _note_context "$note_file"
         created=$(_pn_val "$parsed" "created")
         type=$(_pn_val "$parsed" "type")
 
@@ -1550,7 +1776,7 @@ cmd_worktrees() {
         meta="${created}"
         [[ -n "$type" ]] && meta="${meta}  ${type}"
         [[ -n "$pr" ]] && meta="${meta}  ${GREEN}PR${NC} $pr"
-        echo -e "${BLUE}${repo}/${branch}${NC}  ${meta}"
+        echo -e "${BLUE}${_repo}/${_branch}${NC}  ${meta}"
 
         # Todos (both open and completed, from _parse_note)
         local open_todos=$(_pn_val "$parsed" "open_todos")
@@ -2071,11 +2297,16 @@ Commands:
   list, l [--all] [--all-machines] List active notes
   active                          List active notes (same as list)
   close                           Close current branch's note
+  reopen                          Reopen a closed note
+  done <text>                     Mark a todo as done by substring match
   prune                           Close notes whose worktrees are gone
   summary, s                      Dashboard of active work
   status, st                      One-line status for current branch
   todo, t                         List open todos across all branches
+  blocker, x [text]               Add blocker, or list all blockers
   research, r [text]              Add research item, or list all research
+  search <text>                   Search across all active notes
+  stale [--days N]                Show notes not modified in N days (default 14)
   refresh, rf                     Fetch, pull, build current branch
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
@@ -2087,6 +2318,7 @@ Commands:
   files edit <name>               Open investigation file in $EDITOR
   archive [--days N] [--dry-run]  Archive closed notes older than N days (default 30)
   clean [--all]                   Remove empty placeholder todos
+  reset [--force]                 Remove all non-main worktrees + close notes
   worktrees, w                    All active worktrees with full todo lists
   pr [url]                        Link PR url, or open linked PR in browser
   pr --copy                       Copy PR url to clipboard
@@ -2141,6 +2373,8 @@ case "${1:-}" in
     list|l)             shift; cmd_list "$@" ;;
     active)             cmd_list ;;
     close)              cmd_close ;;
+    reopen)             cmd_reopen ;;
+    done)               shift; cmd_done "$@" ;;
     prune)              cmd_prune ;;
     summary|s)          cmd_summary ;;
     status|st)          cmd_status ;;
@@ -2149,12 +2383,15 @@ case "${1:-}" in
     refresh|rf)         shift; cmd_refresh "$@" ;;
     refresh-all|ra)     cmd_refresh_all ;;
     main|m)             cmd_main ;;
-    blocker|x)          shift; cmd_add blocker "$@" ;;
+    blocker|x)          shift; if [[ -n "$1" ]]; then cmd_add blocker "$@"; else cmd_todo_blockers; fi ;;
+    search)             shift; cmd_search "$@" ;;
+    stale)              shift; cmd_stale "$@" ;;
     build|b)            shift; cmd_build "$@" ;;
     script|sc)          shift; cmd_script "$@" ;;
     archive)            shift; cmd_archive "$@" ;;
     clean)              shift; cmd_clean "$@" ;;
     files|f)            shift; cmd_files "$@" ;;
+    reset)              shift; cmd_reset "$@" ;;
     worktrees|w)        cmd_worktrees ;;
     pr)                 shift; cmd_pr "$@" ;;
     link|wi)            shift; cmd_link "$@" ;;
