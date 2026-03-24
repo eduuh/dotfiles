@@ -18,6 +18,8 @@ _bn() {
         'l:List active notes'
         'active:List active notes'
         'close:Close current branch note'
+        'reopen:Reopen a closed note'
+        'done:Mark a todo as done by substring match'
         'prune:Close notes for removed worktrees'
         'summary:Dashboard of active work'
         's:Dashboard of active work'
@@ -34,8 +36,10 @@ _bn() {
         'ra:Refresh all main worktrees'
         'main:Print main note dir + list scripts'
         'm:Print main note dir + list scripts'
-        'blocker:Add blocker'
-        'x:Add blocker'
+        'blocker:Add blocker or list blockers'
+        'x:Add blocker or list blockers'
+        'search:Search across all active notes'
+        'stale:Show notes not modified recently'
         'build:Run a script'
         'b:Run a script'
         'script:Manage repo scripts'
@@ -144,6 +148,9 @@ _bn() {
             ;;
         achieve|ac)
             _arguments '--list[Print achievements]' '--edit[Open achievements in editor]' '--path[Print achievements path]'
+            ;;
+        stale)
+            _arguments '--days[Days threshold]:days:'
             ;;
         global|g)
             if (( CURRENT == 3 )); then
