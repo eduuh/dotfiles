@@ -4,7 +4,11 @@
 source "$HOME/.bin/tmux/tmux-lib.sh"
 
 project="$1"
-path=$(resolve_project_path "$project")
+if is_bare_repo "$project"; then
+    path=$(bare_repo_main_path "$project")
+else
+    path=$(resolve_project_path "$project")
+fi
 
 [[ ! -d "$path" ]] && { echo "Directory not found: $path"; exit 1; }
 

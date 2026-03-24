@@ -46,6 +46,17 @@ resolve_project_path() {
     fi
 }
 
+# Check if a project name is a bare repo
+is_bare_repo() {
+    [[ -d "$BARE_DIR/${1}.git" ]]
+}
+
+# Resolve the main worktree path for a bare repo
+bare_repo_main_path() {
+    local main_wt="$WORKTREE_DIR/$1/main"
+    [[ -d "$main_wt" ]] && echo "$main_wt" || echo "$BARE_DIR/${1}.git"
+}
+
 # Detect project type by marker files
 # Returns: rust, node, go, python, kubernetes, or default
 detect_project_type() {
