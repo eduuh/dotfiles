@@ -113,9 +113,13 @@ if [[ "$action" == "Create worktree" ]]; then
 
     echo "Done!"
 
-    # 7. Open tmux session in new worktree
-    session_name="${selected}/${sanitized}"
-    "$HOME/.bin/tmux/tat-template.sh" "$session_name" "$worktree_path"
+    # 7. Open as window in current session
+    window_name="$sanitized"
+    if $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$window_name"; then
+        $TMUX_CMD select-window -t "$window_name"
+    else
+        $TMUX_CMD new-window -n "$window_name" -c "$worktree_path"
+    fi
 
 #============================================================================
 # Remove worktree
@@ -169,8 +173,8 @@ elif [[ "$action" == "Remove worktree" ]]; then
             rmdir "$repo_dir" 2>/dev/null || true
         fi
 
-        # 6. Kill tmux session if it exists
-        $TMUX_CMD kill-session -t "$selected" 2>/dev/null || true
+        # 6. Kill tmux window if it exists
+        $TMUX_CMD kill-window -t "$branch_dir" 2>/dev/null || true
 
         echo "Removed: $selected"
         removed=$((removed + 1))

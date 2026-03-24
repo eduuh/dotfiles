@@ -80,7 +80,7 @@ c() { "$HOME/.bin/bn" add collab "$*" }
 a() { "$HOME/.bin/bn" add ask "$*" }
 
 # bn tab completion
-[ -f "$HOME/.bin/_bn_completion.zsh" ] && source "$HOME/.bin/_bn_completion.zsh"
+[ -f "$HOME/.bin/bn-completion.zsh" ] && source "$HOME/.bin/bn-completion.zsh"
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
