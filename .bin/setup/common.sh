@@ -450,6 +450,18 @@ install_rust() {
     fi
 }
 
+install_playwright() {
+    if command -v playwright &> /dev/null; then
+        echo "Playwright is already installed."
+        return 0
+    fi
+
+    echo "Installing Playwright..."
+    if ! npm install -g playwright; then
+        track_failure "playwright" "Failed to install Playwright"
+    fi
+}
+
 install_pnpm() {
     if [[ $CODESPACES == "true" ]]; then
         echo "In a GitHub Codespace environment, skipping PNPM installation."
