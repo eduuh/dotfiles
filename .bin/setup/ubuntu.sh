@@ -84,6 +84,7 @@ setup_ubuntu() {
     fi
     install_lazygit
     install_claude_code
+    install_playwright
     setup_python
     setup_symlinks
 }
