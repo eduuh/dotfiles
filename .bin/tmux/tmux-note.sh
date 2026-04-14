@@ -3,6 +3,7 @@
 # Called via: bind n display-popup -E ... "$HOME/.bin/tmux/tmux-note.sh '#{pane_current_path}'"
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
+tmux_init
 
 NOTES_DIR="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes"
 
@@ -16,7 +17,7 @@ note_dir=$("$HOME/.bin/bn")
 note_file="$note_dir/note.md"
 
 # Sync window sections
-tmux list-windows -F '#{window_name}' 2>/dev/null | while IFS= read -r win; do
+$TMUX_CMD list-windows -F '#{window_name}' 2>/dev/null | while IFS= read -r win; do
     if ! grep -Fq "### $win" "$note_file" 2>/dev/null; then
         echo "" >> "$note_file"
         echo "### $win" >> "$note_file"

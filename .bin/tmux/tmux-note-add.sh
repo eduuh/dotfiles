@@ -3,6 +3,7 @@
 # Called via: bind N display-popup -E ... "$HOME/.bin/tmux/tmux-note-add.sh '#{pane_current_path}'"
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
+tmux_init
 require_fzf
 
 # cd to pane path so branch-note.sh subcommands resolve correctly
@@ -28,7 +29,7 @@ case "$section" in
 esac
 
 # Prompt for text
-window_name=$(tmux display-message -p '#{window_name}' 2>/dev/null)
+window_name=$($TMUX_CMD display-message -p '#{window_name}' 2>/dev/null)
 printf "> "
 read -r "input"
 [[ -z "$input" ]] && exit 0

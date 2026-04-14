@@ -85,17 +85,23 @@ project_type_display() {
     esac
 }
 
-# Base tmux session layout: editor with split + git window
-# Used by rust, go, and as base for other templates
-apply_base_layout() {
-    local name="$1" path="$2"
-    $TMUX_CMD new-session -d -s "$name" -c "$path" -n "editor"
-    $TMUX_CMD send-keys -t "$name:editor" "nvim ." Enter
-    $TMUX_CMD split-window -h -t "$name:editor" -c "$path" -l 40%
-    $TMUX_CMD new-window -t "$name" -n "git" -c "$path"
-    $TMUX_CMD send-keys -t "$name:git" "lazygit" Enter
-    $TMUX_CMD select-window -t "$name:editor"
-    $TMUX_CMD select-pane -t "$name:editor.0"
+# List worktrees for a bare repo (excluding main/master and the bare dir itself)
+# Usage: list_worktrees "repo-name"  →  prints "branch-dir" per line
+list_worktrees() {
+    local repo="$1"
+    local bare="$BARE_DIR/${repo}.git"
+    [[ -d "$bare" ]] || return 1
+    git --git-dir="$bare" worktree list --porcelain 2>/dev/null | while IFS= read -r line; do
+        [[ "$line" == worktree\ * ]] || continue
+        local wt_path="${line#worktree }"
+        [[ "$wt_path" == "$BARE_DIR"/* ]] && continue
+        echo "$(basename "$wt_path")"
+    done
+}
+
+# Count windows in a tmux session (0 if session doesn't exist)
+session_window_count() {
+    $TMUX_CMD list-windows -t "=$1" -F x 2>/dev/null | wc -l
 }
 
 # Resolve repo name and branch from a directory path
