@@ -2,6 +2,7 @@
 # tat-preview.sh - fzf preview for project selection
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
+tmux_init
 
 project="$1"
 if is_bare_repo "$project"; then
@@ -15,6 +16,20 @@ fi
 # Header
 echo "━━━ $project ━━━"
 echo ""
+
+# Session windows (active sessions only)
+if $TMUX_CMD has-session -t "=$project" 2>/dev/null; then
+    echo "Windows:"
+    $TMUX_CMD list-windows -t "=$project" \
+        -F "#{window_index}|#{window_name}|#{pane_current_command}|#{pane_current_path}|#{window_active}" \
+        2>/dev/null | while IFS='|' read -r idx name cmd wpath active; do
+        short="${wpath/#$HOME/~}"
+        marker=""
+        [[ "$active" == "1" ]] && marker="*"
+        printf "  %s%s: %-14s %-8s %s\n" "$idx" "$marker" "$name" "$cmd" "$short"
+    done
+    echo ""
+fi
 
 # Git info (handles regular repos and worktrees)
 if [[ -d "$path/.git" ]] || [[ -f "$path/.git" ]]; then
@@ -55,26 +70,3 @@ fi
 # Project type detection
 project_type=$(detect_project_type "$path")
 echo "Type: $(project_type_display "$project_type")"
-
-# Extra info for Node.js projects
-if [[ "$project_type" == "node" ]] && command -v jq &>/dev/null; then
-    scripts=$(jq -r '.scripts | keys | join(", ")' "$path/package.json" 2>/dev/null)
-    [[ -n "$scripts" ]] && echo "Scripts: ${scripts:0:60}"
-fi
-echo ""
-
-# README preview
-for readme in README.md readme.md README.rst README; do
-    if [[ -f "$path/$readme" ]]; then
-        echo "━━━ README ━━━"
-        if command -v bat &>/dev/null; then
-            bat --style=plain --color=always --line-range=:15 "$path/$readme" 2>/dev/null
-        else
-            i=0
-            while IFS= read -r line && (( i++ < 15 )); do
-                echo "$line"
-            done < "$path/$readme"
-        fi
-        break
-    fi
-done
