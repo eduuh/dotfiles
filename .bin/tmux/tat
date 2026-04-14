@@ -25,12 +25,13 @@ get_projects() {
         done
     fi
 
-    # Regular clones: skip if already listed as bare repo
+    # Regular clones: must be a git repo, skip if already listed as bare repo
     for dir in "$PROJECT_ROOT"/*/(N); do
         [[ -d "$dir" ]] || continue
         local name=$(basename "$dir")
         [[ "$name" == .* || "$name" == "bare" || "$name" == "worktree" ]] && continue
         (( ${+seen[$name]} )) && continue
+        [[ -d "$dir/.git" || -f "$dir/.git" ]] || continue
         projects+=("$name")
     done
 
