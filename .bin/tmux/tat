@@ -114,7 +114,32 @@ fi
 
 # Create or switch to session
 if has_session "$session_name"; then
-    $TMUX_CMD switch-client -t "$session_name"
+    wc=$(session_window_count "$session_name")
+    if (( wc <= 1 )); then
+        $TMUX_CMD switch-client -t "$session_name"
+        exit 0
+    fi
+
+    # Window picker for active sessions
+    window=$($TMUX_CMD list-windows -t "=$session_name" \
+        -F "#{window_index}|#{window_name}|#{pane_current_command}|#{pane_current_path}|#{window_active}" \
+        2>/dev/null | while IFS='|' read -r idx name cmd wpath active; do
+        short="${wpath/#$HOME/~}"
+        marker=""
+        [[ "$active" == "1" ]] && marker="*"
+        printf "%s|%s%s: %-14s %-8s %s\n" "$idx" "$idx" "$marker" "$name" "$cmd" "$short"
+    done | "$FZF_CMD" \
+        --reverse \
+        --delimiter="|" \
+        --with-nth=2 \
+        --header="Pick window (Esc: current)" \
+        | cut -d'|' -f1)
+
+    if [[ -n "$window" ]]; then
+        $TMUX_CMD switch-client -t "$session_name:$window"
+    else
+        $TMUX_CMD switch-client -t "$session_name"
+    fi
 else
     "$TEMPLATE_SCRIPT" "$session_name" "$project_path"
 fi
