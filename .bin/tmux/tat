@@ -42,13 +42,12 @@ get_projects() {
 sort_by_frecency() {
     if command -v zoxide &>/dev/null; then
         while IFS= read -r project; do
-            local ppath
             if is_bare_repo "$project"; then
                 ppath=$(bare_repo_main_path "$project")
             else
                 ppath=$(resolve_project_path "$project")
             fi
-            local score=$(zoxide query -s "$ppath" 2>/dev/null | /usr/bin/awk '{print $1}')
+            score=$(zoxide query -s "$ppath" 2>/dev/null | /usr/bin/awk '{print $1}')
             [[ -z "$score" ]] && score="0"
             echo "$score $project"
         done | sort -rn | /usr/bin/awk '{print $2}'
