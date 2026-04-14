@@ -11,24 +11,26 @@ require_fzf
 PREVIEW_SCRIPT="$HOME/.bin/tmux/tat-preview.sh"
 TEMPLATE_SCRIPT="$HOME/.bin/tmux/tat-template.sh"
 
-# Get all projects: worktree entries (repo/branch) + regular clones
+# Get all projects: bare repos + regular clones (bare wins on name collision)
 get_projects() {
+    local -A seen
     local projects=()
 
-    # Bare repos: ~/projects/bare/repo.git → "repo" (one session per repo)
+    # Bare repos first (they take priority over regular clones)
     if [[ -d "$BARE_DIR" ]]; then
         for bare in "$BARE_DIR"/*.git(N/); do
-            projects+=($(basename "$bare" .git))
+            local name=$(basename "$bare" .git)
+            seen[$name]=1
+            projects+=("$name")
         done
     fi
 
-    # Regular clones: ~/projects/*/ excluding bare/, worktree/, hidden dirs
+    # Regular clones: skip if already listed as bare repo
     for dir in "$PROJECT_ROOT"/*/(N); do
         [[ -d "$dir" ]] || continue
         local name=$(basename "$dir")
-        [[ "$name" == .* ]] && continue
-        [[ "$name" == "bare" ]] && continue
-        [[ "$name" == "worktree" ]] && continue
+        [[ "$name" == .* || "$name" == "bare" || "$name" == "worktree" ]] && continue
+        (( ${+seen[$name]} )) && continue
         projects+=("$name")
     done
 
@@ -59,24 +61,45 @@ has_session() {
     $TMUX_CMD has-session -t "=$1" 2>/dev/null
 }
 
-# Build display list with session indicators
+# Build display list with session indicators and window count
 build_list() {
     get_projects | sort_by_frecency | while IFS= read -r project; do
         if has_session "$project"; then
-            echo "[*] $project"
+            local wc=$(session_window_count "$project")
+            echo "[*${wc}w] $project"
         else
-            echo "    $project"
+            echo "      $project"
         fi
     done
 }
+
+# --list mode: output the list and exit (used by fzf reload)
+if [[ "$1" == "--list" ]]; then
+    build_list
+    exit 0
+fi
+
+# Kill helper for fzf execute binding
+KILL_SCRIPT=$(mktemp)
+trap 'rm -f "$KILL_SCRIPT"' EXIT INT TERM
+cat > "$KILL_SCRIPT" << 'KILLEOF'
+#!/usr/bin/env zsh
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+project="${@##* }"  # last word = project name
+current=$(tmux display-message -p '#S' 2>/dev/null)
+[[ "$project" == "$current" ]] && exit 0  # don't kill current session
+tmux has-session -t "=$project" 2>/dev/null && tmux kill-session -t "=$project"
+KILLEOF
+chmod +x "$KILL_SCRIPT"
 
 # Run fzf with preview
 selected=$(build_list | "$FZF_CMD" \
     --reverse \
     --ansi \
-    --header="Select project (preview: git status, readme)" \
+    --header="Enter: open | ctrl-x: kill session" \
     --preview="$PREVIEW_SCRIPT {-1}" \
     --preview-window="right:50%:wrap" \
+    --bind="ctrl-x:execute-silent($KILL_SCRIPT {})+reload($0 --list)" \
     | /usr/bin/awk '{print $NF}')
 
 # Exit if nothing selected

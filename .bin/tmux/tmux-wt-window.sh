@@ -16,11 +16,11 @@ fi
 # Gather worktrees (filtered to current repo if detected)
 worktrees=()
 for repo_dir in "$WORKTREE_DIR"/*(N/); do
-    local repo_name=$(basename "$repo_dir")
+    repo_name=$(basename "$repo_dir")
     [[ -n "$current_repo" && "$repo_name" != "$current_repo" ]] && continue
     for branch_dir in "$repo_dir"/*(N/); do
         [[ -d "$branch_dir" ]] || continue
-        local branch_name=$(basename "$branch_dir")
+        branch_name=$(basename "$branch_dir")
         worktrees+=("${repo_name}/${branch_name}")
     done
 done

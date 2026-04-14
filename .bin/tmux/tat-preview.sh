@@ -39,6 +39,19 @@ if [[ -d "$path/.git" ]] || [[ -f "$path/.git" ]]; then
     echo ""
 fi
 
+# Worktrees (bare repos only)
+if is_bare_repo "$project"; then
+    worktrees=(${(f)"$(list_worktrees "$project")"})
+    if (( ${#worktrees[@]} > 0 )); then
+        echo "Worktrees: (${#worktrees[@]})"
+        for wt in "${worktrees[@]}"; do
+            [[ -z "$wt" ]] && continue
+            echo "  $wt"
+        done
+        echo ""
+    fi
+fi
+
 # Project type detection
 project_type=$(detect_project_type "$path")
 echo "Type: $(project_type_display "$project_type")"
@@ -57,7 +70,7 @@ for readme in README.md readme.md README.rst README; do
         if command -v bat &>/dev/null; then
             bat --style=plain --color=always --line-range=:15 "$path/$readme" 2>/dev/null
         else
-            local i=0
+            i=0
             while IFS= read -r line && (( i++ < 15 )); do
                 echo "$line"
             done < "$path/$readme"
