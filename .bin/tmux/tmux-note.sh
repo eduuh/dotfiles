@@ -1,33 +1,22 @@
 #!/usr/bin/env zsh
-# tmux-note.sh - Persistent branch note popup, one session per outer tmux session.
-# Toggle: C-Space n opens; the binding detaches the inner client to close.
-# C-a n/d from inside also dismisses. :q kills the session entirely.
+# tmux-note.sh - Open the current branch's note in a tmux popup.
+# The caller's -d has already set cwd, so `bn` resolves relative to it.
 
-source "$HOME/.bin/tmux/tmux-lib.sh"
-tmux_init
-
-INNER_SOCKET="nvim"
-INNER_CONF="$HOME/.config/nvim/tmux-inner.conf"
-
-outer_session=$($TMUX_CMD display-message -p '#S' 2>/dev/null)
-note_session="note_${outer_session}"
-pane_path=$($TMUX_CMD display-message -p '#{pane_current_path}' 2>/dev/null)
-pane_path="${pane_path:-$(pwd)}"
-
-if ! tmux -L "$INNER_SOCKET" has-session -t "=$note_session" 2>/dev/null; then
-    note_dir=$(cd "$pane_path" && "$HOME/.bin/bn" 2>/dev/null)
-    note_file="${note_dir}/note.md"
-
-    $TMUX_CMD list-windows -F '#{window_name}' 2>/dev/null | while IFS= read -r win; do
-        if ! grep -Fq "### $win" "$note_file" 2>/dev/null; then
-            printf '\n### %s\n' "$win" >> "$note_file"
-        fi
-    done
-
-    tmux -L "$INNER_SOCKET" -f "$INNER_CONF" new-session -d -s "$note_session" -c "$pane_path" \
-        nvim "$note_file"
-    tmux -L "$INNER_SOCKET" set-option -t "$note_session" status off
+# Resolve / create the note for this git context
+note_dir=$("$HOME/.bin/bn" 2>/dev/null)
+if [[ -z "$note_dir" || ! -d "$note_dir" ]]; then
+    echo "bn: could not resolve branch note dir for $(pwd)"
+    echo "    Make sure you're inside a git repo."
+    read -sk1 "?Press any key..."
+    exit 1
 fi
+note_file="${note_dir}/note.md"
 
-# No exec — shell must stay alive so the popup closes when attach-session returns
-tmux -L "$INNER_SOCKET" attach-session -t "$note_session"
+# Sync tmux window-name sections into the note (preserves existing behaviour)
+tmux list-windows -F '#{window_name}' 2>/dev/null | while IFS= read -r win; do
+    if ! grep -Fq "### $win" "$note_file" 2>/dev/null; then
+        printf '\n### %s\n' "$win" >> "$note_file"
+    fi
+done
+
+exec nvim "$note_file"

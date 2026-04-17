@@ -1,156 +1,241 @@
-# Tmux Workflow
+# Tmux Keybindings
 
-A streamlined tmux workflow with fuzzy finding, project templates, and smart navigation.
+Prefix: **`C-Space`** (Ctrl+Space)
 
-## Dependencies
+The workflow: one **session per repo**, one **window per worktree**. Sessions are named after the bare repo (e.g. `tracker`, `kube-homelab`); windows are named after the branch (e.g. `feat-auth`). Plain clones like `dotfiles` get a single `main` window.
 
-Installed automatically via setup scripts:
+## Sessions
 
-| Package | Purpose |
-|---------|---------|
-| `tmux` | Terminal multiplexer |
-| `fzf` | Fuzzy finder |
-| `zoxide` | Smart directory jumping (frecency) |
-| `bat` | Syntax-highlighted previews |
-| `tree` | Directory tree display |
-| `jq` | JSON parsing (package.json scripts) |
-| `lazygit` | Git TUI |
+| Key | Action |
+|-----|--------|
+| `C-o` | Project picker (fzf over `~/projects`). Creates or switches session. |
+| `t` | Kill current session, switch to next. |
+| `.` | Rename current session. |
+| `d` | Detach client (built-in). |
 
-## Key Bindings
+## Worktrees (as windows)
 
-Prefix is `Ctrl+Space`.
+| Key | Action |
+|-----|--------|
+| `o` | **Go to or create worktree.** fzf list of existing worktrees. Select one → opens as window. Type a new name + Enter → creates worktree from latest `main`, opens as window. |
+| `X` | Remove current window's worktree + kill the window. Refuses `main`/`master`. Prompts for `--force` if dirty. |
 
-### Navigation
+In a non-bare session (e.g. `dotfiles`), `o` just opens/selects a `main` window at the repo path.
 
-| Binding | Action |
+## Windows
+
+| Key | Action |
+|-----|--------|
+| `w` | New window (same cwd). |
+| `r` | Rename window. |
+| `1`–`5` | Jump to window 1–5. |
+| `[` / `]` | Previous / next window. |
+| `<` / `>` | Swap window left / right. |
+
+## Panes
+
+| Key | Action |
+|-----|--------|
+| `v` | Split right (vertical divider). |
+| `s` | Split below (horizontal divider). |
+| `←` `↓` `↑` `→` | Navigate between panes. |
+| `S-←` `S-↓` `S-↑` `S-→` | Resize current pane by 5 cells. |
+| `z` | Toggle zoom (fullscreen current pane). |
+| `q` | Kill pane (with confirm). |
+
+## Popups
+
+| Key | Action |
+|-----|--------|
+| `e` | Nvim editor popup at current cwd. `:q` / `:qa` closes. |
+| `n` | Branch note popup (`note.md` for current git context). |
+| `g` | Lazygit popup. `q` closes. |
+
+## Copy Mode (vi)
+
+Enter with **`C-Space Space`**.
+
+| Key | Action |
+|-----|--------|
+| `v` | Start selection. |
+| `C-v` | Toggle rectangle selection. |
+| `y` | Copy to system clipboard + exit. |
+| `/` `?` | Search forward / backward. |
+| `n` `N` | Next / previous search match. |
+| `g` `G` | Jump to top / bottom. |
+| `C-u` `C-d` | Half-page up / down. |
+| `q` or `Esc` | Exit copy mode. |
+
+Outside copy mode: `p` paste-buffer, `P` choose-buffer.
+
+## Config
+
+| Key | Action |
+|-----|--------|
+| `R` | Reload `~/.tmux.conf`. |
+
+---
+
+# Nvim Keybindings
+
+Leader: **`<Space>`**
+
+Only the project-specific keys worth memorising — see `~/.config/nvim/lua/plugins/*.lua` for the full picture.
+
+## Files & navigation
+
+| Key | Action |
+|-----|--------|
+| `C-p` | Files (fzf-lua). |
+| `<leader>ff` | Files (fzf-lua). |
+| `<leader>fw` | Live grep. |
+| `<leader>fo` | Old files / recent. |
+| `<leader>fr` | Registers. |
+| `<BS>` | Alternate buffer (`<C-^>`). |
+| `C-s` | Save file. |
+
+## Branch notes
+
+| Key | Action |
+|-----|--------|
+| `<leader>nn` | Open `note.md` for current branch (or jump back via alternate buffer if already on it). |
+
+## Quickfix
+
+| Key | Action |
+|-----|--------|
+| `;n` / `;p` | Next / previous quickfix item. |
+| `<leader>ql` | Quickfix list (fzf). |
+
+## LSP (when an LSP is attached)
+
+| Key | Action |
+|-----|--------|
+| `<leader>rn` | Rename symbol. |
+| `<leader>ca` | Code actions. |
+| `<leader>gd` | Document diagnostics. |
+| `<leader>gw` | Workspace diagnostics. |
+| `<leader>wd` | Workspace diagnostics (alt). |
+| `<leader>ws` | Workspace symbols. |
+| `<leader>lr` | Restart LSP. |
+
+## Git / Diffview
+
+| Key | Action |
+|-----|--------|
+| `<leader>gc` | Git commits (fzf). |
+| `<leader>gb` | Git branches (fzf). |
+| `<leader>gs` | Git stash (fzf). |
+| `<leader>gp` | Gitsigns preview hunk. |
+| `<leader>gr` | Gitsigns reset hunk. |
+| `<leader>vd` | Diffview open. |
+| `<leader>vb` | Diffview branch history. |
+
+## Trouble
+
+| Key | Action |
+|-----|--------|
+| `<leader>xx` | Workspace diagnostics. |
+| `<leader>xd` | Document diagnostics. |
+| `<leader>xs` | Symbols. |
+| `<leader>xq` | Quickfix. |
+| `<leader>xl` | Loclist. |
+
+## Bufferline
+
+| Key | Action |
+|-----|--------|
+| `<leader>bp` | Pin buffer. |
+| `<leader>bo` | Close other buffers. |
+
+## UI
+
+| Key | Action |
+|-----|--------|
+| `<leader>uu` | Toggle undotree. |
+
+## Terminal
+
+| Key | Action |
+|-----|--------|
+| `C-n` | Toggle floating terminal (toggleterm). |
+| `Esc Esc` | Exit terminal-insert mode. |
+| `<leader>tu` | Unlock outer tmux prefix (from inside a terminal). |
+| `<leader>cy` | Claude Code (yolo — skips permission prompts). |
+
+---
+
+# `bn` (Branch Notes CLI)
+
+`bn` lives at `~/.bin/bn`. Every git branch gets a note at `~/projects/worktree/personal-notes/branch-notes/branch-notes/<repo>/<branch>/note.md`. Managed through the CLI — not bound to tmux directly but the primary interface for session context.
+
+## Core
+
+| Command | Action |
 |---------|--------|
-| `C-Space C-o` | **Project picker** - browse ~/projects with preview |
-| `C-Space C-n` | **Tmux navigator** - fuzzy search sessions/windows/panes |
-| `C-Space C-s` | Session tree (built-in) |
-| `C-Space g` | Lazygit popup |
-| `` C-Space ` `` | Floating terminal |
+| `bn` | Ensure note exists, print dir path. |
+| `bn --cat` / `-c` | Print note contents. |
+| `bn --edit` / `-e` | Open note in `$EDITOR`. |
+| `bn --path` / `-p` | Print note dir path (no create). |
 
-### Panes
+## Add to sections
 
-| Binding | Action |
+| Command | Action |
 |---------|--------|
-| `C-Space v` | Split vertical (right) |
-| `C-Space s` | Split horizontal (below) |
-| `Arrow keys` | Navigate panes |
-| `Shift+Arrows` | Resize panes |
-| `C-Space z` | Toggle zoom |
-| `C-Space q` | Kill pane (with confirm) |
-| `C-Space S` | Swap panes |
-| `C-Space J` | Join pane from another window |
+| `bn add todo "text"` | Add todo. |
+| `bn add blocker "text"` | Add blocker. |
+| `bn add decision "text"` | Record a decision. |
+| `bn add research "text"` | Add research item. |
+| `bn add collab "text"` | Collaboration note. |
+| `bn add ask "text"` | Question for user/team. |
 
-### Windows
+## Lifecycle
 
-| Binding | Action |
+| Command | Action |
 |---------|--------|
-| `C-Space w` | New window |
-| `C-Space r` | Rename window |
-| `C-Space 1-5` | Jump to window 1-5 |
-| `C-Space [` | Previous window |
-| `C-Space ]` | Next window |
-| `C-Space <` | Move window left |
-| `C-Space >` | Move window right |
+| `bn done "text"` | Mark a todo done by substring match. |
+| `bn close` | Close current branch's note. |
+| `bn reopen` | Reopen a closed note. |
+| `bn prune` | Close notes whose worktrees are gone. |
+| `bn reset` | Remove non-main worktrees + close notes. |
+| `bn archive` | Archive old closed notes. |
 
-### Sessions
+## Views
 
-| Binding | Action |
+| Command | Action |
 |---------|--------|
-| `C-Space $` | Rename session |
-| `C-Space t` | Kill session & switch to next |
+| `bn summary` / `s` | Dashboard: open todos + blockers across branches. |
+| `bn status` / `st` | One-line status for current branch. |
+| `bn todo` / `t` | Open todos across all branches. |
+| `bn list` / `l` | Active notes (`--all` for closed too). |
+| `bn worktrees` / `w` | All active worktrees with detail. |
+| `bn search <text>` | Search across all notes. |
+| `bn stale [--days N]` | Notes with no recent activity. |
 
-### Copy Mode (vi-style)
+## Build / refresh
 
-| Binding | Action |
+| Command | Action |
 |---------|--------|
-| `C-Space Space` | Enter copy mode |
-| `v` | Begin selection |
-| `C-v` | Rectangle selection |
-| `y` | Copy to system clipboard |
-| `/` | Search forward |
-| `?` | Search backward |
-| `C-Space p` | Paste |
-| `C-Space P` | Choose buffer |
+| `bn build` / `b [name]` | Run a repo-scoped script (default: `build`). |
+| `bn refresh` / `rf` | Fetch, pull, build current branch. |
+| `bn refresh-all` / `ra` | Refresh all main worktrees. |
+| `bn script new <name>` | Create a repo script. |
 
-### Special
+## Links
 
-| Binding | Action |
+| Command | Action |
 |---------|--------|
-| `C-Space R` | Reload config |
-| `C-Space k` | Toggle keys-off mode (for nested tmux) |
+| `bn pr [url]` | Link or open PR for current branch. |
+| `bn link <id>` | Link or open work item. |
+| `bn files` / `f` | Investigation file management. |
 
-## Scripts
+---
 
-### Project Picker (`C-Space C-o`)
+# The workflow in one page
 
-```
-~/.bin/tmux/tat
-```
-
-- Lists all directories in `~/projects`
-- Sorted by **zoxide frecency** (most used first)
-- Shows `[*]` indicator for active sessions
-- Preview pane shows: git status, project type, README
-
-### Tmux Navigator (`C-Space C-n`)
-
-```
-~/.bin/tmux/tmux-nav.sh
-```
-
-Unified fuzzy finder for all tmux objects. Use symbol prefixes to filter:
-
-| Prefix | Shows |
-|--------|-------|
-| `@` | Sessions only |
-| `#` | Windows only |
-| `:` | Panes only |
-| (none) | Everything |
-
-Example: Type `@work` to filter sessions containing "work".
-
-### Session Templates
-
-```
-~/.bin/tmux/tat-template.sh
-```
-
-Auto-detects project type and creates appropriate layout:
-
-| Detected By | Template | Windows |
-|-------------|----------|---------|
-| `package.json` | Node.js | editor+shell, server, git |
-| `Cargo.toml` | Rust | editor+shell, git |
-| `go.mod` | Go | editor+shell, git |
-| `pyproject.toml` | Python | editor+shell (venv), git |
-| `cluster/` + `Makefile` | Kubernetes | editor, k9s, git |
-| (default) | Simple | single pane |
-
-Override with `.tmux-template` file in project root containing template name.
-
-## Configuration Files
-
-| File | Purpose |
-|------|---------|
-| `~/.tmux.conf` | Main tmux configuration |
-| `~/.bin/tmux/tat` | Project picker script |
-| `~/.bin/tmux/tat-preview.sh` | fzf preview for projects |
-| `~/.bin/tmux/tat-template.sh` | Session template logic |
-| `~/.bin/tmux/tmux-nav.sh` | Unified tmux navigator |
-
-## Plugins
-
-Managed via [TPM](https://github.com/tmux-plugins/tpm):
-
-- **tmux-resurrect** - Save/restore sessions across restarts
-- **tmux-continuum** - Auto-save every 15 minutes, auto-restore on start
-
-Install plugins after setup:
-
-```bash
-# Inside tmux
-C-Space I
-```
+1. **Start a session** — `C-Space C-o` → pick a repo. `tat` creates or switches.
+2. **Branch off main** — `C-Space o`, type `feat/foo`. `tmux-wt.sh` fetches, creates worktree from latest main, opens as window named `feat-foo`.
+3. **Work** — `C-Space e` for nvim, `C-Space g` for lazygit, `C-Space n` for the branch note. Inside nvim use `<Space>nn` to jump to the note.
+4. **Context-switch** — `C-Space [` / `]` between worktree windows in the same session. `C-Space C-o` to switch to a different repo.
+5. **Done with a branch** — `C-Space X`, confirm, worktree is removed and window closed.
+6. **Done for the day** — `C-Space t` kills the session and moves to the next.
