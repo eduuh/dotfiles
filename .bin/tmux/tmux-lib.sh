@@ -104,6 +104,32 @@ session_window_count() {
     $TMUX_CMD list-windows -t "=$1" -F x 2>/dev/null | wc -l
 }
 
+# Ensure a worktree exists for repo/branch; create from latest main if missing.
+# Prints progress to stdout (intended for interactive popups).
+# Usage: ensure_worktree <repo> <branch>
+# Returns 0 on success, 1 on failure.
+ensure_worktree() {
+    local repo="$1"
+    local branch="$2"
+    [[ -z "$repo" || -z "$branch" ]] && { echo "ensure_worktree: missing repo/branch"; return 1; }
+    local bare="$BARE_DIR/${repo}.git"
+    [[ -d "$bare" ]] || { echo "Not a bare repo: $repo"; return 1; }
+    local sanitized="${branch//\//-}"
+    local worktree_path="$WORKTREE_DIR/$repo/$sanitized"
+    [[ -d "$worktree_path" ]] && return 0
+    echo "Creating worktree: $worktree_path"
+    echo "Fetching origin..."
+    git --git-dir="$bare" fetch origin || { echo "Fetch failed"; return 1; }
+    git --git-dir="$bare" branch -f main origin/main 2>/dev/null
+    mkdir -p "$WORKTREE_DIR/$repo"
+    if ! git --git-dir="$bare" worktree add -b "$branch" "$worktree_path" main; then
+        echo "Failed to create worktree"
+        return 1
+    fi
+    (cd "$worktree_path" && "$HOME/.bin/bn" build 2>/dev/null) || true
+    return 0
+}
+
 # Resolve repo name and branch from a directory path
 # Sets: NOTE_REPO, NOTE_BRANCH (slashes sanitized to dashes)
 resolve_note_context() {

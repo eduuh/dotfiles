@@ -64,26 +64,12 @@ else
     exit 0
 fi
 
-sanitized=$(echo "$branch_name" | tr '/' '-')
+sanitized="${branch_name//\//-}"
 worktree_path="$WORKTREE_DIR/$session/$sanitized"
 
-# Create worktree if it doesn't exist
-if [[ ! -d "$worktree_path" ]]; then
-    echo "Creating worktree: $worktree_path"
-    echo "Fetching origin..."
-    git --git-dir="$bare_repo" fetch origin || {
-        echo "Fetch failed"
-        read -sk1 "?Press any key..."
-        exit 1
-    }
-    git --git-dir="$bare_repo" branch -f main origin/main 2>/dev/null
-    mkdir -p "$WORKTREE_DIR/$session"
-    if ! git --git-dir="$bare_repo" worktree add -b "$branch_name" "$worktree_path" main; then
-        echo "Failed to create worktree"
-        read -sk1 "?Press any key..."
-        exit 1
-    fi
-    (cd "$worktree_path" && "$HOME/.bin/bn" build 2>/dev/null) || true
+if ! ensure_worktree "$session" "$branch_name"; then
+    read -sk1 "?Press any key..."
+    exit 1
 fi
 
 # Open/switch to window for this worktree
