@@ -13,6 +13,9 @@ source "$HOME/.bin/tmux/tmux-lib.sh"
 tmux_init
 require_fzf
 
+force_new=0
+[[ "$1" == "--new" ]] && force_new=1
+
 session=$($TMUX_CMD display-message -p '#S' 2>/dev/null)
 bare_repo="$BARE_DIR/${session}.git"
 
@@ -26,7 +29,9 @@ if [[ ! -d "$bare_repo" ]]; then
         exit 1
     fi
     window_name="main"
-    if $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$window_name"; then
+    if (( force_new )); then
+        $TMUX_CMD new-window -n "$window_name" -c "$repo_path"
+    elif $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$window_name"; then
         $TMUX_CMD select-window -t "$window_name"
     else
         $TMUX_CMD new-window -n "$window_name" -c "$repo_path"
@@ -74,7 +79,9 @@ fi
 
 # Open/switch to window for this worktree
 window_name="$sanitized"
-if $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$window_name"; then
+if (( force_new )); then
+    $TMUX_CMD new-window -n "$window_name" -c "$worktree_path"
+elif $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$window_name"; then
     $TMUX_CMD select-window -t "$window_name"
 else
     $TMUX_CMD new-window -n "$window_name" -c "$worktree_path"
