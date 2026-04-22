@@ -178,9 +178,9 @@ open_worktree_window() {
     local target_flag=()
     [[ -n "$session" ]] && target_flag=(-t "$session")
 
-    $TMUX_CMD new-window "${target_flag[@]}" -n "$window_name" -c "$wt_path"
+    $TMUX_CMD new-window "${target_flag[@]}" -n "$window_name" -c "$wt_path" \
+        "zsh -ic 'claude --dangerously-skip-permissions'"
 
     local pane_target="${session:+${session}:}${window_name}"
-    $TMUX_CMD send-keys -t "${pane_target}.0" 'yolo' Enter
     $TMUX_CMD split-window -h -t "$pane_target" -c "$wt_path"
 }
