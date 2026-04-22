@@ -52,6 +52,10 @@ remove_worktree() {
     rmdir "$WORKTREE_DIR/$repo" 2>/dev/null || true
     "$HOME/.bin/bn" prune 2>/dev/null || true
 
+    local nvim_hash
+    nvim_hash=$(printf '%s' "$worktree_path" | shasum | cut -c1-8)
+    $TMUX_CMD kill-session -t "=nvim-$nvim_hash" 2>/dev/null || true
+
     [[ -n "$window_id" ]] && $TMUX_CMD kill-window -t "$window_id"
     return 0
 }

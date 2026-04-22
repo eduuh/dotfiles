@@ -47,7 +47,7 @@ In a non-bare session (e.g. `dotfiles`), `o` just opens/selects a `main` window 
 
 | Key | Action |
 |-----|--------|
-| `e` | Nvim editor popup at current cwd. `:q` / `:qa` closes. |
+| `e` | Toggle floating nvim scoped to the current worktree. Only one nvim ever exists: opening from a different worktree kills the previous nvim and spawns a fresh one there. Press again from inside to detach — popup closes, nvim stays alive until the next worktree switch. `:qa` quits it immediately. |
 | `n` | Branch note popup (`note.md` for current git context). |
 | `g` | Lazygit popup. `q` closes. |
 
