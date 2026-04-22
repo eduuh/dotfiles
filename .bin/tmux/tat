@@ -148,106 +148,106 @@ else
     project_path=$(resolve_project_path "$selected")
 fi
 
-# Create or switch to session
-if has_session "$session_name"; then
-    # Open windows in this session
-    open_windows=(${(f)"$($TMUX_CMD list-windows -t "=$session_name" -F '#{window_name}' 2>/dev/null)"})
-
-    # Worktrees for bare repos; empty for plain clones
-    worktrees=()
-    if is_bare_repo "$session_name"; then
-        worktrees=(${(f)"$(list_worktrees "$session_name")"})
-    fi
-
-    # Orphan worktrees: on disk but no window open for them
-    orphans=()
-    for wt in "${worktrees[@]}"; do
-        [[ -z "$wt" ]] && continue
-        found=0
-        for ow in "${open_windows[@]}"; do
-            [[ "$ow" == "$wt" ]] && { found=1; break }
-        done
-        (( found )) || orphans+=("$wt")
-    done
-
-    # Plain clones with a single window and no orphans: nothing to pick
-    if ! is_bare_repo "$session_name" && (( ${#open_windows[@]} <= 1 && ${#orphans[@]} == 0 )); then
-        $TMUX_CMD switch-client -t "$session_name"
-        exit 0
-    fi
-
-    # Build picker rows: kind|payload|display
-    rows=""
-    while IFS='|' read -r idx name cmd wpath active; do
-        [[ -z "$idx" ]] && continue
-        short="${wpath/#$HOME/~}"
-        marker=""
-        [[ "$active" == "1" ]] && marker="*"
-        display=$(printf "%s%s: %-14s %-8s %s" "$idx" "$marker" "$name" "$cmd" "$short")
-        rows+="window|$idx|$display"$'\n'
-    done < <($TMUX_CMD list-windows -t "=$session_name" \
-        -F "#{window_index}|#{window_name}|#{pane_current_command}|#{pane_current_path}|#{window_active}" 2>/dev/null)
-
-    for wt in "${orphans[@]}"; do
-        short="~/projects/worktree/$session_name/$wt"
-        display=$(printf " +: %-14s %-8s %s" "$wt" "(worktree)" "$short")
-        rows+="worktree|$wt|$display"$'\n'
-    done
-
-    picker_header="Pick window/worktree (Esc: current)"
-    if is_bare_repo "$session_name"; then
-        picker_header="Pick window/worktree, or type a branch name to create"
-    fi
-
-    result=$(printf '%s' "$rows" | "$FZF_CMD" \
-        --reverse \
-        --delimiter="|" \
-        --with-nth=3 \
-        --print-query \
-        --header="$picker_header")
-    fzf_exit=$?
-
-    if (( fzf_exit == 130 )); then
-        $TMUX_CMD switch-client -t "$session_name"
-        exit 0
-    fi
-
-    query=$(echo "$result" | sed -n '1p')
-    selection=$(echo "$result" | sed -n '2p')
-
-    if [[ -z "$selection" && -n "$query" ]] && is_bare_repo "$session_name"; then
-        branch_name="$query"
-        if ! ensure_worktree "$session_name" "$branch_name"; then
-            read -sk1 "?Press any key..."
-            exit 1
-        fi
-        sanitized="${branch_name//\//-}"
-        worktree_path="$WORKTREE_DIR/$session_name/$sanitized"
-        if $TMUX_CMD list-windows -t "=$session_name" -F '#{window_name}' 2>/dev/null | grep -qxF "$sanitized"; then
-            $TMUX_CMD select-window -t "${session_name}:${sanitized}"
-        else
-            $TMUX_CMD new-window -t "$session_name" -n "$sanitized" -c "$worktree_path"
-        fi
-        $TMUX_CMD switch-client -t "$session_name"
-        exit 0
-    fi
-
-    if [[ -z "$selection" ]]; then
-        $TMUX_CMD switch-client -t "$session_name"
-        exit 0
-    fi
-
-    kind="${selection%%|*}"
-    rest="${selection#*|}"
-    payload="${rest%%|*}"
-
-    if [[ "$kind" == "window" ]]; then
-        $TMUX_CMD switch-client -t "$session_name:$payload"
-    else
-        wt_path="$WORKTREE_DIR/$session_name/$payload"
-        $TMUX_CMD new-window -t "$session_name" -n "$payload" -c "$wt_path"
-        $TMUX_CMD switch-client -t "$session_name"
-    fi
-else
+# Create session if missing; either way, fall through to the worktree picker
+if ! has_session "$session_name"; then
     "$TEMPLATE_SCRIPT" "$session_name" "$project_path"
+fi
+
+# Open windows in this session
+open_windows=(${(f)"$($TMUX_CMD list-windows -t "=$session_name" -F '#{window_name}' 2>/dev/null)"})
+
+# Worktrees for bare repos; empty for plain clones
+worktrees=()
+if is_bare_repo "$session_name"; then
+    worktrees=(${(f)"$(list_worktrees "$session_name")"})
+fi
+
+# Orphan worktrees: on disk but no window open for them
+orphans=()
+for wt in "${worktrees[@]}"; do
+    [[ -z "$wt" ]] && continue
+    found=0
+    for ow in "${open_windows[@]}"; do
+        [[ "$ow" == "$wt" ]] && { found=1; break }
+    done
+    (( found )) || orphans+=("$wt")
+done
+
+# Plain clones with a single window and no orphans: nothing to pick
+if ! is_bare_repo "$session_name" && (( ${#open_windows[@]} <= 1 && ${#orphans[@]} == 0 )); then
+    $TMUX_CMD switch-client -t "$session_name"
+    exit 0
+fi
+
+# Build picker rows: kind|payload|display
+rows=""
+while IFS='|' read -r idx name cmd wpath active; do
+    [[ -z "$idx" ]] && continue
+    short="${wpath/#$HOME/~}"
+    marker=""
+    [[ "$active" == "1" ]] && marker="*"
+    display=$(printf "%s%s: %-14s %-8s %s" "$idx" "$marker" "$name" "$cmd" "$short")
+    rows+="window|$idx|$display"$'\n'
+done < <($TMUX_CMD list-windows -t "=$session_name" \
+    -F "#{window_index}|#{window_name}|#{pane_current_command}|#{pane_current_path}|#{window_active}" 2>/dev/null)
+
+for wt in "${orphans[@]}"; do
+    short="~/projects/worktree/$session_name/$wt"
+    display=$(printf " +: %-14s %-8s %s" "$wt" "(worktree)" "$short")
+    rows+="worktree|$wt|$display"$'\n'
+done
+
+picker_header="Pick window/worktree (Esc: current)"
+if is_bare_repo "$session_name"; then
+    picker_header="Pick window/worktree, or type a branch name to create"
+fi
+
+result=$(printf '%s' "$rows" | "$FZF_CMD" \
+    --reverse \
+    --delimiter="|" \
+    --with-nth=3 \
+    --print-query \
+    --header="$picker_header")
+fzf_exit=$?
+
+if (( fzf_exit == 130 )); then
+    $TMUX_CMD switch-client -t "$session_name"
+    exit 0
+fi
+
+query=$(echo "$result" | sed -n '1p')
+selection=$(echo "$result" | sed -n '2p')
+
+if [[ -z "$selection" && -n "$query" ]] && is_bare_repo "$session_name"; then
+    branch_name="$query"
+    if ! ensure_worktree "$session_name" "$branch_name"; then
+        read -sk1 "?Press any key..."
+        exit 1
+    fi
+    sanitized="${branch_name//\//-}"
+    worktree_path="$WORKTREE_DIR/$session_name/$sanitized"
+    if $TMUX_CMD list-windows -t "=$session_name" -F '#{window_name}' 2>/dev/null | grep -qxF "$sanitized"; then
+        $TMUX_CMD select-window -t "${session_name}:${sanitized}"
+    else
+        $TMUX_CMD new-window -t "$session_name" -n "$sanitized" -c "$worktree_path"
+    fi
+    $TMUX_CMD switch-client -t "$session_name"
+    exit 0
+fi
+
+if [[ -z "$selection" ]]; then
+    $TMUX_CMD switch-client -t "$session_name"
+    exit 0
+fi
+
+kind="${selection%%|*}"
+rest="${selection#*|}"
+payload="${rest%%|*}"
+
+if [[ "$kind" == "window" ]]; then
+    $TMUX_CMD switch-client -t "$session_name:$payload"
+else
+    wt_path="$WORKTREE_DIR/$session_name/$payload"
+    $TMUX_CMD new-window -t "$session_name" -n "$payload" -c "$wt_path"
+    $TMUX_CMD switch-client -t "$session_name"
 fi
