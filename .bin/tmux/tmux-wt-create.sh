@@ -23,30 +23,13 @@ fi
 slug=$(echo "$branch_name" | tr '/' '-')
 worktree_path="$WORKTREE_DIR/${session}/${slug}"
 
-if [[ -d "$worktree_path" ]]; then
-    echo "Worktree already exists: $worktree_path"
-    echo "Switching to window '$slug'..."
-    if $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$slug"; then
-        $TMUX_CMD select-window -t "$slug"
-    else
-        $TMUX_CMD new-window -n "$slug" -c "$worktree_path"
-    fi
-    exit 0
-fi
-
-echo "Fetching origin..."
-git --git-dir="$bare_repo" fetch origin || { echo "Fetch failed"; exit 1; }
-git --git-dir="$bare_repo" branch -f main origin/main 2>/dev/null
-
-echo "Creating worktree: $worktree_path"
-mkdir -p "$WORKTREE_DIR/${session}"
-if ! git --git-dir="$bare_repo" worktree add -b "$branch_name" "$worktree_path" main; then
-    echo "Failed to create worktree"
+if ! ensure_main_worktree "$session"; then
     exit 1
 fi
 
-echo "Running bn build..."
-(cd "$worktree_path" && "$HOME/.bin/bn" build 2>/dev/null) || true
+if ! ensure_worktree "$session" "$branch_name"; then
+    exit 1
+fi
 
 echo "Opening window '$slug'..."
 if $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$slug"; then

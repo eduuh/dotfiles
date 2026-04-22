@@ -117,6 +117,10 @@ if [[ -z "$selected_line" && "$query" == */* ]]; then
         read -sk1 "?Press any key..."
         exit 1
     fi
+    if ! ensure_main_worktree "$repo"; then
+        read -sk1 "?Press any key..."
+        exit 1
+    fi
     if ! ensure_worktree "$repo" "$branch"; then
         read -sk1 "?Press any key..."
         exit 1
@@ -220,6 +224,10 @@ selection=$(echo "$result" | sed -n '2p')
 
 if [[ -z "$selection" && -n "$query" ]] && is_bare_repo "$session_name"; then
     branch_name="$query"
+    if ! ensure_main_worktree "$session_name"; then
+        read -sk1 "?Press any key..."
+        exit 1
+    fi
     if ! ensure_worktree "$session_name" "$branch_name"; then
         read -sk1 "?Press any key..."
         exit 1

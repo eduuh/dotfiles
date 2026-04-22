@@ -122,12 +122,28 @@ ensure_worktree() {
     git --git-dir="$bare" fetch origin || { echo "Fetch failed"; return 1; }
     git --git-dir="$bare" branch -f main origin/main 2>/dev/null
     mkdir -p "$WORKTREE_DIR/$repo"
-    if ! git --git-dir="$bare" worktree add -b "$branch" "$worktree_path" main; then
-        echo "Failed to create worktree"
-        return 1
+    if git --git-dir="$bare" show-ref --verify --quiet "refs/heads/$branch"; then
+        if ! git --git-dir="$bare" worktree add "$worktree_path" "$branch"; then
+            echo "Failed to create worktree"
+            return 1
+        fi
+    else
+        if ! git --git-dir="$bare" worktree add -b "$branch" "$worktree_path" main; then
+            echo "Failed to create worktree"
+            return 1
+        fi
     fi
     (cd "$worktree_path" && "$HOME/.bin/bn" build 2>/dev/null) || true
     return 0
+}
+
+# Ensure the main worktree exists for a bare repo. No-op for non-bare repos.
+# Usage: ensure_main_worktree <repo>
+ensure_main_worktree() {
+    local repo="$1"
+    [[ -z "$repo" ]] && return 1
+    is_bare_repo "$repo" || return 0
+    ensure_worktree "$repo" "main"
 }
 
 # Resolve repo name and branch from a directory path
