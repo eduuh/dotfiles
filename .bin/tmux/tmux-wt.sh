@@ -39,6 +39,12 @@ if [[ ! -d "$bare_repo" ]]; then
     exit 0
 fi
 
+# Guarantee main worktree exists before any open/create operation
+if ! ensure_main_worktree "$session"; then
+    read -sk1 "?Press any key..."
+    exit 1
+fi
+
 # Gather existing worktree branches for this repo
 branches=()
 if [[ -d "$WORKTREE_DIR/$session" ]]; then
