@@ -170,8 +170,8 @@ if has_session "$session_name"; then
         (( found )) || orphans+=("$wt")
     done
 
-    # Nothing to pick: single window and no orphans → just switch
-    if (( ${#open_windows[@]} <= 1 && ${#orphans[@]} == 0 )); then
+    # Plain clones with a single window and no orphans: nothing to pick
+    if ! is_bare_repo "$session_name" && (( ${#open_windows[@]} <= 1 && ${#orphans[@]} == 0 )); then
         $TMUX_CMD switch-client -t "$session_name"
         exit 0
     fi
@@ -194,11 +194,43 @@ if has_session "$session_name"; then
         rows+="worktree|$wt|$display"$'\n'
     done
 
-    selection=$(printf '%s' "$rows" | "$FZF_CMD" \
+    picker_header="Pick window/worktree (Esc: current)"
+    if is_bare_repo "$session_name"; then
+        picker_header="Pick window/worktree, or type a branch name to create"
+    fi
+
+    result=$(printf '%s' "$rows" | "$FZF_CMD" \
         --reverse \
         --delimiter="|" \
         --with-nth=3 \
-        --header="Pick window/worktree (Esc: current)")
+        --print-query \
+        --header="$picker_header")
+    fzf_exit=$?
+
+    if (( fzf_exit == 130 )); then
+        $TMUX_CMD switch-client -t "$session_name"
+        exit 0
+    fi
+
+    query=$(echo "$result" | sed -n '1p')
+    selection=$(echo "$result" | sed -n '2p')
+
+    if [[ -z "$selection" && -n "$query" ]] && is_bare_repo "$session_name"; then
+        branch_name="$query"
+        if ! ensure_worktree "$session_name" "$branch_name"; then
+            read -sk1 "?Press any key..."
+            exit 1
+        fi
+        sanitized="${branch_name//\//-}"
+        worktree_path="$WORKTREE_DIR/$session_name/$sanitized"
+        if $TMUX_CMD list-windows -t "=$session_name" -F '#{window_name}' 2>/dev/null | grep -qxF "$sanitized"; then
+            $TMUX_CMD select-window -t "${session_name}:${sanitized}"
+        else
+            $TMUX_CMD new-window -t "$session_name" -n "$sanitized" -c "$worktree_path"
+        fi
+        $TMUX_CMD switch-client -t "$session_name"
+        exit 0
+    fi
 
     if [[ -z "$selection" ]]; then
         $TMUX_CMD switch-client -t "$session_name"
