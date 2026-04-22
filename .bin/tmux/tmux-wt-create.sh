@@ -35,7 +35,7 @@ echo "Opening window '$slug'..."
 if $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$slug"; then
     $TMUX_CMD select-window -t "$slug"
 else
-    $TMUX_CMD new-window -n "$slug" -c "$worktree_path"
+    open_worktree_window "" "$slug" "$worktree_path"
 fi
 
 echo "Done: $worktree_path (branch: $branch_name)"

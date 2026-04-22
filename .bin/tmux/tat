@@ -136,7 +136,7 @@ if [[ -z "$selected_line" && "$query" == */* ]]; then
     if $TMUX_CMD list-windows -t "=$session_name" -F '#{window_name}' 2>/dev/null | grep -qxF "$sanitized"; then
         $TMUX_CMD select-window -t "${session_name}:${sanitized}"
     else
-        $TMUX_CMD new-window -t "$session_name" -n "$sanitized" -c "$worktree_path"
+        open_worktree_window "$session_name" "$sanitized" "$worktree_path"
     fi
     $TMUX_CMD switch-client -t "$session_name"
     exit 0
@@ -237,7 +237,7 @@ if [[ -z "$selection" && -n "$query" ]] && is_bare_repo "$session_name"; then
     if $TMUX_CMD list-windows -t "=$session_name" -F '#{window_name}' 2>/dev/null | grep -qxF "$sanitized"; then
         $TMUX_CMD select-window -t "${session_name}:${sanitized}"
     else
-        $TMUX_CMD new-window -t "$session_name" -n "$sanitized" -c "$worktree_path"
+        open_worktree_window "$session_name" "$sanitized" "$worktree_path"
     fi
     $TMUX_CMD switch-client -t "$session_name"
     exit 0
@@ -256,6 +256,6 @@ if [[ "$kind" == "window" ]]; then
     $TMUX_CMD switch-client -t "$session_name:$payload"
 else
     wt_path="$WORKTREE_DIR/$session_name/$payload"
-    $TMUX_CMD new-window -t "$session_name" -n "$payload" -c "$wt_path"
+    open_worktree_window "$session_name" "$payload" "$wt_path"
     $TMUX_CMD switch-client -t "$session_name"
 fi

@@ -18,4 +18,6 @@ fi
 command -v zoxide &>/dev/null && zoxide add "$start_path"
 
 $TMUX_CMD new-session -d -s "$session_name" -n main -c "$start_path"
+$TMUX_CMD send-keys -t "${session_name}:main.0" 'yolo' Enter
+$TMUX_CMD split-window -h -t "${session_name}:main" -c "$start_path"
 $TMUX_CMD switch-client -t "$session_name"
