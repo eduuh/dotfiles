@@ -163,3 +163,24 @@ resolve_note_context() {
     NOTE_BRANCH="${NOTE_BRANCH//\//-}"
     return 0
 }
+
+# Open a worktree as a tmux window with two vertical panes:
+#   left (pane 0): runs `yolo` (claude --dangerously-skip-permissions)
+#   right (pane 1): empty shell, focused
+# Usage: open_worktree_window <session> <window_name> <worktree_path>
+# If <session> is empty, targets the current session.
+open_worktree_window() {
+    local session="$1"
+    local window_name="$2"
+    local wt_path="$3"
+    [[ -z "$window_name" || -z "$wt_path" ]] && return 1
+
+    local target_flag=()
+    [[ -n "$session" ]] && target_flag=(-t "$session")
+
+    $TMUX_CMD new-window "${target_flag[@]}" -n "$window_name" -c "$wt_path"
+
+    local pane_target="${session:+${session}:}${window_name}"
+    $TMUX_CMD send-keys -t "${pane_target}.0" 'yolo' Enter
+    $TMUX_CMD split-window -h -t "$pane_target" -c "$wt_path"
+}

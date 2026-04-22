@@ -30,11 +30,11 @@ if [[ ! -d "$bare_repo" ]]; then
     fi
     window_name="main"
     if (( force_new )); then
-        $TMUX_CMD new-window -n "$window_name" -c "$repo_path"
+        open_worktree_window "" "$window_name" "$repo_path"
     elif $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$window_name"; then
         $TMUX_CMD select-window -t "$window_name"
     else
-        $TMUX_CMD new-window -n "$window_name" -c "$repo_path"
+        open_worktree_window "" "$window_name" "$repo_path"
     fi
     exit 0
 fi
@@ -86,9 +86,9 @@ fi
 # Open/switch to window for this worktree
 window_name="$sanitized"
 if (( force_new )); then
-    $TMUX_CMD new-window -n "$window_name" -c "$worktree_path"
+    open_worktree_window "" "$window_name" "$worktree_path"
 elif $TMUX_CMD list-windows -F '#{window_name}' | grep -qxF "$window_name"; then
     $TMUX_CMD select-window -t "$window_name"
 else
-    $TMUX_CMD new-window -n "$window_name" -c "$worktree_path"
+    open_worktree_window "" "$window_name" "$worktree_path"
 fi
