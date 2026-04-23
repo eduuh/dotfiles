@@ -1109,6 +1109,36 @@ cmd_add() {
     fi
 }
 
+# Append a timestamped line to the current note's ## Progress section.
+# Used by the SessionEnd hook (bn-progress-hook.sh) but also invocable by hand.
+cmd_log_progress() {
+    local text="$*"
+    [[ -z "$text" ]] && { echo "Usage: bn log-progress <text>" >&2; exit 1; }
+
+    require_git_context
+    ensure_note
+
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    local stamp
+    stamp=$(date +"%Y-%m-%d %H:%M")
+    local line="- ${stamp} — ${text}"
+
+    local tmp
+    tmp=$(mktemp)
+    awk -v h="## Progress" -v ln="$line" '
+        BEGIN { in_section = 0; handled = 0 }
+        $0 == h { in_section = 1; handled = 0; print; next }
+        in_section && /^## / && !handled {
+            print ln
+            in_section = 0; handled = 1
+        }
+        { print }
+        END {
+            if (in_section && !handled) print ln
+        }
+    ' "$note_file" > "$tmp" && mv "$tmp" "$note_file"
+}
+
 # List notes across repos (active + local machine by default)
 cmd_list() {
     local show_all=false
@@ -2877,6 +2907,7 @@ case "${1:-}" in
     --cat|-c)           shift; cmd_cat "$@" ;;
     --edit|-e)          shift; cmd_edit "$@" ;;
     migrate)            shift; cmd_migrate "$@" ;;
+    log-progress)       shift; cmd_log_progress "$@" ;;
     add|a)              shift; cmd_add "$@" ;;
     list|l)             shift; cmd_list "$@" ;;
     active)             cmd_list ;;
