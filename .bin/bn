@@ -637,6 +637,40 @@ _next_id() {
     echo "${prefix}$((max + 1))"
 }
 
+# Render the 6 structured sections of a yaml note as markdown.
+# Matches the original md section layout so `bn --cat` output stays familiar.
+# Empty sections render with a single "-" (or "- [ ]" for todos) placeholder.
+_yaml_render_sections() {
+    local yaml="$1"
+    yq -o=json '.' "$yaml" 2>/dev/null | jq -r '
+        def render_bullets(list):
+            if (list | length) == 0 then "-"
+            else (list[] | "- \(.text)")
+            end;
+        def render_todos(list):
+            if (list | length) == 0 then "- [ ]"
+            else (list[] | if .done == true then "- [x] \(.text)" else "- [ ] \(.text)" end)
+            end;
+        "## Todos",
+        render_todos(.todos // []),
+        "",
+        "## Blockers",
+        render_bullets(.blockers // []),
+        "",
+        "## Decisions",
+        render_bullets(.decisions // []),
+        "",
+        "## To Research",
+        render_bullets(.research // []),
+        "",
+        "## Collaboration",
+        render_bullets(.collab // []),
+        "",
+        "## To Ask",
+        render_bullets(.ask // [])
+    '
+}
+
 # Append an item to a yaml section with a fresh id.
 # Usage: _yaml_add <file> <section> <text>
 _yaml_add() {
@@ -897,6 +931,14 @@ cmd_cat() {
     fi
     local file="${1:-note.md}"
     cat "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/$file"
+
+    # Render yaml-backed structured sections inline (only for the default note.md).
+    # Legacy md-only notes already contain the sections; skip the renderer there.
+    local yaml_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.yaml"
+    if [[ "$file" == "note.md" && -f "$yaml_file" ]]; then
+        echo ""
+        _yaml_render_sections "$yaml_file"
+    fi
 
     # Append footer with investigation files and scripts (only for default note.md)
     if [[ "$file" == "note.md" ]]; then
@@ -2558,12 +2600,240 @@ Sections: todo, blocker, decision, research, collab, ask
 HELPEOF
 }
 
+# --- Migration (one-shot md → yaml conversion) ---
+
+# Rewrite note.md to prose-only: strip frontmatter and structured sections.
+# Keeps the title, Goal, Progress, and anything after the post-frontmatter ---
+# separator (typically "## Windows" and tmux/script state).
+_strip_structured_md() {
+    local md="$1"
+    local tmp
+    tmp=$(mktemp)
+    awk '
+        BEGIN { in_front = 0; front_count = 0; skip = 0 }
+        /^---$/ {
+            if (front_count == 0) {
+                in_front = 1; front_count++; skip = 0; next
+            }
+            if (in_front) { in_front = 0; skip = 0; next }
+            skip = 0; print; next
+        }
+        in_front { next }
+        /^## Todos$/         { skip = 1; next }
+        /^## Blockers$/      { skip = 1; next }
+        /^## Decisions$/     { skip = 1; next }
+        /^## To Research$/   { skip = 1; next }
+        /^## Collaboration$/ { skip = 1; next }
+        /^## To Ask$/        { skip = 1; next }
+        /^## /               { skip = 0 }
+        !skip { print }
+    ' "$md" > "$tmp" && mv "$tmp" "$md"
+
+    # Trim leading blank lines and collapse 3+ consecutive blanks to 2.
+    awk '
+        BEGIN { started = 0; blank = 0 }
+        !started && /^$/ { next }
+        { started = 1 }
+        /^$/ { blank++; if (blank <= 2) print; next }
+        { blank = 0; print }
+    ' "$md" > "$tmp" && mv "$tmp" "$md"
+}
+
+# Extract a frontmatter value from _parse_all_notes_md output for a given md path.
+# Usage: _mig_val "$cleaned_output" <key>
+_mig_val() {
+    local cleaned="$1" key="$2"
+    local line=$(echo "$cleaned" | awk -F= -v k="$key" '
+        $0 ~ "^"k"=" { sub("^"k"=", ""); print; exit }')
+    echo "$line"
+}
+
+# Append one structured item to a yaml file. Counter is passed by caller.
+_mig_append() {
+    local yaml="$1" section="$2" id="$3" text="$4" added="$5"
+    local done_flag="${6:-}"
+    case "$section" in
+        todos)
+            if [[ "$done_flag" == "true" ]]; then
+                ID="$id" TEXT="$text" ADDED="$added" \
+                    yq -i '.todos += [{"id": strenv(ID), "text": strenv(TEXT), "done": true, "added": strenv(ADDED)}]' "$yaml"
+            else
+                ID="$id" TEXT="$text" ADDED="$added" \
+                    yq -i '.todos += [{"id": strenv(ID), "text": strenv(TEXT), "done": false, "added": strenv(ADDED)}]' "$yaml"
+            fi
+            ;;
+        *)
+            ID="$id" TEXT="$text" ADDED="$added" KEY="$section" \
+                yq -i '.[strenv(KEY)] += [{"id": strenv(ID), "text": strenv(TEXT), "added": strenv(ADDED)}]' "$yaml"
+            ;;
+    esac
+}
+
+# Convert one md-only note into yaml + prose-only md + .pre-yaml.bak.
+# Safe to re-run: no-ops if sibling note.yaml already exists.
+_migrate_one() {
+    local md="$1"
+    local yaml="${md%.md}.yaml"
+    local bak="${md%.md}.pre-yaml.bak"
+
+    [[ -f "$yaml" ]] && return 0
+
+    local parsed
+    parsed=$(_parse_all_notes_md "$md")
+    local cleaned=${parsed//${md}|/}
+
+    local repo=$(_mig_val "$cleaned" repo)
+    local branch=$(_mig_val "$cleaned" branch)
+    local created=$(_mig_val "$cleaned" created)
+    local note_status=$(_mig_val "$cleaned" status)
+    [[ -z "$note_status" ]] && note_status=active
+    local machine=$(_mig_val "$cleaned" machine)
+    local type=$(_mig_val "$cleaned" type)
+    local work_item=$(_mig_val "$cleaned" work_item)
+    local pr=$(_mig_val "$cleaned" pr)
+    local tags=$(_mig_val "$cleaned" tags)
+    local collaborators=$(_mig_val "$cleaned" collaborators)
+
+    # Infer repo/branch from path if missing
+    if [[ -z "$repo" || -z "$branch" ]]; then
+        local dir=${md:h}
+        [[ -z "$branch" ]] && branch=${dir:t}
+        [[ -z "$repo" ]] && repo=${dir:h:t}
+    fi
+
+    # Emit yaml skeleton. Tags/collaborators preserved as literal if non-empty
+    # and shaped like `[...]`; otherwise default to [].
+    local tags_yaml="[]"
+    [[ "$tags" == \[*\] && "$tags" != "[]" ]] && tags_yaml="$tags"
+    local collab_yaml="[]"
+    [[ "$collaborators" == \[*\] && "$collaborators" != "[]" ]] && collab_yaml="$collaborators"
+
+    {
+        echo "# Structured items for $repo/$branch"
+        echo "# See note.md for Goal/Progress prose."
+        echo "repo: $repo"
+        echo "branch: $branch"
+        [[ -n "$created" ]] && echo "created: $created" || echo "created: null"
+        echo "status: $note_status"
+        [[ -n "$machine" ]] && echo "machine: $machine" || echo "machine: null"
+        echo "type: ${type:-null}"
+        echo "work_item: ${work_item:-null}"
+        echo "pr: ${pr:-null}"
+        echo "tags: $tags_yaml"
+        echo "collaborators: $collab_yaml"
+        echo ""
+        echo "todos: []"
+        echo "blockers: []"
+        echo "decisions: []"
+        echo "research: []"
+        echo "collab: []"
+        echo "ask: []"
+    } > "$yaml"
+
+    # Normalize via yq so the skeleton matches the template output
+    yq -i '.' "$yaml"
+
+    local ct=0 cb=0 cd=0 cr=0 cc=0 ca=0
+    local line
+    while IFS= read -r line; do
+        case "$line" in
+            OPEN_TODO:*)
+                local text="${line#OPEN_TODO:- \[ \] }"
+                ct=$((ct + 1))
+                _mig_append "$yaml" todos "t$ct" "$text" "$created" false
+                ;;
+            TODO:*)
+                local text="${line#TODO:- \[x\] }"
+                ct=$((ct + 1))
+                _mig_append "$yaml" todos "t$ct" "$text" "$created" true
+                ;;
+            BLOCKER:*)
+                local text="${line#BLOCKER:- }"
+                cb=$((cb + 1))
+                _mig_append "$yaml" blockers "b$cb" "$text" "$created"
+                ;;
+            DECISION:*)
+                local text="${line#DECISION:- }"
+                cd=$((cd + 1))
+                _mig_append "$yaml" decisions "d$cd" "$text" "$created"
+                ;;
+            RESEARCH:*)
+                local text="${line#RESEARCH:- }"
+                cr=$((cr + 1))
+                _mig_append "$yaml" research "r$cr" "$text" "$created"
+                ;;
+            COLLAB:*)
+                local text="${line#COLLAB:- }"
+                cc=$((cc + 1))
+                _mig_append "$yaml" collab "c$cc" "$text" "$created"
+                ;;
+            ASK:*)
+                local text="${line#ASK:- }"
+                ca=$((ca + 1))
+                _mig_append "$yaml" ask "a$ca" "$text" "$created"
+                ;;
+        esac
+    done < <(echo "$cleaned")
+
+    cp "$md" "$bak"
+    _strip_structured_md "$md"
+}
+
+cmd_migrate() {
+    require_yq
+
+    local dry_run=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run) dry_run=true; shift ;;
+            *) echo "bn migrate: unknown arg: $1" >&2; exit 1 ;;
+        esac
+    done
+
+    [[ ! -d "$NOTES_DIR" ]] && { echo "No notes directory"; exit 0; }
+
+    local -a md_files
+    md_files=("$NOTES_DIR"/**/note.md(N))
+
+    local total=${#md_files[@]}
+    local migrated=0 skipped=0
+    local md yaml count
+
+    for md in "${md_files[@]}"; do
+        yaml="${md%.md}.yaml"
+        if [[ -f "$yaml" ]]; then
+            (( skipped++ ))
+            continue
+        fi
+
+        if $dry_run; then
+            count=$(_parse_all_notes_md "$md" | grep -cE "\|(OPEN_TODO|TODO|BLOCKER|DECISION|RESEARCH|COLLAB|ASK):")
+            printf "Would migrate: %-60s (%d items)\n" "${md#$NOTES_DIR/}" "$count"
+            (( migrated++ ))
+            continue
+        fi
+
+        echo "Migrating: ${md#$NOTES_DIR/}"
+        _migrate_one "$md"
+        (( migrated++ ))
+    done
+
+    echo ""
+    if $dry_run; then
+        echo "DRY RUN — $migrated would migrate, $skipped already migrated (total $total)"
+    else
+        echo "Done — migrated $migrated, skipped $skipped (total $total)"
+        (( migrated > 0 )) && echo "Backups live at <note>.pre-yaml.bak (delete after verification)"
+    fi
+}
+
 # --- Dispatch ---
 
 case "${1:-}" in
     --path|-p)          cmd_path ;;
     --cat|-c)           shift; cmd_cat "$@" ;;
     --edit|-e)          shift; cmd_edit "$@" ;;
+    migrate)            shift; cmd_migrate "$@" ;;
     add|a)              shift; cmd_add "$@" ;;
     list|l)             shift; cmd_list "$@" ;;
     active)             cmd_list ;;
