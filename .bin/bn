@@ -220,10 +220,11 @@ _render_template() {
 
 # Inline fallbacks (used when template files are missing)
 _branch_note_template_inline() {
-    local repo="" branch=""
+    local repo="" branch="" goal=""
     for pair in "$@"; do
         case "${pair%%=*}" in
             REPO) repo="${pair#*=}" ;; BRANCH) branch="${pair#*=}" ;;
+            GOAL) goal="${pair#*=}" ;;
         esac
     done
     cat << EOF
@@ -231,10 +232,24 @@ _branch_note_template_inline() {
 
 ## Goal
 
+$goal
 
 ## Progress
 
 EOF
+}
+
+# Derive a best-guess Goal sentence from a branch name.
+# "refactor/bn-yaml" -> "Refactor bn yaml"
+# "fix-sokoni-deployment" -> "Fix sokoni deployment"
+_derive_goal() {
+    local branch="$1"
+    local words
+    words=$(printf '%s' "$branch" | tr '/_-' '   ' | tr -s ' ')
+    words="${words# }"
+    words="${words% }"
+    [[ -z "$words" ]] && { echo ""; return; }
+    echo "${(U)words[1]}${words[2,-1]}"
 }
 
 _branch_note_yaml_template_inline() {
@@ -411,11 +426,14 @@ ensure_note() {
     local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
     local note_file="$note_dir/note.md"
     local yaml_file="$note_dir/note.yaml"
+    local goal
+    goal=$(_derive_goal "$NOTE_BRANCH")
     if [[ ! -f "$note_file" ]]; then
         mkdir -p "$note_dir"
         _render_template branch-note.md \
             "REPO=$NOTE_REPO" "BRANCH=$NOTE_BRANCH" \
-            "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" > "$note_file"
+            "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" \
+            "GOAL=$goal" > "$note_file"
     fi
     if [[ ! -f "$yaml_file" && -f "$note_file" ]]; then
         # Only create yaml for genuinely new notes (prose-only md). Existing md-backed
@@ -1815,15 +1833,28 @@ cmd_status() {
     local research=$(_pn_val "$parsed" "research")
     local asks=$(_pn_val "$parsed" "asks")
 
+    # Goal = first non-blank line inside ## Goal section. Used as a status
+    # prefix so SessionStart context tells you *why* this branch exists.
+    local goal
+    goal=$(awk '/^## Goal$/{flag=1; next} /^## /{flag=0} flag && NF {print; exit}' "$note_file")
+
     local parts=()
     (( todos > 0 )) && parts+=("${todos} todo$( (( todos != 1 )) && echo s)")
     (( blockers > 0 )) && parts+=("${blockers} blocker$( (( blockers != 1 )) && echo s)")
     (( research > 0 )) && parts+=("${research} research")
     (( asks > 0 )) && parts+=("${asks} ask$( (( asks != 1 )) && echo s)")
+
+    local summary
     if [[ ${#parts[@]} -eq 0 ]]; then
-        echo "$NOTE_REPO/$NOTE_BRANCH: clear"
+        summary="clear"
     else
-        echo "$NOTE_REPO/$NOTE_BRANCH: ${(j:, :)parts}"
+        summary="${(j:, :)parts}"
+    fi
+
+    if [[ -n "$goal" ]]; then
+        echo "$NOTE_REPO/$NOTE_BRANCH — $goal ($summary)"
+    else
+        echo "$NOTE_REPO/$NOTE_BRANCH: $summary"
     fi
 }
 
