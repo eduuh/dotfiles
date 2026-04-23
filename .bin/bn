@@ -234,9 +234,6 @@ _branch_note_template_inline() {
 
 ## Progress
 
-
----
-## Windows
 EOF
 }
 
@@ -513,7 +510,9 @@ format_line() {
     esac
 }
 
-# Insert a line into the correct section of a note
+# Insert a line into the correct section of a note. Also drops the bare
+# placeholder (`- [ ]` or `-`) that the template seeded so a freshly-added
+# real item isn't sharing the section with a leftover empty bullet.
 insert_into_section() {
     local note_file="$1" heading="$2" line="$3"
 
@@ -527,8 +526,14 @@ insert_into_section() {
 
     if [[ -n "$next_heading_rel" ]]; then
         local insert_at=$((heading_line + next_heading_rel - 1))
-        # Use awk for safe insertion — avoids sed injection via / or \ in user text
-        awk -v n="$insert_at" -v text="$line" 'NR==n{print text} {print}' "$note_file" > "${note_file}.tmp" \
+        # Use awk for safe insertion — avoids sed injection via / or \ in user text.
+        # While scanning, drop any bare-placeholder line in this section so the
+        # first real add leaves a clean list.
+        awk -v n="$insert_at" -v h="$heading_line" -v text="$line" '
+            NR > h && NR < n && ($0 == "- [ ]" || $0 == "-") { next }
+            NR == n { print text }
+            { print }
+        ' "$note_file" > "${note_file}.tmp" \
             && mv "${note_file}.tmp" "$note_file"
     else
         echo "$line" >> "$note_file"
@@ -638,8 +643,9 @@ _next_id() {
 }
 
 # Render the 6 structured sections of a yaml note as markdown.
-# Matches the original md section layout so `bn --cat` output stays familiar.
-# Empty sections render with a single "-" (or "- [ ]" for todos) placeholder.
+# Order is action-first: Blockers → Open todos (hide done) → Decisions →
+# Research → Collaboration → Ask. Sits after Goal/Progress in cmd_cat output.
+# Empty sections render with a "-" (or "- [ ]" for todos) placeholder.
 _yaml_render_sections() {
     local yaml="$1"
     yq -o=json '.' "$yaml" 2>/dev/null | jq -r '
@@ -647,15 +653,16 @@ _yaml_render_sections() {
             if (list | length) == 0 then "-"
             else (list[] | "- \(.text)")
             end;
-        def render_todos(list):
-            if (list | length) == 0 then "- [ ]"
-            else (list[] | if .done == true then "- [x] \(.text)" else "- [ ] \(.text)" end)
+        def render_open_todos(list):
+            (list | map(select(.done != true))) as $open |
+            if ($open | length) == 0 then "- [ ]"
+            else ($open[] | "- [ ] \(.text)")
             end;
-        "## Todos",
-        render_todos(.todos // []),
-        "",
         "## Blockers",
         render_bullets(.blockers // []),
+        "",
+        "## Todos",
+        render_open_todos(.todos // []),
         "",
         "## Decisions",
         render_bullets(.decisions // []),
@@ -2604,23 +2611,26 @@ HELPEOF
 
 # --- Migration (one-shot md → yaml conversion) ---
 
-# Rewrite note.md to prose-only: strip frontmatter and structured sections.
-# Keeps the title, Goal, Progress, and anything after the post-frontmatter ---
-# separator (typically "## Windows" and tmux/script state).
+# Rewrite note.md to prose-only: strip frontmatter, structured sections, and
+# the now-dead `## Windows` block (legacy tmux capture) plus any standalone
+# post-frontmatter `---` separator. Leaves title, Goal, and Progress.
 _strip_structured_md() {
     local md="$1"
     local tmp
     tmp=$(mktemp)
     awk '
-        BEGIN { in_front = 0; front_count = 0; skip = 0 }
+        BEGIN { in_front = 0; front_count = 0; skip = 0; hard_skip = 0 }
         /^---$/ {
             if (front_count == 0) {
                 in_front = 1; front_count++; skip = 0; next
             }
             if (in_front) { in_front = 0; skip = 0; next }
-            skip = 0; print; next
+            # Standalone --- separator (was the divider before ## Windows). Drop.
+            next
         }
         in_front { next }
+        hard_skip { next }
+        /^## Windows$/       { hard_skip = 1; next }
         /^## Todos$/         { skip = 1; next }
         /^## Blockers$/      { skip = 1; next }
         /^## Decisions$/     { skip = 1; next }

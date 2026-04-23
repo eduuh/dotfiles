@@ -12,11 +12,4 @@ if [[ -z "$note_dir" || ! -d "$note_dir" ]]; then
 fi
 note_file="${note_dir}/note.md"
 
-# Sync tmux window-name sections into the note (preserves existing behaviour)
-tmux list-windows -F '#{window_name}' 2>/dev/null | while IFS= read -r win; do
-    if ! grep -Fq "### $win" "$note_file" 2>/dev/null; then
-        printf '\n### %s\n' "$win" >> "$note_file"
-    fi
-done
-
 exec nvim "$note_file"
