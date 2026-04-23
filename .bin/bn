@@ -746,24 +746,26 @@ _parse_all_notes() {
 
     (( ${#yaml_files[@]} > 0 )) && _parse_all_notes_yaml "${yaml_files[@]}"
     (( ${#md_files[@]} > 0 )) && _parse_all_notes_md "${md_files[@]}"
+    return 0
 }
 
-# Parse all yaml-backed notes via a single yq eval-all + jq pass.
-# Takes note.md paths (yaml siblings are derived). Emits the md path as the
-# "file" key so downstream callers (that pass md paths) keep working.
+# Parse all yaml-backed notes. Takes note.md paths; the yaml sibling is derived
+# per-file. yq eval-all cross-products across files when merging with literals,
+# so we run yq once per file but pipe the combined JSON stream through a single
+# jq invocation to keep the per-parse fixed cost reasonable.
 _parse_all_notes_yaml() {
     (( $# == 0 )) && return
     require_yq
 
-    local -a yaml_paths
-    local f
-    for f in "$@"; do
-        yaml_paths+=("${f%.md}.yaml")
-    done
-
-    yq eval-all '. * {"__file": filename}' -o=json "${yaml_paths[@]}" 2>/dev/null \
-      | jq -r '
-        (.__file | sub("\\.yaml$"; ".md")) as $f |
+    local f yaml_f
+    {
+        for f in "$@"; do
+            yaml_f="${f%.md}.yaml"
+            [[ -f "$yaml_f" ]] || continue
+            FILE="$f" yq -o=json '. + {"__file": strenv(FILE)}' "$yaml_f" 2>/dev/null
+        done
+    } | jq -r '
+        .__file as $f |
         "\($f)|status=\(.status // "active")",
         "\($f)|machine=\(.machine // "")",
         "\($f)|created=\(.created // "")",
