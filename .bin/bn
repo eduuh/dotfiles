@@ -57,19 +57,31 @@ require_git_context() {
 
 # --- Helpers: Git & Frontmatter ---
 
-# Read a single frontmatter field from a note file (pure zsh, no subprocesses).
+# Read a single frontmatter field from a note.
+# If a sibling note.yaml exists, reads from there via yq. Otherwise reads the
+# markdown frontmatter (pure zsh, no subprocesses) for legacy md-only notes.
 # Usage: _frontmatter_val "$note_file" "field_name"
 # Sets REPLY; returns empty string if not found.
 _frontmatter_val() {
-    local in_front=false
+    local note_file="$1" key="$2"
+    local yaml_sibling="${note_file%.md}.yaml"
+
+    if [[ -f "$yaml_sibling" ]]; then
+        REPLY=$(yq -r ".${key} // \"\"" "$yaml_sibling" 2>/dev/null)
+        [[ "$REPLY" == "null" ]] && REPLY=""
+        [[ -n "$REPLY" ]] && return 0
+        return 1
+    fi
+
+    local in_front=false line
     while IFS= read -r line; do
         if [[ "$line" == "---" ]]; then
             $in_front && break
             in_front=true
             continue
         fi
-        $in_front && [[ "$line" == ${2}:* ]] && { REPLY="${line#${2}:}"; REPLY="${REPLY# }"; return 0; }
-    done < "$1"
+        $in_front && [[ "$line" == ${key}:* ]] && { REPLY="${line#${key}:}"; REPLY="${REPLY# }"; return 0; }
+    done < "$note_file"
     REPLY=""
     return 1
 }
@@ -92,21 +104,37 @@ get_note_status() {
     echo "${REPLY:-active}"
 }
 
-# Set status in frontmatter
+# Set status in frontmatter (yaml-first when sibling exists).
 set_note_status() {
     local note_file="$1" new_status="$2"
+    local yaml_sibling="${note_file%.md}.yaml"
+
+    if [[ -f "$yaml_sibling" ]]; then
+        require_yq
+        STATUS="$new_status" yq -i '.status = strenv(STATUS)' "$yaml_sibling"
+        return
+    fi
+
     if grep -q '^status:' "$note_file"; then
         sed -i '' "s/^status: .*/status: $new_status/" "$note_file"
     else
-        # Insert status after created line
         sed -i '' "/^created:/a\\
 status: $new_status" "$note_file"
     fi
 }
 
-# Set any frontmatter field (adds after status: if missing)
+# Set any frontmatter field (yaml-first when sibling exists; md fallback preserves
+# the legacy "insert after status:" behavior).
 _set_frontmatter() {
     local note_file="$1" key="$2" value="$3"
+    local yaml_sibling="${note_file%.md}.yaml"
+
+    if [[ -f "$yaml_sibling" ]]; then
+        require_yq
+        KEY="$key" VAL="$value" yq -i '.[strenv(KEY)] = strenv(VAL)' "$yaml_sibling"
+        return
+    fi
+
     if grep -q "^${key}:" "$note_file"; then
         awk -v key="$key" -v val="$value" \
             '$0 ~ "^"key":" { print key": "val; next } { print }' \
@@ -178,7 +206,9 @@ _render_template() {
         # Fallback: inline heredocs for backwards compat
         case "$tmpl_name" in
             branch-note.md) _branch_note_template_inline "${(@)@}" ;;
+            branch-note.yaml) _branch_note_yaml_template_inline "${(@)@}" ;;
             global-note.md) _global_note_template_inline "${(@)@}" ;;
+            global-note.yaml) _global_note_yaml_template_inline "${(@)@}" ;;
             investigation.md) _investigation_template_inline "${(@)@}" ;;
             pr-review.md) _pr_review_template_inline "${(@)@}" ;;
             achievement.md) _achievement_template_inline "${(@)@}" ;;
@@ -190,27 +220,13 @@ _render_template() {
 
 # Inline fallbacks (used when template files are missing)
 _branch_note_template_inline() {
-    local repo="" branch="" date="" machine=""
+    local repo="" branch=""
     for pair in "$@"; do
         case "${pair%%=*}" in
             REPO) repo="${pair#*=}" ;; BRANCH) branch="${pair#*=}" ;;
-            DATE) date="${pair#*=}" ;; MACHINE) machine="${pair#*=}" ;;
         esac
     done
     cat << EOF
----
-repo: $repo
-branch: $branch
-created: $date
-status: active
-machine: $machine
-type:
-work_item:
-pr:
-tags: []
-collaborators: []
----
-
 # $repo / $branch
 
 ## Goal
@@ -219,30 +235,58 @@ collaborators: []
 ## Progress
 
 
-## Todos
-- [ ]
-
-## Blockers
--
-
-## Decisions
--
-
-## To Research
--
-
-## Collaboration
--
-
-## To Ask
--
-
 ---
 ## Windows
 EOF
 }
 
+_branch_note_yaml_template_inline() {
+    local repo="" branch="" date="" machine=""
+    for pair in "$@"; do
+        case "${pair%%=*}" in
+            REPO) repo="${pair#*=}" ;; BRANCH) branch="${pair#*=}" ;;
+            DATE) date="${pair#*=}" ;; MACHINE) machine="${pair#*=}" ;;
+        esac
+    done
+    cat << EOF
+# Structured items for $repo/$branch
+# See note.md for Goal/Progress prose.
+repo: $repo
+branch: $branch
+created: $date
+status: active
+machine: $machine
+type: null
+work_item: null
+pr: null
+tags: []
+collaborators: []
+
+todos: []
+blockers: []
+decisions: []
+research: []
+collab: []
+ask: []
+EOF
+}
+
 _global_note_template_inline() {
+    local repo=""
+    for pair in "$@"; do
+        case "${pair%%=*}" in
+            REPO) repo="${pair#*=}" ;;
+        esac
+    done
+    cat << EOF
+# $repo (global)
+
+## Goal
+
+EOF
+}
+
+_global_note_yaml_template_inline() {
     local repo="" date="" machine=""
     for pair in "$@"; do
         case "${pair%%=*}" in
@@ -250,35 +294,18 @@ _global_note_template_inline() {
         esac
     done
     cat << EOF
----
+# Structured items for $repo (global)
 repo: $repo
 created: $date
 status: active
 machine: $machine
----
 
-# $repo (global)
-
-## Goal
-
-
-## Todos
-- [ ]
-
-## Blockers
--
-
-## Decisions
--
-
-## To Research
--
-
-## Collaboration
--
-
-## To Ask
--
+todos: []
+blockers: []
+decisions: []
+research: []
+collab: []
+ask: []
 EOF
 }
 
@@ -386,22 +413,40 @@ EOF
 ensure_note() {
     local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
     local note_file="$note_dir/note.md"
+    local yaml_file="$note_dir/note.yaml"
     if [[ ! -f "$note_file" ]]; then
         mkdir -p "$note_dir"
         _render_template branch-note.md \
             "REPO=$NOTE_REPO" "BRANCH=$NOTE_BRANCH" \
             "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" > "$note_file"
     fi
+    if [[ ! -f "$yaml_file" && -f "$note_file" ]]; then
+        # Only create yaml for genuinely new notes (prose-only md). Existing md-backed
+        # notes with structured sections will be upgraded via `bn migrate`.
+        if ! grep -q '^## Todos$\|^## Blockers$\|^---$' "$note_file"; then
+            _render_template branch-note.yaml \
+                "REPO=$NOTE_REPO" "BRANCH=$NOTE_BRANCH" \
+                "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" > "$yaml_file"
+        fi
+    fi
     ensure_scripts_dir "$NOTE_REPO"
 }
 
 # Create repo-level global note if it doesn't exist
 ensure_global_note() {
-    local note_file="$NOTES_DIR/$NOTE_REPO/note.md"
+    local note_dir="$NOTES_DIR/$NOTE_REPO"
+    local note_file="$note_dir/note.md"
+    local yaml_file="$note_dir/note.yaml"
     if [[ ! -f "$note_file" ]]; then
-        mkdir -p "$NOTES_DIR/$NOTE_REPO"
+        mkdir -p "$note_dir"
         _render_template global-note.md \
             "REPO=$NOTE_REPO" "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" > "$note_file"
+    fi
+    if [[ ! -f "$yaml_file" && -f "$note_file" ]]; then
+        if ! grep -q '^## Todos$\|^## Blockers$\|^---$' "$note_file"; then
+            _render_template global-note.yaml \
+                "REPO=$NOTE_REPO" "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" > "$yaml_file"
+        fi
     fi
 }
 
@@ -530,6 +575,88 @@ _clean_note() {
     echo "  Removed $(( before - after )) placeholder(s)"
 }
 
+# --- Helpers: YAML (via yq) ---
+
+# Exit with install hint if yq is not available.
+require_yq() {
+    command -v yq &>/dev/null && return 0
+    echo "bn: yq is required for structured notes (install: brew install yq)" >&2
+    exit 1
+}
+
+# Map a section keyword (todo, blocker, …) to the yaml key used in note.yaml.
+_yaml_section_key() {
+    case "$1" in
+        todo|todos)         echo "todos" ;;
+        blocker|blockers)   echo "blockers" ;;
+        decision|decisions) echo "decisions" ;;
+        research)           echo "research" ;;
+        collab)             echo "collab" ;;
+        ask)                echo "ask" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Single-letter ID prefix for each section.
+_yaml_id_prefix() {
+    case "$1" in
+        todo|todos)         echo "t" ;;
+        blocker|blockers)   echo "b" ;;
+        decision|decisions) echo "d" ;;
+        research)           echo "r" ;;
+        collab)             echo "c" ;;
+        ask)                echo "a" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Next monotonic id for a prefix in a yaml file. Scans ids in the owning
+# section, returns <prefix><max+1>. Never reuses ids from deleted items
+# because it tracks max seen, not count.
+_next_id() {
+    require_yq
+    local file="$1" prefix="$2"
+    local key
+    case "$prefix" in
+        t) key=todos ;;
+        b) key=blockers ;;
+        d) key=decisions ;;
+        r) key=research ;;
+        c) key=collab ;;
+        a) key=ask ;;
+        *) echo "bn: unknown id prefix: $prefix" >&2; return 1 ;;
+    esac
+    local max
+    max=$(yq ".${key}[].id" "$file" 2>/dev/null \
+          | awk -v p="$prefix" '
+              $0 ~ "^" p "[0-9]+$" {
+                  n = substr($0, length(p) + 1) + 0
+                  if (n > max) max = n
+              }
+              END { print max + 0 }')
+    echo "${prefix}$((max + 1))"
+}
+
+# Append an item to a yaml section with a fresh id.
+# Usage: _yaml_add <file> <section> <text>
+_yaml_add() {
+    require_yq
+    local file="$1" section="$2" text="$3"
+    local key prefix id today
+    key=$(_yaml_section_key "$section") || return 1
+    prefix=$(_yaml_id_prefix "$section") || return 1
+    id=$(_next_id "$file" "$prefix")
+    today=$(date +%Y-%m-%d)
+    if [[ "$key" == "todos" ]]; then
+        ID="$id" TEXT="$text" TODAY="$today" \
+            yq -i '.todos += [{"id": strenv(ID), "text": strenv(TEXT), "done": false, "added": strenv(TODAY)}]' "$file"
+    else
+        ID="$id" TEXT="$text" TODAY="$today" KEY="$key" \
+            yq -i '.[strenv(KEY)] += [{"id": strenv(ID), "text": strenv(TEXT), "added": strenv(TODAY)}]' "$file"
+    fi
+    REPLY="$id"
+}
+
 # --- Helpers: Single-pass Note Parser ---
 
 # Parse a note file in a single awk pass. Outputs key=value lines for frontmatter
@@ -565,11 +692,71 @@ _pn_lines() {
 
 # --- Helpers: Batch Note Parser ---
 
-# Parse ALL note files in a single awk invocation. Each line is prefixed with
-# the filename so we can split per-file afterwards.
+# Parse ALL note files. Each line is prefixed with the note.md path so callers
+# can split per-file. Files with a sibling note.yaml are parsed via yq+jq;
+# legacy md-only files stay on the awk path until migration.
 # Usage: _ALL_PARSED=$(_parse_all_notes "${note_files[@]}")
 #        local parsed=$(_pn_for_file "$_ALL_PARSED" "$note_file")
 _parse_all_notes() {
+    (( $# == 0 )) && return
+
+    local -a yaml_files md_files
+    local f
+    for f in "$@"; do
+        if [[ -f "${f%.md}.yaml" ]]; then
+            yaml_files+=("$f")
+        else
+            md_files+=("$f")
+        fi
+    done
+
+    (( ${#yaml_files[@]} > 0 )) && _parse_all_notes_yaml "${yaml_files[@]}"
+    (( ${#md_files[@]} > 0 )) && _parse_all_notes_md "${md_files[@]}"
+}
+
+# Parse all yaml-backed notes via a single yq eval-all + jq pass.
+# Takes note.md paths (yaml siblings are derived). Emits the md path as the
+# "file" key so downstream callers (that pass md paths) keep working.
+_parse_all_notes_yaml() {
+    (( $# == 0 )) && return
+    require_yq
+
+    local -a yaml_paths
+    local f
+    for f in "$@"; do
+        yaml_paths+=("${f%.md}.yaml")
+    done
+
+    yq eval-all '. * {"__file": filename}' -o=json "${yaml_paths[@]}" 2>/dev/null \
+      | jq -r '
+        (.__file | sub("\\.yaml$"; ".md")) as $f |
+        "\($f)|status=\(.status // "active")",
+        "\($f)|machine=\(.machine // "")",
+        "\($f)|created=\(.created // "")",
+        "\($f)|branch=\(.branch // "")",
+        "\($f)|repo=\(.repo // "")",
+        "\($f)|type=\(.type // "")",
+        "\($f)|work_item=\(.work_item // "")",
+        "\($f)|pr=\(.pr // "")",
+        "\($f)|todos=\((.todos // []) | length)",
+        "\($f)|open_todos=\((.todos // []) | map(select(.done != true)) | length)",
+        "\($f)|blockers=\((.blockers // []) | length)",
+        "\($f)|research=\((.research // []) | length)",
+        "\($f)|asks=\((.ask // []) | length)",
+        "\($f)|decisions=\((.decisions // []) | length)",
+        "\($f)|collab=\((.collab // []) | length)",
+        ((.todos // [])[]? | "\($f)|" + (if .done == true then "TODO:- [x] \(.text)" else "OPEN_TODO:- [ ] \(.text)" end)),
+        ((.blockers // [])[]?  | "\($f)|BLOCKER:- \(.text)"),
+        ((.decisions // [])[]? | "\($f)|DECISION:- \(.text)"),
+        ((.research // [])[]?  | "\($f)|RESEARCH:- \(.text)"),
+        ((.ask // [])[]?       | "\($f)|ASK:- \(.text)"),
+        ((.collab // [])[]?    | "\($f)|COLLAB:- \(.text)")
+      '
+}
+
+# Legacy awk-based parser for md-only notes (pre-migration). Identical output
+# format to _parse_all_notes_yaml so downstream callers don't distinguish.
+_parse_all_notes_md() {
     (( $# == 0 )) && return
     awk '
     BEGIN {
@@ -822,7 +1009,8 @@ cmd_default() {
     echo "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
 }
 
-# Add a line to a section
+# Add a line to a section. Prefers note.yaml when present (fresh id + metadata);
+# falls back to the markdown section insert for legacy md-only notes.
 cmd_add() {
     local section="$1"
     [[ -z "$section" ]] && { echo "Usage: branch-note add <section> <text>" >&2; exit 1; }
@@ -837,12 +1025,19 @@ cmd_add() {
     require_git_context
     ensure_note
 
-    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
-    local line
-    line=$(format_line "$section" "$text")
+    local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+    local yaml_file="$note_dir/note.yaml"
+    local note_file="$note_dir/note.md"
 
-    insert_into_section "$note_file" "$heading" "$line"
-    echo "Added to ${heading#\#\# }: $text"
+    if [[ -f "$yaml_file" ]]; then
+        _yaml_add "$yaml_file" "$section" "$text"
+        echo "Added to ${heading#\#\# } [$REPLY]: $text"
+    else
+        local line
+        line=$(format_line "$section" "$text")
+        insert_into_section "$note_file" "$heading" "$line"
+        echo "Added to ${heading#\#\# }: $text"
+    fi
 }
 
 # List notes across repos (active + local machine by default)
