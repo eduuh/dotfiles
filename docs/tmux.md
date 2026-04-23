@@ -198,6 +198,11 @@ Only the project-specific keys worth memorising — see `~/.config/nvim/lua/plug
 | `bn done <id>` | Mark a todo done by stable id (e.g., `bn done t3`). |
 | `bn done "text"` | Fall back to substring match — fails on ambiguity. |
 | `bn log-progress "text"` | Append timestamped line to Progress (used by SessionEnd hook). |
+| `bn plan list` | List Claude plan files captured for the current branch. |
+| `bn plan save [src]` | Manually capture a plan (default: newest in `~/.claude/plans/`). |
+| `bn plan open <slug>` | Open a captured plan in `$EDITOR` (prefix match). |
+| `bn plan cat <slug>` | Print a captured plan to stdout. |
+| `bn plan rm <slug>` | Remove a captured plan (asks confirmation). |
 | `bn close` | Close current branch's note. |
 | `bn reopen` | Reopen a closed note. |
 | `bn prune` | Close notes whose worktrees are gone. |

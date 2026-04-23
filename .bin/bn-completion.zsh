@@ -30,6 +30,7 @@ _bn() {
         'json:Dump note.yaml as JSON'
         'migrate:Convert md-only notes to split md + yaml'
         'log-progress:Append a timestamped line to Progress'
+        'plan:Manage captured Claude plan files'
         'todo:List open todos across all branches'
         'todos:List open todos across all branches'
         't:Add todo or list todos'
@@ -154,6 +155,28 @@ _bn() {
             ;;
         migrate)
             _arguments '--dry-run[Show what would migrate without writing]'
+            ;;
+        plan)
+            if (( CURRENT == 3 )); then
+                local -a plan_cmds=(
+                    'list:List captured plans'
+                    'save:Copy most recent ~/.claude/plans/*.md into branch note'
+                    'open:Open plan in $EDITOR'
+                    'cat:Print plan to stdout'
+                    'rm:Remove a plan'
+                )
+                _describe -t plan-cmds 'plan command' plan_cmds
+            elif (( CURRENT == 4 )) && [[ "${words[3]}" =~ ^(open|cat|rm)$ ]]; then
+                local note_dir
+                note_dir=$(bn --path 2>/dev/null)
+                if [[ -n "$note_dir" && -d "$note_dir/plans" ]]; then
+                    local -a slugs
+                    for f in "$note_dir"/plans/*.md(N:t:r); do
+                        slugs+=("$f:Plan")
+                    done
+                    (( ${#slugs[@]} > 0 )) && _describe -t plans 'plan' slugs
+                fi
+            fi
             ;;
         archive)
             _arguments '--days[Days threshold]:days:' '--dry-run[Show what would be archived]'
