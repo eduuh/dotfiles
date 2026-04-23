@@ -1317,16 +1317,72 @@ cmd_close() {
     fi
 }
 
-# Mark a todo as done by substring match
+# Mark a todo as done by id (t1/t2/…) or substring match.
+# Yaml-backed notes update note.yaml with done: true + done_at. Legacy md-only
+# notes fall back to the original sed-based checkbox toggle.
 cmd_done() {
     local query="$*"
-    [[ -z "$query" ]] && { echo "Usage: bn done <text>" >&2; exit 1; }
+    [[ -z "$query" ]] && { echo "Usage: bn done <id|text>" >&2; exit 1; }
 
     require_git_context
-    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+    local yaml_file="$note_dir/note.yaml"
+    local note_file="$note_dir/note.md"
     [[ ! -f "$note_file" ]] && { echo "No note for $NOTE_REPO/$NOTE_BRANCH" >&2; exit 1; }
 
-    # Find matching open todos
+    if [[ -f "$yaml_file" ]]; then
+        require_yq
+        local today=$(date +%Y-%m-%d)
+
+        # Explicit id path: `bn done t3`
+        if [[ "$query" =~ ^t[0-9]+$ ]]; then
+            local existing
+            existing=$(ID="$query" yq -r '.todos[] | select(.id == strenv(ID)) | .text' "$yaml_file" 2>/dev/null)
+            if [[ -z "$existing" ]]; then
+                echo "No todo with id $query" >&2; return 1
+            fi
+            local is_done
+            is_done=$(ID="$query" yq -r '.todos[] | select(.id == strenv(ID)) | .done' "$yaml_file" 2>/dev/null)
+            if [[ "$is_done" == "true" ]]; then
+                echo "Todo $query already done" >&2; return 1
+            fi
+            ID="$query" TODAY="$today" yq -i '
+                (.todos[] | select(.id == strenv(ID))) |= (.done = true | .done_at = strenv(TODAY))
+            ' "$yaml_file"
+            echo "Done [$query]: $existing"
+            return 0
+        fi
+
+        # Substring match over open todos (id + text), case-insensitive, literal.
+        local items
+        items=$(yq -r '.todos[]? | select(.done != true) | "\(.id)\t\(.text)"' "$yaml_file" 2>/dev/null)
+        local hits
+        hits=$(echo "$items" | awk -F'\t' -v q="$query" '
+            BEGIN { q = tolower(q) }
+            NF >= 2 { t = tolower($2); if (index(t, q) > 0) print }
+        ')
+
+        if [[ -z "$hits" ]]; then
+            echo "No open todo matching '$query'" >&2; return 1
+        fi
+        local n=$(echo "$hits" | wc -l | tr -d ' ')
+        if (( n > 1 )); then
+            echo "Multiple matches for '$query':"
+            echo "$hits" | awk -F'\t' '{printf "  [%s] %s\n", $1, $2}'
+            echo "Use the id: bn done <id>" >&2
+            return 1
+        fi
+
+        local match_id=${hits%%$'\t'*}
+        local match_text=${hits#*$'\t'}
+        ID="$match_id" TODAY="$today" yq -i '
+            (.todos[] | select(.id == strenv(ID))) |= (.done = true | .done_at = strenv(TODAY))
+        ' "$yaml_file"
+        echo "Done [$match_id]: $match_text"
+        return 0
+    fi
+
+    # Legacy md-only path
     local -a matches=()
     local -a line_nums=()
     local lnum=0
@@ -1849,6 +1905,83 @@ SCRIPTEOF
 }
 
 # Status: one-line summary for current branch
+# Dump the yaml note as JSON — for Claude skills / `jq` post-processing.
+# Sibling md has no queryable structure, so this requires a migrated note.
+cmd_json() {
+    require_git_context
+    local yaml_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.yaml"
+    if [[ ! -f "$yaml_file" ]]; then
+        echo "No yaml note for $NOTE_REPO/$NOTE_BRANCH (run: bn migrate)" >&2
+        exit 1
+    fi
+    require_yq
+    yq -o=json '.' "$yaml_file"
+}
+
+# Lean context snapshot for SessionStart: goal + open blockers + top-N open
+# todos + last 3 progress entries + last 3 decisions. Caps output at ~25 lines
+# regardless of note age, guarding against context bloat over months.
+cmd_brief() {
+    require_git_context
+    local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+    local yaml_file="$note_dir/note.yaml"
+    local note_file="$note_dir/note.md"
+
+    if [[ ! -f "$note_file" ]]; then
+        echo "$NOTE_REPO/$NOTE_BRANCH: no note"
+        return
+    fi
+
+    local goal
+    goal=$(awk '/^## Goal$/{flag=1; next} /^## /{flag=0} flag && NF{print; exit}' "$note_file")
+
+    if [[ -n "$goal" ]]; then
+        echo "# $NOTE_REPO/$NOTE_BRANCH — $goal"
+    else
+        echo "# $NOTE_REPO/$NOTE_BRANCH"
+    fi
+
+    local progress
+    progress=$(awk '/^## Progress$/{flag=1; next} /^## /{flag=0} flag && /^- /' "$note_file" | tail -3)
+
+    local blockers="" todos="" decisions=""
+    if [[ -f "$yaml_file" ]]; then
+        require_yq
+        # yq-mikefarah quirk: `.emptyarray[] | format` still emits one line with
+        # null interpolation. Gate each iteration on a length check.
+        if (( $(yq -r '(.blockers // []) | length' "$yaml_file" 2>/dev/null) > 0 )); then
+            blockers=$(yq -r '.blockers[] | "- [!] \(.text)"' "$yaml_file" 2>/dev/null)
+        fi
+        if (( $(yq -r '(.todos // []) | map(select(.done != true)) | length' "$yaml_file" 2>/dev/null) > 0 )); then
+            todos=$(yq -r '.todos[] | select(.done != true) | "- [\(.id)] \(.text)"' "$yaml_file" 2>/dev/null | head -10)
+        fi
+        if (( $(yq -r '(.decisions // []) | length' "$yaml_file" 2>/dev/null) > 0 )); then
+            decisions=$(yq -r '.decisions[] | "- \(.text)"' "$yaml_file" 2>/dev/null | tail -3)
+        fi
+    fi
+
+    if [[ -n "$blockers" ]]; then
+        echo ""
+        echo "Blockers:"
+        echo "$blockers"
+    fi
+    if [[ -n "$todos" ]]; then
+        echo ""
+        echo "Open todos:"
+        echo "$todos"
+    fi
+    if [[ -n "$progress" ]]; then
+        echo ""
+        echo "Recent progress:"
+        echo "$progress"
+    fi
+    if [[ -n "$decisions" ]]; then
+        echo ""
+        echo "Recent decisions:"
+        echo "$decisions"
+    fi
+}
+
 cmd_status() {
     require_git_context
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
@@ -2908,6 +3041,8 @@ case "${1:-}" in
     --edit|-e)          shift; cmd_edit "$@" ;;
     migrate)            shift; cmd_migrate "$@" ;;
     log-progress)       shift; cmd_log_progress "$@" ;;
+    --json|json)        cmd_json ;;
+    brief)              cmd_brief ;;
     add|a)              shift; cmd_add "$@" ;;
     list|l)             shift; cmd_list "$@" ;;
     active)             cmd_list ;;
