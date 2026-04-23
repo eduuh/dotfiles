@@ -19,12 +19,17 @@ _bn() {
         'active:List active notes'
         'close:Close current branch note'
         'reopen:Reopen a closed note'
-        'done:Mark a todo as done by substring match'
+        'done:Mark a todo as done by id or substring'
         'prune:Close notes for removed worktrees'
         'summary:Dashboard of active work'
         's:Dashboard of active work'
         'status:One-line status for current branch'
         'st:One-line status for current branch'
+        'brief:Lean SessionStart view (goal + open items + recent)'
+        '--json:Dump note.yaml as JSON'
+        'json:Dump note.yaml as JSON'
+        'migrate:Convert md-only notes to split md + yaml'
+        'log-progress:Append a timestamped line to Progress'
         'todo:List open todos across all branches'
         'todos:List open todos across all branches'
         't:Add todo or list todos'
@@ -133,6 +138,22 @@ _bn() {
             ;;
         list|l)
             _arguments '--all[Include closed notes]' '--all-machines[Show notes from all hosts]'
+            ;;
+        done)
+            if (( CURRENT == 3 )); then
+                local -a todos
+                local json
+                json=$(bn --json 2>/dev/null)
+                if [[ -n "$json" ]]; then
+                    while IFS=$'\t' read -r tid text; do
+                        [[ -n "$tid" ]] && todos+=("${tid}:${text}")
+                    done < <(echo "$json" | jq -r '.todos[]? | select(.done != true) | "\(.id)\t\(.text)"' 2>/dev/null)
+                    (( ${#todos[@]} > 0 )) && _describe -t todos 'open todo' todos
+                fi
+            fi
+            ;;
+        migrate)
+            _arguments '--dry-run[Show what would migrate without writing]'
             ;;
         archive)
             _arguments '--days[Days threshold]:days:' '--dry-run[Show what would be archived]'
