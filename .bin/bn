@@ -989,6 +989,20 @@ cmd_cat() {
             done
         fi
 
+        # Captured Claude plans
+        local plans_dir="$note_dir/plans"
+        local -a plan_files
+        for f in "$plans_dir"/*.md(N); do
+            plan_files+=("$f")
+        done
+        if (( ${#plan_files[@]} > 0 )); then
+            echo ""
+            echo "--- Plans ---"
+            for f in "${plan_files[@]}"; do
+                echo "  ${f:t:r}"
+            done
+        fi
+
         # Scripts from main's scripts dir
         local -a scripts
         for f in "$scripts_dir"/*(Nx); do
@@ -1109,8 +1123,8 @@ cmd_plan() {
                 return 0
             fi
             echo "Plans for $NOTE_REPO/$NOTE_BRANCH:"
+            local title
             for f in "$plans_dir"/*.md(N); do
-                local title
                 title=$(grep -m1 '^# ' "$f" 2>/dev/null | sed 's/^# //')
                 [[ -z "$title" ]] && title="(untitled)"
                 printf "  %s\n    %s\n" "${f:t:r}" "$title"
@@ -2073,6 +2087,16 @@ cmd_brief() {
         echo ""
         echo "Recent decisions:"
         echo "$decisions"
+    fi
+
+    local -a plan_files
+    for f in "$note_dir"/plans/*.md(N); do
+        plan_files+=("$f")
+    done
+    if (( ${#plan_files[@]} > 0 )); then
+        local latest="${plan_files[-1]:t:r}"
+        echo ""
+        echo "${#plan_files[@]} plan(s) attached — latest: $latest"
     fi
 }
 
