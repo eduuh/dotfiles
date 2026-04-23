@@ -1072,6 +1072,100 @@ cmd_files() {
     esac
 }
 
+# Manage Claude Code plan files captured into the branch note's plans/ folder.
+# Subcommands: list | open <slug> | cat <slug> | save [src] | rm <slug>
+# Slug matching is prefix-tolerant.
+cmd_plan() {
+    require_git_context
+    ensure_note
+
+    local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+    local plans_dir="$note_dir/plans"
+    local subcmd="${1:-list}"
+    [[ $# -gt 0 ]] && shift
+
+    _plan_resolve() {
+        local query="$1"
+        local -a hits
+        hits=("$plans_dir"/*"$query"*.md(N))
+        if (( ${#hits[@]} == 0 )); then
+            echo "No plan matching '$query'" >&2
+            return 1
+        fi
+        if (( ${#hits[@]} > 1 )); then
+            echo "Multiple plans match '$query':" >&2
+            for h in "${hits[@]}"; do echo "  ${h:t:r}" >&2; done
+            echo "Be more specific." >&2
+            return 1
+        fi
+        REPLY="${hits[1]}"
+        return 0
+    }
+
+    case "$subcmd" in
+        list|"")
+            if [[ ! -d "$plans_dir" ]] || (( $(ls "$plans_dir"/*.md(N) 2>/dev/null | wc -l) == 0 )); then
+                echo "No plans captured for $NOTE_REPO/$NOTE_BRANCH"
+                return 0
+            fi
+            echo "Plans for $NOTE_REPO/$NOTE_BRANCH:"
+            for f in "$plans_dir"/*.md(N); do
+                local title
+                title=$(grep -m1 '^# ' "$f" 2>/dev/null | sed 's/^# //')
+                [[ -z "$title" ]] && title="(untitled)"
+                printf "  %s\n    %s\n" "${f:t:r}" "$title"
+            done
+            ;;
+        save)
+            local src="${1:-}"
+            if [[ -z "$src" ]]; then
+                src=$(ls -t "$HOME/.claude/plans"/*.md 2>/dev/null | head -1)
+                [[ -z "$src" ]] && { echo "No plan files found in ~/.claude/plans/" >&2; exit 1; }
+            fi
+            [[ ! -f "$src" ]] && { echo "Plan not found: $src" >&2; exit 1; }
+            mkdir -p "$plans_dir"
+            local slug=${src:t:r}
+            local dest="$plans_dir/$(date +%Y-%m-%d)-${slug}.md"
+            if [[ -f "$dest" ]]; then
+                echo "Already captured: ${dest:t}"
+                return 0
+            fi
+            cp "$src" "$dest"
+            echo "Captured: ${dest:t}"
+            ;;
+        open)
+            local query="${1:-}"
+            [[ -z "$query" ]] && { echo "Usage: bn plan open <slug>" >&2; exit 1; }
+            _plan_resolve "$query" || exit 1
+            ${EDITOR:-nvim} "$REPLY"
+            ;;
+        cat)
+            local query="${1:-}"
+            [[ -z "$query" ]] && { echo "Usage: bn plan cat <slug>" >&2; exit 1; }
+            _plan_resolve "$query" || exit 1
+            cat "$REPLY"
+            ;;
+        rm)
+            local query="${1:-}"
+            [[ -z "$query" ]] && { echo "Usage: bn plan rm <slug>" >&2; exit 1; }
+            _plan_resolve "$query" || exit 1
+            echo -n "Remove ${REPLY:t}? [y/N] "
+            read -r answer
+            if [[ "$answer" =~ ^[Yy]$ ]]; then
+                rm "$REPLY"
+                echo "Removed."
+            else
+                echo "Kept."
+            fi
+            ;;
+        *)
+            echo "Unknown subcommand: $subcmd" >&2
+            echo "Usage: bn plan [list | save [src] | open <slug> | cat <slug> | rm <slug>]" >&2
+            exit 1
+            ;;
+    esac
+}
+
 cmd_default() {
     require_git_context
     ensure_note
@@ -3043,6 +3137,7 @@ case "${1:-}" in
     log-progress)       shift; cmd_log_progress "$@" ;;
     --json|json)        cmd_json ;;
     brief)              cmd_brief ;;
+    plan)               shift; cmd_plan "$@" ;;
     add|a)              shift; cmd_add "$@" ;;
     list|l)             shift; cmd_list "$@" ;;
     active)             cmd_list ;;
