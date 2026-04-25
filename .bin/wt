@@ -26,12 +26,18 @@ Commands:
   go [worktree]            cd to worktree (interactive if not specified)
   fetch                    Fetch all remotes for bare repo
   prune                    Prune stale worktree references
+  cleanup [--all] [--force] [worktree]
+                           Verify PR for a worktree's branch is merged, then
+                           remove the worktree and delete its local branch.
+                           Default target: current worktree.
 
 Examples:
   wt clone git@github.com:user/test.git    # Creates ~/projects/bare/test.git
   wt add main                              # Creates ~/projects/worktree/test/main
   wt add user/feature-x                    # Creates ~/projects/worktree/test/user-feature-x
   wt add -b new-feature main               # Create new branch from main
+  wt cleanup                               # Clean current worktree if PR is merged
+  wt cleanup --all                         # Clean every worktree whose PR is merged
 EOF
 }
 
@@ -374,6 +380,162 @@ cmd_prune() {
     echo -e "${GREEN}Pruned stale worktree references${NC}"
 }
 
+# Derive owner/repo slug from a bare repo's origin URL ("git@github.com:owner/repo.git" or https form)
+github_slug() {
+    local bare="$1"
+    local url
+    url=$(git --git-dir="$bare" remote get-url origin 2>/dev/null) || return 1
+    echo "$url" | sed -E 's|.*github\.com[:/]([^/]+/[^/]+)|\1|; s|\.git$||'
+}
+
+# Look up the PR state for <branch> on <repo_slug>. Echoes one of: MERGED, OPEN, CLOSED, NONE
+pr_state() {
+    local repo_slug="$1" branch="$2"
+    local state
+    state=$(gh pr list --repo "$repo_slug" --head "$branch" --state all \
+        --json state --jq '.[0].state' 2>/dev/null) || true
+    echo "${state:-NONE}"
+}
+
+# Clean a single worktree. Args: <worktree_path> <force:true|false>
+cleanup_one() {
+    local worktree="$1" force="$2"
+    local bare branch slug state cwd_inside=false
+
+    bare=$(find_bare_repo "$worktree") || true
+    if [[ -z "$bare" ]]; then
+        echo -e "${RED}Could not find bare repo for: $worktree${NC}"; return 1
+    fi
+    branch=$(git -C "$worktree" branch --show-current 2>/dev/null) || true
+    if [[ -z "$branch" ]]; then
+        echo -e "${RED}Could not determine branch for: $worktree${NC}"; return 1
+    fi
+    if [[ "$branch" == "main" || "$branch" == "master" ]]; then
+        echo -e "${RED}Refusing to clean up '$branch' worktree${NC}"; return 1
+    fi
+
+    slug=$(github_slug "$bare") || true
+    if [[ -n "$slug" ]]; then
+        state=$(pr_state "$slug" "$branch")
+    else
+        state="NONE"
+    fi
+
+    case "$state" in
+        MERGED)
+            echo -e "${GREEN}$slug/$branch — PR merged${NC}"
+            ;;
+        NONE|"")
+            echo -e "${YELLOW}$slug/$branch — no PR found${NC}"
+            $force || { echo -e "${YELLOW}Use --force to clean anyway${NC}"; return 1; }
+            ;;
+        *)
+            echo -e "${YELLOW}$slug/$branch — PR is $state, not merged${NC}"
+            $force || { echo -e "${YELLOW}Use --force to clean anyway${NC}"; return 1; }
+            ;;
+    esac
+
+    [[ "$(pwd)" == "$worktree"* ]] && cwd_inside=true
+
+    local force_flag=""
+    $force && force_flag="--force"
+    if ! git --git-dir="$bare" worktree remove $force_flag "$worktree"; then
+        echo -e "${RED}Worktree removal failed (uncommitted changes? try --force)${NC}"
+        return 1
+    fi
+
+    git --git-dir="$bare" branch -D "$branch" 2>/dev/null || true
+
+    local repo_dir
+    repo_dir=$(dirname "$worktree")
+    [[ "$repo_dir" == "$WORKTREE_DIR"/* ]] && rmdir "$repo_dir" 2>/dev/null || true
+
+    "$HOME/.bin/bn" prune 2>/dev/null || true
+
+    echo -e "${GREEN}Cleaned $branch${NC}"
+    $cwd_inside && echo -e "${YELLOW}Note: your shell is now in a removed directory — cd elsewhere${NC}"
+    return 0
+}
+
+# Sweep mode: scan every worktree across every bare repo, clean any whose PR is merged
+cleanup_all() {
+    local force="$1"
+    local cleaned=0 skipped=0
+
+    for bare in "$BARE_DIR"/*.git(N/); do
+        local slug
+        slug=$(github_slug "$bare") || continue
+        local wts
+        wts=$(git --git-dir="$bare" worktree list --porcelain | grep '^worktree ' | cut -d' ' -f2-)
+        while IFS= read -r wt; do
+            [[ -z "$wt" ]] && continue
+            [[ "$wt" == "$BARE_DIR"/* ]] && continue
+            local branch
+            branch=$(git -C "$wt" branch --show-current 2>/dev/null) || continue
+            [[ "$branch" == "main" || "$branch" == "master" ]] && continue
+            local state
+            state=$(pr_state "$slug" "$branch")
+            if [[ "$state" == "MERGED" ]]; then
+                if cleanup_one "$wt" "$force"; then
+                    cleaned=$((cleaned + 1))
+                else
+                    skipped=$((skipped + 1))
+                fi
+            else
+                echo -e "${YELLOW}Skip $slug/$branch (${state:-no PR})${NC}"
+                skipped=$((skipped + 1))
+            fi
+        done <<< "$wts"
+    done
+    echo -e "${GREEN}Cleaned $cleaned, skipped $skipped${NC}"
+}
+
+# Cleanup dispatcher
+cmd_cleanup() {
+    local force=false all=false target=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force) force=true; shift ;;
+            --all)   all=true;   shift ;;
+            -h|--help)
+                cat <<HELP
+wt cleanup [--all] [--force] [worktree]
+
+Verifies the PR for a worktree's branch is merged on GitHub, then removes the
+worktree and deletes its local branch. Closes orphan branch notes via 'bn prune'.
+
+  --all     Sweep every worktree under all bare repos and clean merged ones.
+  --force   Clean even if no PR exists or the PR is not yet merged.
+  worktree  Path or slug under \$WORKTREE_DIR. Default: current worktree.
+HELP
+                return 0
+                ;;
+            *) target="$1"; shift ;;
+        esac
+    done
+
+    if $all; then
+        cleanup_all "$force"
+        return $?
+    fi
+
+    local worktree
+    if [[ -z "$target" ]]; then
+        worktree=$(pwd)
+    elif [[ "$target" == /* ]]; then
+        worktree="$target"
+    else
+        worktree="$WORKTREE_DIR/$target"
+    fi
+
+    if [[ ! -d "$worktree" ]]; then
+        echo -e "${RED}Worktree not found: $worktree${NC}"
+        return 1
+    fi
+
+    cleanup_one "$worktree" "$force"
+}
+
 # Main
 case "${1:-}" in
     clone)  shift; cmd_clone "$@" ;;
@@ -383,6 +545,7 @@ case "${1:-}" in
     go)     shift; cmd_go "$@" ;;
     fetch)  cmd_fetch ;;
     prune)  cmd_prune ;;
+    cleanup) shift; cmd_cleanup "$@" ;;
     -h|--help|help|"") usage ;;
     *)      echo -e "${RED}Unknown command: $1${NC}"; usage; exit 1 ;;
 esac
