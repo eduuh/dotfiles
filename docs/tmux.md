@@ -174,7 +174,9 @@ Only the project-specific keys worth memorising — see `~/.config/nvim/lua/plug
 | Command | Action |
 |---------|--------|
 | `bn` | Ensure note exists, print dir path. |
-| `bn --cat` / `-c` | Print note contents. |
+| `bn --cat` / `-c` | Print full note contents. |
+| `bn brief` | Lean SessionStart view: goal, blockers, open todos (cap 10), last 3 Progress, last 3 Decisions. |
+| `bn --json` | Dump `note.yaml` as JSON for scripts / Claude skills. |
 | `bn --edit` / `-e` | Open note in `$EDITOR`. |
 | `bn --path` / `-p` | Print note dir path (no create). |
 
@@ -193,12 +195,20 @@ Only the project-specific keys worth memorising — see `~/.config/nvim/lua/plug
 
 | Command | Action |
 |---------|--------|
-| `bn done "text"` | Mark a todo done by substring match. |
+| `bn done <id>` | Mark a todo done by stable id (e.g., `bn done t3`). |
+| `bn done "text"` | Fall back to substring match — fails on ambiguity. |
+| `bn log-progress "text"` | Append timestamped line to Progress (used by SessionEnd hook). |
+| `bn plan list` | List Claude plan files captured for the current branch. |
+| `bn plan save [src]` | Manually capture a plan (default: newest in `~/.claude/plans/`). |
+| `bn plan open <slug>` | Open a captured plan in `$EDITOR` (prefix match). |
+| `bn plan cat <slug>` | Print a captured plan to stdout. |
+| `bn plan rm <slug>` | Remove a captured plan (asks confirmation). |
 | `bn close` | Close current branch's note. |
 | `bn reopen` | Reopen a closed note. |
 | `bn prune` | Close notes whose worktrees are gone. |
 | `bn reset` | Remove non-main worktrees + close notes. |
 | `bn archive` | Archive old closed notes. |
+| `bn migrate [--dry-run]` | Convert legacy md-only notes to split md + yaml. |
 
 ## Views
 
