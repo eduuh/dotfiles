@@ -1969,23 +1969,11 @@ cmd_main() {
     fi
 }
 
-# Run a named script (default: build). No name → tries "build", then fzf.
+# Run a named script (default: build).
 cmd_build() {
-    local name="${1:-}"
+    local name="${1:-build}"
     require_git_context
     ensure_scripts_dir "$NOTE_REPO"
-
-    if [[ -z "$name" ]]; then
-        local default_script; resolve_script "$NOTE_REPO" "build"; default_script=$REPLY
-        if [[ -f "$default_script" ]]; then
-            name="build"
-        elif command -v fzf &>/dev/null && _fzf_pick_script "$NOTE_REPO"; then
-            name="$REPLY"
-        else
-            echo "No scripts for $NOTE_REPO. Create one with: bn script new <name>" >&2
-            exit 1
-        fi
-    fi
 
     local script
     resolve_script "$NOTE_REPO" "$name"; script=$REPLY
