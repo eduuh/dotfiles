@@ -2794,6 +2794,64 @@ cmd_details() {
     esac
 }
 
+cmd_setup() {
+    require_git_context
+    local main_dir="$NOTES_DIR/$NOTE_REPO/main"
+    local details_file="$main_dir/Details.md"
+    local scripts_dir="$main_dir/scripts"
+    local build_script="$scripts_dir/build"
+
+    echo -e "${BLUE}Setting up bn for: $NOTE_REPO${NC}"
+    echo ""
+
+    # Step 1: Details.md
+    if [[ -f "$details_file" ]]; then
+        echo -e "  ${GREEN}✓${NC} Details.md already exists"
+    else
+        mkdir -p "$main_dir"
+        _render_template details.md "REPO=$NOTE_REPO" > "$details_file"
+        echo -e "  ${GREEN}+${NC} Created Details.md"
+        echo ""
+        echo "  Fill in your project links:"
+        echo -n "  Open Details.md now? [Y/n] "
+        read -r answer
+        if [[ "${answer:-y}" =~ ^[Yy]$ ]]; then
+            ${EDITOR:-nvim} "$details_file"
+        fi
+    fi
+
+    # Step 2: build script
+    ensure_scripts_dir "$NOTE_REPO"
+    if [[ -f "$build_script" ]]; then
+        echo -e "  ${GREEN}✓${NC} build script already exists"
+    else
+        cat > "$build_script" << 'SCRIPTEOF'
+#!/usr/bin/env zsh
+set -e
+
+# build script — runs with cwd set to the repo/worktree directory.
+# Add your setup steps here, e.g.:
+#   npm install
+#   yarn
+#   pip install -r requirements.txt
+
+SCRIPTEOF
+        chmod +x "$build_script"
+        echo -e "  ${GREEN}+${NC} Created scripts/build"
+        echo ""
+        echo "  Add your build/setup steps:"
+        echo -n "  Open build script now? [Y/n] "
+        read -r answer
+        if [[ "${answer:-y}" =~ ^[Yy]$ ]]; then
+            ${EDITOR:-nvim} "$build_script"
+        fi
+    fi
+
+    echo ""
+    echo -e "${GREEN}Done.${NC} New branch notes for $NOTE_REPO will auto-include Details.md."
+    echo "Run 'bn build' in any worktree to run the build script."
+}
+
 cmd_blog() {
     local BLOG_BARE="$HOME/projects/bare/bits-and-atoms.git"
     local BLOG_DRAFTS="$HOME/projects/worktree/bits-and-atoms/drafts"
@@ -3334,6 +3392,7 @@ case "${1:-}" in
     diff|d)             cmd_diff ;;
     achieve|ac)         shift; cmd_achieve "$@" ;;
     global|g)           shift; cmd_global "$@" ;;
+    setup)              cmd_setup ;;
     details)            shift; cmd_details "$@" ;;
     blog)               shift; cmd_blog "$@" ;;
     learn)              shift; cmd_learn "$@" ;;
