@@ -2800,6 +2800,7 @@ cmd_setup() {
     local details_file="$main_dir/Details.md"
     local scripts_dir="$main_dir/scripts"
     local build_script="$scripts_dir/build"
+    local test_script="$scripts_dir/test"
 
     echo -e "${BLUE}Setting up bn for: $NOTE_REPO${NC}"
     echo ""
@@ -2847,9 +2848,35 @@ SCRIPTEOF
         fi
     fi
 
+    # Step 3: test script
+    if [[ -f "$test_script" ]]; then
+        echo -e "  ${GREEN}✓${NC} test script already exists"
+    else
+        cat > "$test_script" << 'SCRIPTEOF'
+#!/usr/bin/env zsh
+set -e
+
+# test script — runs with cwd set to the repo/worktree directory.
+# Add your test steps here, e.g.:
+#   npm test
+#   yarn test
+#   pytest
+
+SCRIPTEOF
+        chmod +x "$test_script"
+        echo -e "  ${GREEN}+${NC} Created scripts/test"
+        echo ""
+        echo "  Add your test steps:"
+        echo -n "  Open test script now? [Y/n] "
+        read -r answer
+        if [[ "${answer:-y}" =~ ^[Yy]$ ]]; then
+            ${EDITOR:-nvim} "$test_script"
+        fi
+    fi
+
     echo ""
     echo -e "${GREEN}Done.${NC} New branch notes for $NOTE_REPO will auto-include Details.md."
-    echo "Run 'bn build' in any worktree to run the build script."
+    echo "Run 'bn build' or 'bn build test' in any worktree to run scripts."
 }
 
 cmd_blog() {
