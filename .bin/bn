@@ -2876,7 +2876,7 @@ SCRIPTEOF
 
     echo ""
     echo -e "${GREEN}Done.${NC} New branch notes for $NOTE_REPO will auto-include Details.md."
-    echo "Run 'bn build' or 'bn build test' in any worktree to run scripts."
+    echo "Run 'bn build' or 'bn test' in any worktree to run scripts."
 }
 
 cmd_blog() {
@@ -3407,6 +3407,7 @@ case "${1:-}" in
     search)             shift; cmd_search "$@" ;;
     stale)              shift; cmd_stale "$@" ;;
     build|b)            shift; cmd_build "$@" ;;
+    test|t)             cmd_build test ;;
     script|sc)          shift; cmd_script "$@" ;;
     archive)            shift; cmd_archive "$@" ;;
     clean)              shift; cmd_clean "$@" ;;
