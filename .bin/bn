@@ -182,6 +182,35 @@ _copy_to_clipboard() {
     fi
 }
 
+# --- Helpers: fzf Pickers ---
+
+# fzf-pick a script for <repo>; sets REPLY to the name. Returns 1 if none/cancelled.
+_fzf_pick_script() {
+    local repo="$1"
+    local scripts_dir="$NOTES_DIR/$repo/main/scripts"
+    local -a scripts
+    for f in "$scripts_dir"/*(Nx); do scripts+=("${f:t}"); done
+    (( ${#scripts[@]} == 0 )) && return 1
+    REPLY=$(printf '%s\n' "${scripts[@]}" \
+        | fzf --prompt="script> " --height=10 --no-info 2>/dev/null)
+    [[ -n "$REPLY" ]]
+}
+
+# fzf-pick an investigation file in <note_dir>; sets REPLY to full path. Returns 1 if none/cancelled.
+_fzf_pick_file() {
+    local note_dir="$1"
+    local -a files
+    for f in "$note_dir"/*.md(N); do
+        [[ "${f:t}" == "note.md" ]] && continue
+        files+=("$f")
+    done
+    (( ${#files[@]} == 0 )) && return 1
+    REPLY=$(printf '%s\n' "${files[@]}" \
+        | fzf --prompt="file> " --height=10 --no-info \
+              --preview="cat {}" 2>/dev/null)
+    [[ -n "$REPLY" ]]
+}
+
 # --- Helpers: Note Templates ---
 
 TEMPLATE_DIR="$HOME/.config/bn/templates"
@@ -213,6 +242,7 @@ _render_template() {
             pr-review.md) _pr_review_template_inline "${(@)@}" ;;
             achievement.md) _achievement_template_inline "${(@)@}" ;;
             achievements-header.md) _achievements_header_template_inline "${(@)@}" ;;
+            details.md) _details_template_inline "${(@)@}" ;;
             *) echo "Unknown template: $tmpl_name" >&2; return 1 ;;
         esac
     fi
@@ -402,6 +432,21 @@ _achievement_template_inline() {
 EOF
 }
 
+_details_template_inline() {
+    local repo=""
+    for pair in "$@"; do case "${pair%%=*}" in REPO) repo="${pair#*=}" ;; esac; done
+    cat << EOF
+# $repo — Details
+
+## Links
+
+-
+
+## Context
+
+EOF
+}
+
 _achievements_header_template_inline() {
     local repo="" date=""
     for pair in "$@"; do
@@ -434,6 +479,11 @@ ensure_note() {
             "REPO=$NOTE_REPO" "BRANCH=$NOTE_BRANCH" \
             "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" \
             "GOAL=$goal" > "$note_file"
+        local details_file="$NOTES_DIR/$NOTE_REPO/main/Details.md"
+        if [[ -f "$details_file" ]]; then
+            printf '\n---\n' >> "$note_file"
+            cat "$details_file" >> "$note_file"
+        fi
     fi
     if [[ ! -f "$yaml_file" && -f "$note_file" ]]; then
         # Only create yaml for genuinely new notes (prose-only md). Existing md-backed
@@ -1057,7 +1107,6 @@ cmd_files() {
             ${EDITOR:-nvim} "$filepath"
             ;;
         "")
-            # List investigation files
             local -a inv_files
             for f in "$note_dir"/*.md(N); do
                 [[ "${f:t}" == "note.md" ]] && continue
@@ -1068,12 +1117,15 @@ cmd_files() {
                 echo "Create one with: bn files new <name>"
                 return
             fi
-            echo "Investigation files ($NOTE_REPO/$NOTE_BRANCH):"
-            for f in "${inv_files[@]}"; do
-                local lines
-                lines=$(wc -l < "$f" | tr -d ' ')
-                echo "  ${f:t} ($lines lines)"
-            done
+            if command -v fzf &>/dev/null; then
+                _fzf_pick_file "$note_dir" && ${EDITOR:-nvim} "$REPLY"
+            else
+                echo "Investigation files ($NOTE_REPO/$NOTE_BRANCH):"
+                for f in "${inv_files[@]}"; do
+                    local lines; lines=$(wc -l < "$f" | tr -d ' ')
+                    echo "  ${f:t} ($lines lines)"
+                done
+            fi
             ;;
         *)
             # View a specific file
@@ -1917,11 +1969,23 @@ cmd_main() {
     fi
 }
 
-# Run a named script (default: build)
+# Run a named script (default: build). No name → tries "build", then fzf.
 cmd_build() {
-    local name="${1:-build}"
+    local name="${1:-}"
     require_git_context
     ensure_scripts_dir "$NOTE_REPO"
+
+    if [[ -z "$name" ]]; then
+        local default_script; resolve_script "$NOTE_REPO" "build"; default_script=$REPLY
+        if [[ -f "$default_script" ]]; then
+            name="build"
+        elif command -v fzf &>/dev/null && _fzf_pick_script "$NOTE_REPO"; then
+            name="$REPLY"
+        else
+            echo "No scripts for $NOTE_REPO. Create one with: bn script new <name>" >&2
+            exit 1
+        fi
+    fi
 
     local script
     resolve_script "$NOTE_REPO" "$name"; script=$REPLY
@@ -1974,9 +2038,15 @@ SCRIPTEOF
             ;;
         edit)
             local name="$1"
-            [[ -z "$name" ]] && { echo "Usage: bn script edit <name>" >&2; exit 1; }
             require_git_context
             ensure_scripts_dir "$NOTE_REPO"
+            if [[ -z "$name" ]]; then
+                if command -v fzf &>/dev/null && _fzf_pick_script "$NOTE_REPO"; then
+                    name="$REPLY"
+                else
+                    echo "Usage: bn script edit <name>" >&2; exit 1
+                fi
+            fi
 
             local script
             resolve_script "$NOTE_REPO" "$name"; script=$REPLY
@@ -1986,7 +2056,7 @@ SCRIPTEOF
             fi
             ${EDITOR:-nvim} "$script"
             ;;
-        list|l|"")
+        list|l)
             require_git_context
             ensure_scripts_dir "$NOTE_REPO"
 
@@ -2003,6 +2073,27 @@ SCRIPTEOF
             else
                 echo "No scripts for $NOTE_REPO"
                 echo "Create one with: bn script new <name>"
+            fi
+            ;;
+        "")
+            require_git_context
+            ensure_scripts_dir "$NOTE_REPO"
+            if command -v fzf &>/dev/null && _fzf_pick_script "$NOTE_REPO"; then
+                local script; resolve_script "$NOTE_REPO" "$REPLY"; script=$REPLY
+                [[ -x "$script" ]] || chmod +x "$script"
+                ${EDITOR:-nvim} "$script"
+            else
+                # Fall back to list
+                local scripts_dir="$NOTES_DIR/$NOTE_REPO/main/scripts"
+                local -a scripts
+                for f in "$scripts_dir"/*(Nx); do scripts+=("${f:t}"); done
+                if (( ${#scripts[@]} > 0 )); then
+                    echo "Scripts for $NOTE_REPO:"
+                    for s in "${scripts[@]}"; do echo "  $s"; done
+                else
+                    echo "No scripts for $NOTE_REPO"
+                    echo "Create one with: bn script new <name>"
+                fi
             fi
             ;;
         *)
@@ -2445,6 +2536,12 @@ cmd_pr() {
         # Setting a PR link
         ensure_note
         _set_frontmatter "$note_file" "pr" "$url"
+        local yaml_file="${note_file%.md}.yaml"
+        if [[ -f "$yaml_file" ]]; then
+            _yaml_add "$yaml_file" "collab" "PR: $url" >/dev/null
+        else
+            insert_into_section "$note_file" "## Collaboration" "- PR: $url" 2>/dev/null || true
+        fi
         echo "PR linked: $url"
         return
     fi
@@ -2505,6 +2602,13 @@ cmd_link() {
     if [[ -n "$id" ]]; then
         ensure_note
         _set_frontmatter "$note_file" "work_item" "$id"
+        local wi_url_entry="https://dev.azure.com/office/Office/_workitems/edit/${id}"
+        local yaml_file="${note_file%.md}.yaml"
+        if [[ -f "$yaml_file" ]]; then
+            _yaml_add "$yaml_file" "collab" "WI $id: $wi_url_entry" >/dev/null
+        else
+            insert_into_section "$note_file" "## Collaboration" "- WI $id: $wi_url_entry" 2>/dev/null || true
+        fi
         echo "Work item linked: $id"
         return
     fi
@@ -2650,6 +2754,44 @@ cmd_diff() {
     local commits
     commits=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
     echo -e "${GREEN}${commits} commit(s) ahead of main${NC}"
+}
+
+cmd_details() {
+    require_git_context
+    local main_dir="$NOTES_DIR/$NOTE_REPO/main"
+    local details_file="$main_dir/Details.md"
+    local subcmd="${1:-}"
+
+    case "$subcmd" in
+        new)
+            if [[ -f "$details_file" ]]; then
+                echo "Details.md already exists: $details_file"
+                echo "Edit with: bn details edit"
+                return 1
+            fi
+            mkdir -p "$main_dir"
+            _render_template details.md "REPO=$NOTE_REPO" > "$details_file"
+            echo "Created: $details_file"
+            echo "Edit with: bn details edit"
+            ;;
+        edit)
+            if [[ ! -f "$details_file" ]]; then
+                echo "No Details.md for $NOTE_REPO. Create with: bn details new" >&2
+                return 1
+            fi
+            ${EDITOR:-nvim} "$details_file"
+            ;;
+        path) echo "$details_file" ;;
+        "")
+            if [[ -f "$details_file" ]]; then
+                cat "$details_file"
+            else
+                echo "No Details.md for $NOTE_REPO"
+                echo "Create with: bn details new"
+            fi
+            ;;
+        *) echo "Usage: bn details [new|edit|path]" >&2; exit 1 ;;
+    esac
 }
 
 cmd_blog() {
@@ -3192,6 +3334,7 @@ case "${1:-}" in
     diff|d)             cmd_diff ;;
     achieve|ac)         shift; cmd_achieve "$@" ;;
     global|g)           shift; cmd_global "$@" ;;
+    details)            shift; cmd_details "$@" ;;
     blog)               shift; cmd_blog "$@" ;;
     learn)              shift; cmd_learn "$@" ;;
     -h|--help|help)     cmd_help ;;

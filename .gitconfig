@@ -1,9 +1,9 @@
 [credential "https://github.com"]
 	helper = 
-	helper = !/opt/homebrew/bin/gh auth git-credential
+	helper = !/home/edd/.local/bin/gh auth git-credential
 [credential "https://gist.github.com"]
 	helper = 
-	helper = !/opt/homebrew/bin/gh auth git-credential
+	helper = !/home/edd/.local/bin/gh auth git-credential
 [user]
 	name = eduuh
 	email = 31909722+eduuh@users.noreply.github.com
