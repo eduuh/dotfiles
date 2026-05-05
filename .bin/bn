@@ -20,6 +20,8 @@
 #   bn refresh-all|ra               # Refresh all main worktrees
 #   bn main|m                       # Print main note dir + list scripts
 #   bn build|b [name]               # Run a script (default: build)
+#   bn run                          # Run 'run' script in background; copies Details.md link
+#   bn cron [list|new|edit|run|setup|teardown|remove]  # Manage branch cron jobs
 #   bn script|sc [new|edit|list]    # Manage repo scripts
 #   bn files|f [name|new|edit]       # Investigation file management
 #   bn archive [--days N] [--dry-run]  # Archive old closed notes
@@ -1992,6 +1994,60 @@ cmd_build() {
     (cd "$work_dir" && "$script")
 }
 
+cmd_run() {
+    require_git_context
+    ensure_scripts_dir "$NOTE_REPO"
+
+    local main_dir="$NOTES_DIR/$NOTE_REPO/main"
+    local details_file="$main_dir/Details.md"
+    if [[ -f "$details_file" ]]; then
+        local url
+        url=$(awk '
+            /^## Links/{found=1; next}
+            /^## /{found=0}
+            found && match($0, /https?:\/\/[^ )]+/) {
+                print substr($0, RSTART, RLENGTH)
+                exit
+            }
+        ' "$details_file")
+        if [[ -n "$url" ]]; then
+            _copy_to_clipboard "$url"
+            echo "Copied to clipboard: $url"
+        fi
+    fi
+
+    local script
+    resolve_script "$NOTE_REPO" "run"; script=$REPLY
+    if [[ ! -f "$script" ]]; then
+        echo "No 'run' script for $NOTE_REPO" >&2
+        echo "Create one with: bn script new run" >&2
+        exit 1
+    fi
+    [[ ! -x "$script" ]] && chmod +x "$script"
+
+    local work_dir log_file pid_file
+    work_dir=$(pwd)
+    log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
+    pid_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.pid"
+
+    if [[ -f "$pid_file" ]]; then
+        local old_pid
+        old_pid=$(cat "$pid_file")
+        if kill -0 "$old_pid" 2>/dev/null; then
+            echo "Stopping previous run (PID $old_pid)..."
+            kill "$old_pid"
+        fi
+        rm -f "$pid_file"
+    fi
+
+    echo "Starting run script in background..."
+    echo "Log: $log_file"
+    (cd "$work_dir" && exec "$script" >> "$log_file" 2>&1) &
+    local pid=$!
+    echo $pid > "$pid_file"
+    echo "PID: $pid"
+}
+
 # Script management: new, edit, list
 cmd_script() {
     local subcmd="${1:-}"
@@ -3057,6 +3113,176 @@ LEARNEOF
     esac
 }
 
+# --- Cron Jobs ---
+
+_crons_dir() { echo "$NOTES_DIR/$1/main/crons"; }
+
+cmd_cron() {
+    local subcmd="${1:-list}"
+    shift 2>/dev/null || true
+    case "$subcmd" in
+        list|l)    _cron_list ;;
+        new)       _cron_new "$@" ;;
+        edit)      _cron_edit "$@" ;;
+        run)       _cron_run "$@" ;;
+        setup)     _cron_setup ;;
+        teardown)  _cron_teardown ;;
+        remove|rm) _cron_remove "$@" ;;
+        *) echo "Usage: bn cron [list|new <name>|edit <name>|run <name>|setup|teardown|remove <name>]" >&2; exit 1 ;;
+    esac
+}
+
+_cron_list() {
+    require_git_context
+    require_yq
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    local -a files
+    for f in "$crons_dir"/*.yaml(N); do files+=("$f"); done
+    if (( ${#files[@]} == 0 )); then
+        echo "No crons for $NOTE_REPO — add one with: bn cron new <name>"
+        return
+    fi
+    echo "Crons for $NOTE_REPO:"
+    for f in "${files[@]}"; do
+        local name enabled schedule
+        name=$(yq '.name // ""' "$f")
+        enabled=$(yq '.enabled // true' "$f")
+        schedule=$(yq '.schedule // ""' "$f")
+        local mark="✓"
+        [[ "$enabled" == "false" ]] && mark="✗"
+        printf "  %s  %-22s %s\n" "$mark" "$name" "$schedule"
+    done
+}
+
+_cron_new() {
+    require_git_context
+    require_yq
+    local name="$1"
+    [[ -z "$name" ]] && { echo "Usage: bn cron new <name>" >&2; exit 1; }
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    mkdir -p "$crons_dir"
+    local cron_file="$crons_dir/${name}.yaml"
+    if [[ -f "$cron_file" ]]; then
+        echo "Cron '$name' already exists. Edit with: bn cron edit $name" >&2
+        exit 1
+    fi
+    local worktree
+    worktree=$(pwd)
+    cat > "$cron_file" << EOF
+name: $name
+schedule: "0 9 * * *"
+worktree: $worktree
+enabled: true
+steps:
+  - git fetch origin
+  - git rebase origin/main
+  - bn build
+  - bn run
+EOF
+    echo "Created: $cron_file"
+    ${EDITOR:-nvim} "$cron_file"
+}
+
+_cron_edit() {
+    require_git_context
+    local name="$1"
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    if [[ -z "$name" ]] && command -v fzf &>/dev/null; then
+        local -a names
+        for f in "$crons_dir"/*.yaml(N); do names+=("${f:t:r}"); done
+        (( ${#names[@]} == 0 )) && { echo "No crons for $NOTE_REPO" >&2; return 1; }
+        name=$(printf '%s\n' "${names[@]}" | fzf --prompt="cron> " --height=10 --no-info 2>/dev/null)
+    fi
+    [[ -z "$name" ]] && { echo "Usage: bn cron edit <name>" >&2; exit 1; }
+    local cron_file="$crons_dir/${name}.yaml"
+    [[ ! -f "$cron_file" ]] && { echo "No cron '$name' for $NOTE_REPO" >&2; exit 1; }
+    ${EDITOR:-nvim} "$cron_file"
+}
+
+_cron_run() {
+    local name="" repo=""
+    while [[ -n "${1:-}" ]]; do
+        case "$1" in
+            --repo) repo="$2"; shift 2 ;;
+            *)      [[ -z "$name" ]] && name="$1"; shift ;;
+        esac
+    done
+    if [[ -n "$repo" ]]; then
+        NOTE_REPO="$repo"
+    else
+        require_git_context
+    fi
+    [[ -z "$name" ]] && { echo "Usage: bn cron run <name> [--repo <repo>]" >&2; exit 1; }
+    require_yq
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    local cron_file="$crons_dir/${name}.yaml"
+    [[ ! -f "$cron_file" ]] && { echo "No cron '$name' for $NOTE_REPO" >&2; exit 1; }
+
+    local worktree enabled
+    worktree=$(yq '.worktree // ""' "$cron_file")
+    enabled=$(yq '.enabled // true' "$cron_file")
+    [[ "$enabled" == "false" ]] && { echo "Cron '$name' is disabled" >&2; exit 1; }
+    [[ -z "$worktree" || ! -d "$worktree" ]] && { echo "Worktree not found: $worktree" >&2; exit 1; }
+
+    echo "Running cron '$name' in $worktree..."
+    local step_count i step
+    step_count=$(yq '.steps | length' "$cron_file")
+    for (( i = 0; i < step_count; i++ )); do
+        step=$(yq ".steps[$i]" "$cron_file")
+        echo "  → $step"
+        (cd "$worktree" && eval "$step") || { echo "  ✗ Failed: $step" >&2; exit 1; }
+    done
+    echo "  ✓ Done"
+}
+
+_cron_setup() {
+    require_git_context
+    require_yq
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    local bn_path="$HOME/.bin/bn"
+    local -a new_lines
+    for f in "$crons_dir"/*.yaml(N); do
+        local name enabled schedule
+        name=$(yq '.name // ""' "$f")
+        enabled=$(yq '.enabled // true' "$f")
+        schedule=$(yq '.schedule // ""' "$f")
+        [[ "$enabled" == "false" || -z "$name" || -z "$schedule" ]] && continue
+        new_lines+=("$schedule $bn_path cron run $name --repo $NOTE_REPO")
+    done
+    local current stripped
+    current=$(crontab -l 2>/dev/null || true)
+    stripped=$(printf '%s\n' "$current" | awk "/^# BEGIN bn:${NOTE_REPO}\$/{skip=1;next} /^# END bn:${NOTE_REPO}\$/{skip=0;next} !skip{print}")
+    local new_ct="$stripped"
+    if (( ${#new_lines[@]} > 0 )); then
+        new_ct+=$'\n'"# BEGIN bn:$NOTE_REPO"
+        for line in "${new_lines[@]}"; do new_ct+=$'\n'"$line"; done
+        new_ct+=$'\n'"# END bn:$NOTE_REPO"
+    fi
+    printf '%s\n' "$new_ct" | crontab -
+    echo "Installed ${#new_lines[@]} cron job(s) for $NOTE_REPO:"
+    for line in "${new_lines[@]}"; do echo "  $line"; done
+}
+
+_cron_teardown() {
+    require_git_context
+    local current stripped
+    current=$(crontab -l 2>/dev/null || true)
+    stripped=$(printf '%s\n' "$current" | awk "/^# BEGIN bn:${NOTE_REPO}\$/{skip=1;next} /^# END bn:${NOTE_REPO}\$/{skip=0;next} !skip{print}")
+    printf '%s\n' "$stripped" | crontab -
+    echo "Removed cron entries for $NOTE_REPO"
+}
+
+_cron_remove() {
+    require_git_context
+    local name="$1"
+    [[ -z "$name" ]] && { echo "Usage: bn cron remove <name>" >&2; exit 1; }
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    local cron_file="$crons_dir/${name}.yaml"
+    [[ ! -f "$cron_file" ]] && { echo "No cron '$name' for $NOTE_REPO" >&2; exit 1; }
+    rm "$cron_file"
+    echo "Removed cron '$name'"
+}
+
 cmd_help() {
     cat << 'HELPEOF'
 Usage: bn [command]
@@ -3084,7 +3310,15 @@ Commands:
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
   build, b [name]                 Run a script (default: build)
+  run                             Run 'run' script in background; copies Details.md link to clipboard
   script, sc [new|edit|list]      Manage repo scripts
+  cron list                       List cron jobs for current repo
+  cron new <name>                 Create a cron job (opens editor)
+  cron edit <name>                Edit a cron job
+  cron run <name> [--repo <r>]    Run a cron job's steps immediately
+  cron setup                      Install enabled crons into system crontab
+  cron teardown                   Remove this repo's crons from crontab
+  cron remove <name>              Delete a cron job
   files, f                        List investigation files in current branch
   files <name>                    Print contents of investigation file
   files new <name>                Create new investigation file
@@ -3395,6 +3629,7 @@ case "${1:-}" in
     search)             shift; cmd_search "$@" ;;
     stale)              shift; cmd_stale "$@" ;;
     build|b)            shift; cmd_build "$@" ;;
+    run)               cmd_run ;;
     test|t)             cmd_build test ;;
     script|sc)          shift; cmd_script "$@" ;;
     archive)            shift; cmd_archive "$@" ;;
@@ -3412,6 +3647,7 @@ case "${1:-}" in
     details)            shift; cmd_details "$@" ;;
     blog)               shift; cmd_blog "$@" ;;
     learn)              shift; cmd_learn "$@" ;;
+    cron)               shift; cmd_cron "$@" ;;
     -h|--help|help)     cmd_help ;;
     "")                 cmd_default ;;
     *)                  echo "Unknown command: $1" >&2; exit 1 ;;
