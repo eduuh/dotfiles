@@ -20,6 +20,7 @@
 #   bn refresh-all|ra               # Refresh all main worktrees
 #   bn main|m                       # Print main note dir + list scripts
 #   bn build|b [name]               # Run a script (default: build)
+#   bn clone                        # Run scripts/clone (e.g. fresh setup / rebase + build + run)
 #   bn run                          # Run 'run' script in background; copies Details.md link
 #   bn cron [list|new|edit|run|setup|teardown|remove]  # Manage branch cron jobs
 #   bn script|sc [new|edit|list]    # Manage repo scripts
@@ -3310,6 +3311,7 @@ Commands:
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
   build, b [name]                 Run a script (default: build)
+  clone                           Run scripts/clone (fresh setup, rebase + build + run, etc.)
   run                             Run 'run' script in background; copies Details.md link to clipboard
   script, sc [new|edit|list]      Manage repo scripts
   cron list                       List cron jobs for current repo
@@ -3631,6 +3633,7 @@ case "${1:-}" in
     build|b)            shift; cmd_build "$@" ;;
     run)               cmd_run ;;
     test|t)             cmd_build test ;;
+    clone)             cmd_build clone ;;
     script|sc)          shift; cmd_script "$@" ;;
     archive)            shift; cmd_archive "$@" ;;
     clean)              shift; cmd_clean "$@" ;;
