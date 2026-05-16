@@ -7,7 +7,18 @@ source "$HOME/.bin/tmux/tmux-lib.sh"
 
 resolve_note_context "${1:-$(pwd)}" || exit 0
 
-note_dir="$HOME/projects/branch-notes/$NOTE_REPO/$NOTE_BRANCH"
+# Match bn's WORK_REPOS allowlist so the status badge reads from the right repo.
+work_repos_file="${BN_WORK_REPOS_FILE:-$HOME/.config/bn/work-repos}"
+notes_dir="$HOME/projects/branch-notes"
+if [[ -r "$work_repos_file" ]]; then
+    while IFS= read -r line; do
+        line="${line%%#*}"
+        line="${line//[[:space:]]/}"
+        [[ "$line" == "$NOTE_REPO" ]] && { notes_dir="$HOME/projects/branch-notes-work"; break; }
+    done < "$work_repos_file"
+fi
+
+note_dir="$notes_dir/$NOTE_REPO/$NOTE_BRANCH"
 note="$note_dir/note.md"
 yaml="$note_dir/note.yaml"
 [[ -f "$note" ]] || exit 0

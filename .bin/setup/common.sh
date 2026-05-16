@@ -214,23 +214,23 @@ _clone_single_repo() {
     fi
 }
 
-# Ensure the branch-notes repo exists on Windows (WSL only) and is symlinked
-# at the path `bn` expects: ~/projects/branch-notes
-setup_branch_notes_symlink() {
-    _is_wsl || return 0
+# Provision one branch-notes-style repo on Windows + symlink under ~/projects/.
+# Used for both the personal `branch-notes` repo and the `branch-notes-work` repo
+# for work-classified projects (allowlist in ~/.config/bn/work-repos).
+_setup_one_branch_notes_repo() {
+    local name="$1"
+    local win_dir target link
+    win_dir=$(_windows_projects_dir) || { track_failure "$name" "Could not resolve Windows projects dir"; return 1; }
+    target="$win_dir/$name"
+    link="$HOME/projects/$name"
 
-    local win_dir
-    win_dir=$(_windows_projects_dir) || { track_failure "branch-notes" "Could not resolve Windows projects dir"; return 1; }
-    local target="$win_dir/branch-notes"
-    local link="$HOME/projects/branch-notes"
-
-    mkdir -p "$win_dir" || { track_failure "branch-notes" "Failed to create $win_dir"; return 1; }
+    mkdir -p "$win_dir" || { track_failure "$name" "Failed to create $win_dir"; return 1; }
 
     if [ ! -d "$target/.git" ]; then
-        echo "[branch-notes] Initializing repo at $target..."
+        echo "[$name] Initializing repo at $target..."
         mkdir -p "$target"
         (cd "$target" && git init -b main >/dev/null && git config core.filemode false) || {
-            track_failure "branch-notes" "Failed to git init $target"
+            track_failure "$name" "Failed to git init $target"
             return 1
         }
     fi
@@ -239,10 +239,18 @@ setup_branch_notes_symlink() {
         return 0
     fi
     if [ -e "$link" ]; then
-        track_failure "branch-notes" "$link exists and is not a symlink — refusing to overwrite"
+        track_failure "$name" "$link exists and is not a symlink — refusing to overwrite"
         return 1
     fi
-    ln -s "$target" "$link" && echo "[branch-notes] Symlinked $link → $target"
+    ln -s "$target" "$link" && echo "[$name] Symlinked $link → $target"
+}
+
+# Provision both branch-notes repos (personal + work). bn picks the right one
+# per repo via $HOME/.config/bn/work-repos (allowlist, gitignored).
+setup_branch_notes_symlink() {
+    _is_wsl || return 0
+    _setup_one_branch_notes_repo "branch-notes"
+    _setup_one_branch_notes_repo "branch-notes-work"
 }
 
 clone_repos() {

@@ -47,14 +47,61 @@ fi
 
 # --- Config ---
 
-NOTES_DIR="$HOME/projects/branch-notes"
+_NOTES_DIR_PERSONAL="$HOME/projects/branch-notes"
+_NOTES_DIR_WORK="$HOME/projects/branch-notes-work"
+
+# Work-repo allowlist is per-machine (sensitive) — kept out of public dotfiles.
+# Format: one repo name per line, '#' comments allowed.
+_WORK_REPOS_FILE="${BN_WORK_REPOS_FILE:-$HOME/.config/bn/work-repos}"
+typeset -ga _WORK_REPOS=()
+if [[ -r "$_WORK_REPOS_FILE" ]]; then
+    while IFS= read -r line; do
+        line="${line%%#*}"
+        line="${line//[[:space:]]/}"
+        [[ -z "$line" ]] && continue
+        _WORK_REPOS+=("$line")
+    done < "$_WORK_REPOS_FILE"
+fi
+
+# Default NOTES_DIR is the personal repo. resolve_note_context overrides this
+# for the current NOTE_REPO when a context is loaded.
+NOTES_DIR="$_NOTES_DIR_PERSONAL"
 _HOSTNAME=$(hostname)
+
+# Is the given repo classified as a work repo (case-sensitive match against allowlist)?
+_is_work_repo() {
+    local r="$1" w
+    for w in "${_WORK_REPOS[@]}"; do
+        [[ "$r" == "$w" ]] && return 0
+    done
+    return 1
+}
+
+# Resolve the notes dir for a specific repo name.
+notes_dir_for() {
+    if _is_work_repo "$1"; then
+        echo "$_NOTES_DIR_WORK"
+    else
+        echo "$_NOTES_DIR_PERSONAL"
+    fi
+}
+
+# Iterate over every existing notes dir (personal first, then work).
+_for_each_notes_dir() {
+    local d
+    for d in "$_NOTES_DIR_PERSONAL" "$_NOTES_DIR_WORK"; do
+        [[ -d "$d" ]] && echo "$d"
+    done
+}
 
 # --- Helpers: Git Context ---
 
 # Resolve git context and exit on failure. Use instead of bare resolve_note_context.
 require_git_context() {
     resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    # Point NOTES_DIR at the right repo for the current NOTE_REPO so the
+    # ubiquitous $NOTES_DIR/$NOTE_REPO/... usages just work.
+    NOTES_DIR=$(notes_dir_for "$NOTE_REPO")
 }
 
 # --- Helpers: Git & Frontmatter ---
@@ -189,7 +236,7 @@ _copy_to_clipboard() {
 # fzf-pick a script for <repo>; sets REPLY to the name. Returns 1 if none/cancelled.
 _fzf_pick_script() {
     local repo="$1"
-    local scripts_dir="$NOTES_DIR/$repo/main/scripts"
+    local scripts_dir="$(notes_dir_for "$repo")/$repo/main/scripts"
     local -a scripts
     for f in "$scripts_dir"/*(Nx); do scripts+=("${f:t}"); done
     (( ${#scripts[@]} == 0 )) && return 1
@@ -521,14 +568,15 @@ ensure_global_note() {
 
 # Resolve path to a named script (always in main's note dir)
 resolve_script() {
-    REPLY="$NOTES_DIR/$1/main/scripts/$2"
+    REPLY="$(notes_dir_for "$1")/$1/main/scripts/$2"
 }
 
 # Ensure scripts/ dir exists; auto-migrate old build.sh on first access
 ensure_scripts_dir() {
     local repo="$1"
-    local scripts_dir="$NOTES_DIR/$repo/main/scripts"
-    local old_build_sh="$NOTES_DIR/$repo/main/build.sh"
+    local d="$(notes_dir_for "$repo")"
+    local scripts_dir="$d/$repo/main/scripts"
+    local old_build_sh="$d/$repo/main/build.sh"
 
     mkdir -p "$scripts_dir"
 
@@ -965,8 +1013,11 @@ _pn_for_file() {
 #   _BN_PARSED — raw batch parse output
 # Returns 1 (and prints message) if no notes found.
 _load_all_notes() {
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; return 1; }
-    _BN_FILES=("$NOTES_DIR"/*/*/note.md(N))
+    _BN_FILES=()
+    local d
+    for d in $(_for_each_notes_dir); do
+        _BN_FILES+=("$d"/*/*/note.md(N))
+    done
     (( ${#_BN_FILES[@]} == 0 )) && { echo "No branch notes found"; return 1; }
     _BN_PARSED=$(_parse_all_notes "${_BN_FILES[@]}")
 }
@@ -1788,7 +1839,7 @@ cmd_reset() {
         git --git-dir="$bare" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
 
         # Close the branch note if it exists
-        local note_file="$NOTES_DIR/${repo_name}/${branch_name}/note.md"
+        local note_file="$(notes_dir_for "$repo_name")/${repo_name}/${branch_name}/note.md"
         if [[ -f "$note_file" ]]; then
             set_note_status "$note_file" "closed"
             echo "  Closed note: ${repo_name}/${branch_name}"
@@ -2347,7 +2398,8 @@ cmd_archive() {
     fi
 
     local archived=0
-    local -a affected_paths=()
+    # Map of notes-dir → space-separated archived "$repo/$branch" entries
+    typeset -A affected_by_dir
 
     if $dry_run; then
         echo -e "${YELLOW}[DRY RUN — no changes will be made]${NC}"
@@ -2366,7 +2418,8 @@ cmd_archive() {
 
         _note_context "$note_file"
         local note_dir=${note_file:h}
-        local dest="$NOTES_DIR/archive/$_repo/$_branch"
+        local notes_root="$(notes_dir_for "$_repo")"
+        local dest="$notes_root/archive/$_repo/$_branch"
 
         if [[ -d "$dest" ]]; then
             echo -e "${RED}Already exists, skipping: archive/$_repo/$_branch${NC}" >&2
@@ -2379,10 +2432,10 @@ cmd_archive() {
             mkdir -p "${dest:h}"
             mv "$note_dir" "$dest"
             archived=$((archived + 1))
-            affected_paths+=("$_repo/$_branch")
+            affected_by_dir[$notes_root]+="$_repo/$_branch "
 
             # Clean up empty repo dir
-            local repo_dir="$NOTES_DIR/$_repo"
+            local repo_dir="$notes_root/$_repo"
             if [[ -d "$repo_dir" ]] && [[ -z "$(ls -A "$repo_dir")" ]]; then
                 rmdir "$repo_dir"
             fi
@@ -2397,16 +2450,21 @@ cmd_archive() {
     else
         echo -e "${GREEN}Archived: $archived note(s)${NC}"
 
-        # Auto-commit only the moved note directories
+        # Commit per notes dir (each is a separate git repo)
         if (( archived > 0 )); then
-            for p in "${affected_paths[@]}"; do
-                git -C "$NOTES_DIR" add -- "archive/$p"
-                git -C "$NOTES_DIR" rm -r --cached --ignore-unmatch --quiet -- "$p"
+            local notes_root
+            for notes_root in ${(k)affected_by_dir}; do
+                local paths=(${=affected_by_dir[$notes_root]})
+                local p
+                for p in $paths; do
+                    git -C "$notes_root" add -- "archive/$p"
+                    git -C "$notes_root" rm -r --cached --ignore-unmatch --quiet -- "$p"
+                done
+                git -C "$notes_root" diff --cached --quiet || {
+                    git -C "$notes_root" commit -m "archive ${#paths} note(s)" >/dev/null
+                    echo -e "${GREEN}Committed to $notes_root${NC}"
+                }
             done
-            git -C "$NOTES_DIR" diff --cached --quiet || {
-                git -C "$NOTES_DIR" commit -m "archive ${archived} note(s)" >/dev/null
-                echo -e "${GREEN}Committed to personal-notes${NC}"
-            }
         fi
     fi
 }
@@ -3115,7 +3173,7 @@ LEARNEOF
 
 # --- Cron Jobs ---
 
-_crons_dir() { echo "$NOTES_DIR/$1/main/crons"; }
+_crons_dir() { echo "$(notes_dir_for "$1")/$1/main/crons"; }
 
 cmd_cron() {
     local subcmd="${1:-list}"
@@ -3563,10 +3621,12 @@ cmd_migrate() {
         esac
     done
 
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No notes directory"; exit 0; }
-
     local -a md_files
-    md_files=("$NOTES_DIR"/**/note.md(N))
+    local d
+    for d in $(_for_each_notes_dir); do
+        md_files+=("$d"/**/note.md(N))
+    done
+    [[ ${#md_files[@]} -eq 0 ]] && { echo "No notes found"; exit 0; }
 
     local total=${#md_files[@]}
     local migrated=0 skipped=0
@@ -3579,14 +3639,20 @@ cmd_migrate() {
             continue
         fi
 
+        # Display path relative to its notes root
+        local rel="$md"
+        for d in $(_for_each_notes_dir); do
+            [[ "$md" == "$d"/* ]] && { rel="${md#$d/}"; break; }
+        done
+
         if $dry_run; then
             count=$(_parse_all_notes_md "$md" | grep -cE "\|(OPEN_TODO|TODO|BLOCKER|DECISION|RESEARCH|COLLAB|ASK):")
-            printf "Would migrate: %-60s (%d items)\n" "${md#$NOTES_DIR/}" "$count"
+            printf "Would migrate: %-60s (%d items)\n" "$rel" "$count"
             (( migrated++ ))
             continue
         fi
 
-        echo "Migrating: ${md#$NOTES_DIR/}"
+        echo "Migrating: $rel"
         _migrate_one "$md"
         (( migrated++ ))
     done
