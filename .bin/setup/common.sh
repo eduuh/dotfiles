@@ -88,10 +88,8 @@ detect_distro() {
 REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh)
 
 # Repos that should live on the Windows filesystem when on WSL
-# (cloned to /mnt/c/projects/<name>, symlinked at ~/projects/<name>)
+# (cloned to $WINDOWS_PROJECTS_DIR/<name>, symlinked at ~/projects/<name>)
 WINDOWS_CLONE_REPOS=(personal-notes)
-
-WINDOWS_PROJECTS_DIR="/mnt/c/projects"
 
 _is_regular_repo() {
     local name="$1"
@@ -103,6 +101,20 @@ _is_regular_repo() {
 
 _is_wsl() {
     grep -qi microsoft /proc/version 2>/dev/null
+}
+
+# Resolve the Windows-side `projects` directory under the current Windows user's
+# profile (e.g. /mnt/c/Users/<user>/projects). Computed lazily so non-WSL hosts
+# don't pay the cmd.exe round-trip.
+_windows_projects_dir() {
+    if [ -z "$WINDOWS_PROJECTS_DIR" ]; then
+        _is_wsl || return 1
+        local userprofile
+        userprofile=$(/mnt/c/Windows/System32/cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d '\r\n')
+        [ -z "$userprofile" ] && return 1
+        WINDOWS_PROJECTS_DIR="$(wslpath "$userprofile" 2>/dev/null)/projects"
+    fi
+    echo "$WINDOWS_PROJECTS_DIR"
 }
 
 _is_windows_repo() {
@@ -118,7 +130,7 @@ _is_windows_repo() {
 _regular_clone_target() {
     local name="$1"
     if _is_windows_repo "$name"; then
-        echo "$WINDOWS_PROJECTS_DIR/$name"
+        echo "$(_windows_projects_dir)/$name"
     else
         echo "$HOME/projects/$name"
     fi
@@ -148,7 +160,9 @@ _clone_single_repo() {
             fi
         else
             if _is_windows_repo "$REPO_NAME"; then
-                mkdir -p "$WINDOWS_PROJECTS_DIR" || { echo "[$REPO_NAME] Failed to create $WINDOWS_PROJECTS_DIR."; return 1; }
+                local win_dir
+                win_dir=$(_windows_projects_dir) || { echo "[$REPO_NAME] Could not resolve Windows projects dir."; return 1; }
+                mkdir -p "$win_dir" || { echo "[$REPO_NAME] Failed to create $win_dir."; return 1; }
             fi
             echo "[$REPO_NAME] Cloning (regular) → $CLONE_DIR..."
             git clone "$REPO" "$CLONE_DIR" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
@@ -205,10 +219,12 @@ _clone_single_repo() {
 setup_branch_notes_symlink() {
     _is_wsl || return 0
 
-    local target="$WINDOWS_PROJECTS_DIR/branch-notes"
+    local win_dir
+    win_dir=$(_windows_projects_dir) || { track_failure "branch-notes" "Could not resolve Windows projects dir"; return 1; }
+    local target="$win_dir/branch-notes"
     local link="$HOME/projects/branch-notes"
 
-    mkdir -p "$WINDOWS_PROJECTS_DIR" || { track_failure "branch-notes" "Failed to create $WINDOWS_PROJECTS_DIR"; return 1; }
+    mkdir -p "$win_dir" || { track_failure "branch-notes" "Failed to create $win_dir"; return 1; }
 
     if [ ! -d "$target/.git" ]; then
         echo "[branch-notes] Initializing repo at $target..."
