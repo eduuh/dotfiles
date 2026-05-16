@@ -20,6 +20,8 @@
 #   bn refresh-all|ra               # Refresh all main worktrees
 #   bn main|m                       # Print main note dir + list scripts
 #   bn build|b [name]               # Run a script (default: build)
+#   bn run                          # Run 'run' script in background; copies Details.md link
+#   bn cron [list|new|edit|run|setup|teardown|remove]  # Manage branch cron jobs
 #   bn script|sc [new|edit|list]    # Manage repo scripts
 #   bn files|f [name|new|edit]       # Investigation file management
 #   bn archive [--days N] [--dry-run]  # Archive old closed notes
@@ -45,14 +47,61 @@ fi
 
 # --- Config ---
 
-NOTES_DIR="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes"
+_NOTES_DIR_PERSONAL="$HOME/projects/branch-notes"
+_NOTES_DIR_WORK="$HOME/projects/branch-notes-work"
+
+# Work-repo allowlist is per-machine (sensitive) — kept out of public dotfiles.
+# Format: one repo name per line, '#' comments allowed.
+_WORK_REPOS_FILE="${BN_WORK_REPOS_FILE:-$HOME/.config/bn/work-repos}"
+typeset -ga _WORK_REPOS=()
+if [[ -r "$_WORK_REPOS_FILE" ]]; then
+    while IFS= read -r line; do
+        line="${line%%#*}"
+        line="${line//[[:space:]]/}"
+        [[ -z "$line" ]] && continue
+        _WORK_REPOS+=("$line")
+    done < "$_WORK_REPOS_FILE"
+fi
+
+# Default NOTES_DIR is the personal repo. resolve_note_context overrides this
+# for the current NOTE_REPO when a context is loaded.
+NOTES_DIR="$_NOTES_DIR_PERSONAL"
 _HOSTNAME=$(hostname)
+
+# Is the given repo classified as a work repo (case-sensitive match against allowlist)?
+_is_work_repo() {
+    local r="$1" w
+    for w in "${_WORK_REPOS[@]}"; do
+        [[ "$r" == "$w" ]] && return 0
+    done
+    return 1
+}
+
+# Resolve the notes dir for a specific repo name.
+notes_dir_for() {
+    if _is_work_repo "$1"; then
+        echo "$_NOTES_DIR_WORK"
+    else
+        echo "$_NOTES_DIR_PERSONAL"
+    fi
+}
+
+# Iterate over every existing notes dir (personal first, then work).
+_for_each_notes_dir() {
+    local d
+    for d in "$_NOTES_DIR_PERSONAL" "$_NOTES_DIR_WORK"; do
+        [[ -d "$d" ]] && echo "$d"
+    done
+}
 
 # --- Helpers: Git Context ---
 
 # Resolve git context and exit on failure. Use instead of bare resolve_note_context.
 require_git_context() {
     resolve_note_context "$(pwd)" || { echo "Not in a git repo" >&2; exit 1; }
+    # Point NOTES_DIR at the right repo for the current NOTE_REPO so the
+    # ubiquitous $NOTES_DIR/$NOTE_REPO/... usages just work.
+    NOTES_DIR=$(notes_dir_for "$NOTE_REPO")
 }
 
 # --- Helpers: Git & Frontmatter ---
@@ -182,6 +231,35 @@ _copy_to_clipboard() {
     fi
 }
 
+# --- Helpers: fzf Pickers ---
+
+# fzf-pick a script for <repo>; sets REPLY to the name. Returns 1 if none/cancelled.
+_fzf_pick_script() {
+    local repo="$1"
+    local scripts_dir="$(notes_dir_for "$repo")/$repo/main/scripts"
+    local -a scripts
+    for f in "$scripts_dir"/*(Nx); do scripts+=("${f:t}"); done
+    (( ${#scripts[@]} == 0 )) && return 1
+    REPLY=$(printf '%s\n' "${scripts[@]}" \
+        | fzf --prompt="script> " --height=10 --no-info 2>/dev/null)
+    [[ -n "$REPLY" ]]
+}
+
+# fzf-pick an investigation file in <note_dir>; sets REPLY to full path. Returns 1 if none/cancelled.
+_fzf_pick_file() {
+    local note_dir="$1"
+    local -a files
+    for f in "$note_dir"/*.md(N); do
+        [[ "${f:t}" == "note.md" ]] && continue
+        files+=("$f")
+    done
+    (( ${#files[@]} == 0 )) && return 1
+    REPLY=$(printf '%s\n' "${files[@]}" \
+        | fzf --prompt="file> " --height=10 --no-info \
+              --preview="cat {}" 2>/dev/null)
+    [[ -n "$REPLY" ]]
+}
+
 # --- Helpers: Note Templates ---
 
 TEMPLATE_DIR="$HOME/.config/bn/templates"
@@ -213,6 +291,7 @@ _render_template() {
             pr-review.md) _pr_review_template_inline "${(@)@}" ;;
             achievement.md) _achievement_template_inline "${(@)@}" ;;
             achievements-header.md) _achievements_header_template_inline "${(@)@}" ;;
+            details.md) _details_template_inline "${(@)@}" ;;
             *) echo "Unknown template: $tmpl_name" >&2; return 1 ;;
         esac
     fi
@@ -402,6 +481,21 @@ _achievement_template_inline() {
 EOF
 }
 
+_details_template_inline() {
+    local repo=""
+    for pair in "$@"; do case "${pair%%=*}" in REPO) repo="${pair#*=}" ;; esac; done
+    cat << EOF
+# $repo — Details
+
+## Links
+
+-
+
+## Context
+
+EOF
+}
+
 _achievements_header_template_inline() {
     local repo="" date=""
     for pair in "$@"; do
@@ -434,6 +528,11 @@ ensure_note() {
             "REPO=$NOTE_REPO" "BRANCH=$NOTE_BRANCH" \
             "DATE=$(date +%Y-%m-%d)" "MACHINE=$_HOSTNAME" \
             "GOAL=$goal" > "$note_file"
+        local details_file="$NOTES_DIR/$NOTE_REPO/main/Details.md"
+        if [[ -f "$details_file" ]]; then
+            printf '\n---\n' >> "$note_file"
+            cat "$details_file" >> "$note_file"
+        fi
     fi
     if [[ ! -f "$yaml_file" && -f "$note_file" ]]; then
         # Only create yaml for genuinely new notes (prose-only md). Existing md-backed
@@ -469,14 +568,15 @@ ensure_global_note() {
 
 # Resolve path to a named script (always in main's note dir)
 resolve_script() {
-    REPLY="$NOTES_DIR/$1/main/scripts/$2"
+    REPLY="$(notes_dir_for "$1")/$1/main/scripts/$2"
 }
 
 # Ensure scripts/ dir exists; auto-migrate old build.sh on first access
 ensure_scripts_dir() {
     local repo="$1"
-    local scripts_dir="$NOTES_DIR/$repo/main/scripts"
-    local old_build_sh="$NOTES_DIR/$repo/main/build.sh"
+    local d="$(notes_dir_for "$repo")"
+    local scripts_dir="$d/$repo/main/scripts"
+    local old_build_sh="$d/$repo/main/build.sh"
 
     mkdir -p "$scripts_dir"
 
@@ -913,8 +1013,11 @@ _pn_for_file() {
 #   _BN_PARSED — raw batch parse output
 # Returns 1 (and prints message) if no notes found.
 _load_all_notes() {
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No branch notes found"; return 1; }
-    _BN_FILES=("$NOTES_DIR"/*/*/note.md(N))
+    _BN_FILES=()
+    local d
+    for d in $(_for_each_notes_dir); do
+        _BN_FILES+=("$d"/*/*/note.md(N))
+    done
     (( ${#_BN_FILES[@]} == 0 )) && { echo "No branch notes found"; return 1; }
     _BN_PARSED=$(_parse_all_notes "${_BN_FILES[@]}")
 }
@@ -1057,7 +1160,6 @@ cmd_files() {
             ${EDITOR:-nvim} "$filepath"
             ;;
         "")
-            # List investigation files
             local -a inv_files
             for f in "$note_dir"/*.md(N); do
                 [[ "${f:t}" == "note.md" ]] && continue
@@ -1068,12 +1170,15 @@ cmd_files() {
                 echo "Create one with: bn files new <name>"
                 return
             fi
-            echo "Investigation files ($NOTE_REPO/$NOTE_BRANCH):"
-            for f in "${inv_files[@]}"; do
-                local lines
-                lines=$(wc -l < "$f" | tr -d ' ')
-                echo "  ${f:t} ($lines lines)"
-            done
+            if command -v fzf &>/dev/null; then
+                _fzf_pick_file "$note_dir" && ${EDITOR:-nvim} "$REPLY"
+            else
+                echo "Investigation files ($NOTE_REPO/$NOTE_BRANCH):"
+                for f in "${inv_files[@]}"; do
+                    local lines; lines=$(wc -l < "$f" | tr -d ' ')
+                    echo "  ${f:t} ($lines lines)"
+                done
+            fi
             ;;
         *)
             # View a specific file
@@ -1734,7 +1839,7 @@ cmd_reset() {
         git --git-dir="$bare" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
 
         # Close the branch note if it exists
-        local note_file="$NOTES_DIR/${repo_name}/${branch_name}/note.md"
+        local note_file="$(notes_dir_for "$repo_name")/${repo_name}/${branch_name}/note.md"
         if [[ -f "$note_file" ]]; then
             set_note_status "$note_file" "closed"
             echo "  Closed note: ${repo_name}/${branch_name}"
@@ -1917,7 +2022,7 @@ cmd_main() {
     fi
 }
 
-# Run a named script (default: build)
+# Run a named script (default: build).
 cmd_build() {
     local name="${1:-build}"
     require_git_context
@@ -1938,6 +2043,60 @@ cmd_build() {
     work_dir=$(pwd)
     echo "Running scripts/$name for $NOTE_REPO..."
     (cd "$work_dir" && "$script")
+}
+
+cmd_run() {
+    require_git_context
+    ensure_scripts_dir "$NOTE_REPO"
+
+    local main_dir="$NOTES_DIR/$NOTE_REPO/main"
+    local details_file="$main_dir/Details.md"
+    if [[ -f "$details_file" ]]; then
+        local url
+        url=$(awk '
+            /^## Links/{found=1; next}
+            /^## /{found=0}
+            found && match($0, /https?:\/\/[^ )]+/) {
+                print substr($0, RSTART, RLENGTH)
+                exit
+            }
+        ' "$details_file")
+        if [[ -n "$url" ]]; then
+            _copy_to_clipboard "$url"
+            echo "Copied to clipboard: $url"
+        fi
+    fi
+
+    local script
+    resolve_script "$NOTE_REPO" "run"; script=$REPLY
+    if [[ ! -f "$script" ]]; then
+        echo "No 'run' script for $NOTE_REPO" >&2
+        echo "Create one with: bn script new run" >&2
+        exit 1
+    fi
+    [[ ! -x "$script" ]] && chmod +x "$script"
+
+    local work_dir log_file pid_file
+    work_dir=$(pwd)
+    log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
+    pid_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.pid"
+
+    if [[ -f "$pid_file" ]]; then
+        local old_pid
+        old_pid=$(cat "$pid_file")
+        if kill -0 "$old_pid" 2>/dev/null; then
+            echo "Stopping previous run (PID $old_pid)..."
+            kill "$old_pid"
+        fi
+        rm -f "$pid_file"
+    fi
+
+    echo "Starting run script in background..."
+    echo "Log: $log_file"
+    (cd "$work_dir" && exec "$script" >> "$log_file" 2>&1) &
+    local pid=$!
+    echo $pid > "$pid_file"
+    echo "PID: $pid"
 }
 
 # Script management: new, edit, list
@@ -1974,9 +2133,15 @@ SCRIPTEOF
             ;;
         edit)
             local name="$1"
-            [[ -z "$name" ]] && { echo "Usage: bn script edit <name>" >&2; exit 1; }
             require_git_context
             ensure_scripts_dir "$NOTE_REPO"
+            if [[ -z "$name" ]]; then
+                if command -v fzf &>/dev/null && _fzf_pick_script "$NOTE_REPO"; then
+                    name="$REPLY"
+                else
+                    echo "Usage: bn script edit <name>" >&2; exit 1
+                fi
+            fi
 
             local script
             resolve_script "$NOTE_REPO" "$name"; script=$REPLY
@@ -1986,7 +2151,7 @@ SCRIPTEOF
             fi
             ${EDITOR:-nvim} "$script"
             ;;
-        list|l|"")
+        list|l)
             require_git_context
             ensure_scripts_dir "$NOTE_REPO"
 
@@ -2003,6 +2168,27 @@ SCRIPTEOF
             else
                 echo "No scripts for $NOTE_REPO"
                 echo "Create one with: bn script new <name>"
+            fi
+            ;;
+        "")
+            require_git_context
+            ensure_scripts_dir "$NOTE_REPO"
+            if command -v fzf &>/dev/null && _fzf_pick_script "$NOTE_REPO"; then
+                local script; resolve_script "$NOTE_REPO" "$REPLY"; script=$REPLY
+                [[ -x "$script" ]] || chmod +x "$script"
+                ${EDITOR:-nvim} "$script"
+            else
+                # Fall back to list
+                local scripts_dir="$NOTES_DIR/$NOTE_REPO/main/scripts"
+                local -a scripts
+                for f in "$scripts_dir"/*(Nx); do scripts+=("${f:t}"); done
+                if (( ${#scripts[@]} > 0 )); then
+                    echo "Scripts for $NOTE_REPO:"
+                    for s in "${scripts[@]}"; do echo "  $s"; done
+                else
+                    echo "No scripts for $NOTE_REPO"
+                    echo "Create one with: bn script new <name>"
+                fi
             fi
             ;;
         *)
@@ -2212,7 +2398,8 @@ cmd_archive() {
     fi
 
     local archived=0
-    local -a affected_paths=()
+    # Map of notes-dir → space-separated archived "$repo/$branch" entries
+    typeset -A affected_by_dir
 
     if $dry_run; then
         echo -e "${YELLOW}[DRY RUN — no changes will be made]${NC}"
@@ -2231,7 +2418,8 @@ cmd_archive() {
 
         _note_context "$note_file"
         local note_dir=${note_file:h}
-        local dest="$NOTES_DIR/archive/$_repo/$_branch"
+        local notes_root="$(notes_dir_for "$_repo")"
+        local dest="$notes_root/archive/$_repo/$_branch"
 
         if [[ -d "$dest" ]]; then
             echo -e "${RED}Already exists, skipping: archive/$_repo/$_branch${NC}" >&2
@@ -2244,10 +2432,10 @@ cmd_archive() {
             mkdir -p "${dest:h}"
             mv "$note_dir" "$dest"
             archived=$((archived + 1))
-            affected_paths+=("$_repo/$_branch")
+            affected_by_dir[$notes_root]+="$_repo/$_branch "
 
             # Clean up empty repo dir
-            local repo_dir="$NOTES_DIR/$_repo"
+            local repo_dir="$notes_root/$_repo"
             if [[ -d "$repo_dir" ]] && [[ -z "$(ls -A "$repo_dir")" ]]; then
                 rmdir "$repo_dir"
             fi
@@ -2262,16 +2450,21 @@ cmd_archive() {
     else
         echo -e "${GREEN}Archived: $archived note(s)${NC}"
 
-        # Auto-commit only the moved note directories
+        # Commit per notes dir (each is a separate git repo)
         if (( archived > 0 )); then
-            for p in "${affected_paths[@]}"; do
-                git -C "$NOTES_DIR" add -- "archive/$p"
-                git -C "$NOTES_DIR" rm -r --cached --ignore-unmatch --quiet -- "$p"
+            local notes_root
+            for notes_root in ${(k)affected_by_dir}; do
+                local paths=(${=affected_by_dir[$notes_root]})
+                local p
+                for p in $paths; do
+                    git -C "$notes_root" add -- "archive/$p"
+                    git -C "$notes_root" rm -r --cached --ignore-unmatch --quiet -- "$p"
+                done
+                git -C "$notes_root" diff --cached --quiet || {
+                    git -C "$notes_root" commit -m "archive ${#paths} note(s)" >/dev/null
+                    echo -e "${GREEN}Committed to $notes_root${NC}"
+                }
             done
-            git -C "$NOTES_DIR" diff --cached --quiet || {
-                git -C "$NOTES_DIR" commit -m "archive ${archived} note(s)" >/dev/null
-                echo -e "${GREEN}Committed to personal-notes${NC}"
-            }
         fi
     fi
 }
@@ -2445,6 +2638,12 @@ cmd_pr() {
         # Setting a PR link
         ensure_note
         _set_frontmatter "$note_file" "pr" "$url"
+        local yaml_file="${note_file%.md}.yaml"
+        if [[ -f "$yaml_file" ]]; then
+            _yaml_add "$yaml_file" "collab" "PR: $url" >/dev/null
+        else
+            insert_into_section "$note_file" "## Collaboration" "- PR: $url" 2>/dev/null || true
+        fi
         echo "PR linked: $url"
         return
     fi
@@ -2505,6 +2704,13 @@ cmd_link() {
     if [[ -n "$id" ]]; then
         ensure_note
         _set_frontmatter "$note_file" "work_item" "$id"
+        local wi_url_entry="https://dev.azure.com/office/Office/_workitems/edit/${id}"
+        local yaml_file="${note_file%.md}.yaml"
+        if [[ -f "$yaml_file" ]]; then
+            _yaml_add "$yaml_file" "collab" "WI $id: $wi_url_entry" >/dev/null
+        else
+            insert_into_section "$note_file" "## Collaboration" "- WI $id: $wi_url_entry" 2>/dev/null || true
+        fi
         echo "Work item linked: $id"
         return
     fi
@@ -2650,6 +2856,129 @@ cmd_diff() {
     local commits
     commits=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
     echo -e "${GREEN}${commits} commit(s) ahead of main${NC}"
+}
+
+cmd_details() {
+    require_git_context
+    local main_dir="$NOTES_DIR/$NOTE_REPO/main"
+    local details_file="$main_dir/Details.md"
+    local subcmd="${1:-}"
+
+    case "$subcmd" in
+        new)
+            if [[ -f "$details_file" ]]; then
+                echo "Details.md already exists: $details_file"
+                echo "Edit with: bn details edit"
+                return 1
+            fi
+            mkdir -p "$main_dir"
+            _render_template details.md "REPO=$NOTE_REPO" > "$details_file"
+            echo "Created: $details_file"
+            echo "Edit with: bn details edit"
+            ;;
+        edit)
+            if [[ ! -f "$details_file" ]]; then
+                echo "No Details.md for $NOTE_REPO. Create with: bn details new" >&2
+                return 1
+            fi
+            ${EDITOR:-nvim} "$details_file"
+            ;;
+        path) echo "$details_file" ;;
+        "")
+            if [[ -f "$details_file" ]]; then
+                cat "$details_file"
+            else
+                echo "No Details.md for $NOTE_REPO"
+                echo "Create with: bn details new"
+            fi
+            ;;
+        *) echo "Usage: bn details [new|edit|path]" >&2; exit 1 ;;
+    esac
+}
+
+cmd_setup() {
+    require_git_context
+    local main_dir="$NOTES_DIR/$NOTE_REPO/main"
+    local details_file="$main_dir/Details.md"
+    local scripts_dir="$main_dir/scripts"
+    local build_script="$scripts_dir/build"
+    local test_script="$scripts_dir/test"
+
+    echo -e "${BLUE}Setting up bn for: $NOTE_REPO${NC}"
+    echo ""
+
+    # Step 1: Details.md
+    if [[ -f "$details_file" ]]; then
+        echo -e "  ${GREEN}✓${NC} Details.md already exists"
+    else
+        mkdir -p "$main_dir"
+        _render_template details.md "REPO=$NOTE_REPO" > "$details_file"
+        echo -e "  ${GREEN}+${NC} Created Details.md"
+        echo ""
+        echo "  Fill in your project links:"
+        echo -n "  Open Details.md now? [Y/n] "
+        read -r answer
+        if [[ "${answer:-y}" =~ ^[Yy]$ ]]; then
+            ${EDITOR:-nvim} "$details_file"
+        fi
+    fi
+
+    # Step 2: build script
+    ensure_scripts_dir "$NOTE_REPO"
+    if [[ -f "$build_script" ]]; then
+        echo -e "  ${GREEN}✓${NC} build script already exists"
+    else
+        cat > "$build_script" << 'SCRIPTEOF'
+#!/usr/bin/env zsh
+set -e
+
+# build script — runs with cwd set to the repo/worktree directory.
+# Add your setup steps here, e.g.:
+#   npm install
+#   yarn
+#   pip install -r requirements.txt
+
+SCRIPTEOF
+        chmod +x "$build_script"
+        echo -e "  ${GREEN}+${NC} Created scripts/build"
+        echo ""
+        echo "  Add your build/setup steps:"
+        echo -n "  Open build script now? [Y/n] "
+        read -r answer
+        if [[ "${answer:-y}" =~ ^[Yy]$ ]]; then
+            ${EDITOR:-nvim} "$build_script"
+        fi
+    fi
+
+    # Step 3: test script
+    if [[ -f "$test_script" ]]; then
+        echo -e "  ${GREEN}✓${NC} test script already exists"
+    else
+        cat > "$test_script" << 'SCRIPTEOF'
+#!/usr/bin/env zsh
+set -e
+
+# test script — runs with cwd set to the repo/worktree directory.
+# Add your test steps here, e.g.:
+#   npm test
+#   yarn test
+#   pytest
+
+SCRIPTEOF
+        chmod +x "$test_script"
+        echo -e "  ${GREEN}+${NC} Created scripts/test"
+        echo ""
+        echo "  Add your test steps:"
+        echo -n "  Open test script now? [Y/n] "
+        read -r answer
+        if [[ "${answer:-y}" =~ ^[Yy]$ ]]; then
+            ${EDITOR:-nvim} "$test_script"
+        fi
+    fi
+
+    echo ""
+    echo -e "${GREEN}Done.${NC} New branch notes for $NOTE_REPO will auto-include Details.md."
+    echo "Run 'bn build' or 'bn test' in any worktree to run scripts."
 }
 
 cmd_blog() {
@@ -2842,6 +3171,176 @@ LEARNEOF
     esac
 }
 
+# --- Cron Jobs ---
+
+_crons_dir() { echo "$(notes_dir_for "$1")/$1/main/crons"; }
+
+cmd_cron() {
+    local subcmd="${1:-list}"
+    shift 2>/dev/null || true
+    case "$subcmd" in
+        list|l)    _cron_list ;;
+        new)       _cron_new "$@" ;;
+        edit)      _cron_edit "$@" ;;
+        run)       _cron_run "$@" ;;
+        setup)     _cron_setup ;;
+        teardown)  _cron_teardown ;;
+        remove|rm) _cron_remove "$@" ;;
+        *) echo "Usage: bn cron [list|new <name>|edit <name>|run <name>|setup|teardown|remove <name>]" >&2; exit 1 ;;
+    esac
+}
+
+_cron_list() {
+    require_git_context
+    require_yq
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    local -a files
+    for f in "$crons_dir"/*.yaml(N); do files+=("$f"); done
+    if (( ${#files[@]} == 0 )); then
+        echo "No crons for $NOTE_REPO — add one with: bn cron new <name>"
+        return
+    fi
+    echo "Crons for $NOTE_REPO:"
+    for f in "${files[@]}"; do
+        local name enabled schedule
+        name=$(yq '.name // ""' "$f")
+        enabled=$(yq '.enabled // true' "$f")
+        schedule=$(yq '.schedule // ""' "$f")
+        local mark="✓"
+        [[ "$enabled" == "false" ]] && mark="✗"
+        printf "  %s  %-22s %s\n" "$mark" "$name" "$schedule"
+    done
+}
+
+_cron_new() {
+    require_git_context
+    require_yq
+    local name="$1"
+    [[ -z "$name" ]] && { echo "Usage: bn cron new <name>" >&2; exit 1; }
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    mkdir -p "$crons_dir"
+    local cron_file="$crons_dir/${name}.yaml"
+    if [[ -f "$cron_file" ]]; then
+        echo "Cron '$name' already exists. Edit with: bn cron edit $name" >&2
+        exit 1
+    fi
+    local worktree
+    worktree=$(pwd)
+    cat > "$cron_file" << EOF
+name: $name
+schedule: "0 9 * * *"
+worktree: $worktree
+enabled: true
+steps:
+  - git fetch origin
+  - git rebase origin/main
+  - bn build
+  - bn run
+EOF
+    echo "Created: $cron_file"
+    ${EDITOR:-nvim} "$cron_file"
+}
+
+_cron_edit() {
+    require_git_context
+    local name="$1"
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    if [[ -z "$name" ]] && command -v fzf &>/dev/null; then
+        local -a names
+        for f in "$crons_dir"/*.yaml(N); do names+=("${f:t:r}"); done
+        (( ${#names[@]} == 0 )) && { echo "No crons for $NOTE_REPO" >&2; return 1; }
+        name=$(printf '%s\n' "${names[@]}" | fzf --prompt="cron> " --height=10 --no-info 2>/dev/null)
+    fi
+    [[ -z "$name" ]] && { echo "Usage: bn cron edit <name>" >&2; exit 1; }
+    local cron_file="$crons_dir/${name}.yaml"
+    [[ ! -f "$cron_file" ]] && { echo "No cron '$name' for $NOTE_REPO" >&2; exit 1; }
+    ${EDITOR:-nvim} "$cron_file"
+}
+
+_cron_run() {
+    local name="" repo=""
+    while [[ -n "${1:-}" ]]; do
+        case "$1" in
+            --repo) repo="$2"; shift 2 ;;
+            *)      [[ -z "$name" ]] && name="$1"; shift ;;
+        esac
+    done
+    if [[ -n "$repo" ]]; then
+        NOTE_REPO="$repo"
+    else
+        require_git_context
+    fi
+    [[ -z "$name" ]] && { echo "Usage: bn cron run <name> [--repo <repo>]" >&2; exit 1; }
+    require_yq
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    local cron_file="$crons_dir/${name}.yaml"
+    [[ ! -f "$cron_file" ]] && { echo "No cron '$name' for $NOTE_REPO" >&2; exit 1; }
+
+    local worktree enabled
+    worktree=$(yq '.worktree // ""' "$cron_file")
+    enabled=$(yq '.enabled // true' "$cron_file")
+    [[ "$enabled" == "false" ]] && { echo "Cron '$name' is disabled" >&2; exit 1; }
+    [[ -z "$worktree" || ! -d "$worktree" ]] && { echo "Worktree not found: $worktree" >&2; exit 1; }
+
+    echo "Running cron '$name' in $worktree..."
+    local step_count i step
+    step_count=$(yq '.steps | length' "$cron_file")
+    for (( i = 0; i < step_count; i++ )); do
+        step=$(yq ".steps[$i]" "$cron_file")
+        echo "  → $step"
+        (cd "$worktree" && eval "$step") || { echo "  ✗ Failed: $step" >&2; exit 1; }
+    done
+    echo "  ✓ Done"
+}
+
+_cron_setup() {
+    require_git_context
+    require_yq
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    local bn_path="$HOME/.bin/bn"
+    local -a new_lines
+    for f in "$crons_dir"/*.yaml(N); do
+        local name enabled schedule
+        name=$(yq '.name // ""' "$f")
+        enabled=$(yq '.enabled // true' "$f")
+        schedule=$(yq '.schedule // ""' "$f")
+        [[ "$enabled" == "false" || -z "$name" || -z "$schedule" ]] && continue
+        new_lines+=("$schedule $bn_path cron run $name --repo $NOTE_REPO")
+    done
+    local current stripped
+    current=$(crontab -l 2>/dev/null || true)
+    stripped=$(printf '%s\n' "$current" | awk "/^# BEGIN bn:${NOTE_REPO}\$/{skip=1;next} /^# END bn:${NOTE_REPO}\$/{skip=0;next} !skip{print}")
+    local new_ct="$stripped"
+    if (( ${#new_lines[@]} > 0 )); then
+        new_ct+=$'\n'"# BEGIN bn:$NOTE_REPO"
+        for line in "${new_lines[@]}"; do new_ct+=$'\n'"$line"; done
+        new_ct+=$'\n'"# END bn:$NOTE_REPO"
+    fi
+    printf '%s\n' "$new_ct" | crontab -
+    echo "Installed ${#new_lines[@]} cron job(s) for $NOTE_REPO:"
+    for line in "${new_lines[@]}"; do echo "  $line"; done
+}
+
+_cron_teardown() {
+    require_git_context
+    local current stripped
+    current=$(crontab -l 2>/dev/null || true)
+    stripped=$(printf '%s\n' "$current" | awk "/^# BEGIN bn:${NOTE_REPO}\$/{skip=1;next} /^# END bn:${NOTE_REPO}\$/{skip=0;next} !skip{print}")
+    printf '%s\n' "$stripped" | crontab -
+    echo "Removed cron entries for $NOTE_REPO"
+}
+
+_cron_remove() {
+    require_git_context
+    local name="$1"
+    [[ -z "$name" ]] && { echo "Usage: bn cron remove <name>" >&2; exit 1; }
+    local crons_dir=$(_crons_dir "$NOTE_REPO")
+    local cron_file="$crons_dir/${name}.yaml"
+    [[ ! -f "$cron_file" ]] && { echo "No cron '$name' for $NOTE_REPO" >&2; exit 1; }
+    rm "$cron_file"
+    echo "Removed cron '$name'"
+}
+
 cmd_help() {
     cat << 'HELPEOF'
 Usage: bn [command]
@@ -2869,7 +3368,15 @@ Commands:
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
   build, b [name]                 Run a script (default: build)
+  run                             Run 'run' script in background; copies Details.md link to clipboard
   script, sc [new|edit|list]      Manage repo scripts
+  cron list                       List cron jobs for current repo
+  cron new <name>                 Create a cron job (opens editor)
+  cron edit <name>                Edit a cron job
+  cron run <name> [--repo <r>]    Run a cron job's steps immediately
+  cron setup                      Install enabled crons into system crontab
+  cron teardown                   Remove this repo's crons from crontab
+  cron remove <name>              Delete a cron job
   files, f                        List investigation files in current branch
   files <name>                    Print contents of investigation file
   files new <name>                Create new investigation file
@@ -3114,10 +3621,12 @@ cmd_migrate() {
         esac
     done
 
-    [[ ! -d "$NOTES_DIR" ]] && { echo "No notes directory"; exit 0; }
-
     local -a md_files
-    md_files=("$NOTES_DIR"/**/note.md(N))
+    local d
+    for d in $(_for_each_notes_dir); do
+        md_files+=("$d"/**/note.md(N))
+    done
+    [[ ${#md_files[@]} -eq 0 ]] && { echo "No notes found"; exit 0; }
 
     local total=${#md_files[@]}
     local migrated=0 skipped=0
@@ -3130,14 +3639,20 @@ cmd_migrate() {
             continue
         fi
 
+        # Display path relative to its notes root
+        local rel="$md"
+        for d in $(_for_each_notes_dir); do
+            [[ "$md" == "$d"/* ]] && { rel="${md#$d/}"; break; }
+        done
+
         if $dry_run; then
             count=$(_parse_all_notes_md "$md" | grep -cE "\|(OPEN_TODO|TODO|BLOCKER|DECISION|RESEARCH|COLLAB|ASK):")
-            printf "Would migrate: %-60s (%d items)\n" "${md#$NOTES_DIR/}" "$count"
+            printf "Would migrate: %-60s (%d items)\n" "$rel" "$count"
             (( migrated++ ))
             continue
         fi
 
-        echo "Migrating: ${md#$NOTES_DIR/}"
+        echo "Migrating: $rel"
         _migrate_one "$md"
         (( migrated++ ))
     done
@@ -3180,6 +3695,8 @@ case "${1:-}" in
     search)             shift; cmd_search "$@" ;;
     stale)              shift; cmd_stale "$@" ;;
     build|b)            shift; cmd_build "$@" ;;
+    run)               cmd_run ;;
+    test|t)             cmd_build test ;;
     script|sc)          shift; cmd_script "$@" ;;
     archive)            shift; cmd_archive "$@" ;;
     clean)              shift; cmd_clean "$@" ;;
@@ -3192,8 +3709,11 @@ case "${1:-}" in
     diff|d)             cmd_diff ;;
     achieve|ac)         shift; cmd_achieve "$@" ;;
     global|g)           shift; cmd_global "$@" ;;
+    setup)              cmd_setup ;;
+    details)            shift; cmd_details "$@" ;;
     blog)               shift; cmd_blog "$@" ;;
     learn)              shift; cmd_learn "$@" ;;
+    cron)               shift; cmd_cron "$@" ;;
     -h|--help|help)     cmd_help ;;
     "")                 cmd_default ;;
     *)                  echo "Unknown command: $1" >&2; exit 1 ;;
