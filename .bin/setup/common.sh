@@ -87,6 +87,12 @@ detect_distro() {
 # Repos that get regular (non-bare) clones at ~/projects/reponame
 REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh)
 
+# Repos that should live on the Windows filesystem when on WSL
+# (cloned to /mnt/c/projects/<name>, symlinked at ~/projects/<name>)
+WINDOWS_CLONE_REPOS=(personal-notes)
+
+WINDOWS_PROJECTS_DIR="/mnt/c/projects"
+
 _is_regular_repo() {
     local name="$1"
     for r in "${REGULAR_CLONE_REPOS[@]}"; do
@@ -95,14 +101,39 @@ _is_regular_repo() {
     return 1
 }
 
+_is_wsl() {
+    grep -qi microsoft /proc/version 2>/dev/null
+}
+
+_is_windows_repo() {
+    local name="$1"
+    _is_wsl || return 1
+    for r in "${WINDOWS_CLONE_REPOS[@]}"; do
+        [[ "$name" == "$r" ]] && return 0
+    done
+    return 1
+}
+
+# Resolve the on-disk path a regular clone should live at, honoring WSL→Windows rules
+_regular_clone_target() {
+    local name="$1"
+    if _is_windows_repo "$name"; then
+        echo "$WINDOWS_PROJECTS_DIR/$name"
+    else
+        echo "$HOME/projects/$name"
+    fi
+}
+
 _clone_single_repo() {
     local REPO="$1"
     local REPO_NAME=$(basename "$REPO" .git)
 
     if _is_regular_repo "$REPO_NAME"; then
-        local CLONE_DIR=~/projects/"$REPO_NAME"
+        local CLONE_DIR
+        CLONE_DIR=$(_regular_clone_target "$REPO_NAME")
+        local SYMLINK_DIR=~/projects/"$REPO_NAME"
 
-        if [ -d "$CLONE_DIR" ]; then
+        if [ -d "$CLONE_DIR" ] && [ ! -L "$CLONE_DIR" ]; then
             if [ -d "$CLONE_DIR/.git" ]; then
                 cd "$CLONE_DIR"
                 if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -116,8 +147,20 @@ _clone_single_repo() {
                 echo "[$REPO_NAME] Directory exists but is not a git repo. Skipping."
             fi
         else
-            echo "[$REPO_NAME] Cloning (regular)..."
+            if _is_windows_repo "$REPO_NAME"; then
+                mkdir -p "$WINDOWS_PROJECTS_DIR" || { echo "[$REPO_NAME] Failed to create $WINDOWS_PROJECTS_DIR."; return 1; }
+            fi
+            echo "[$REPO_NAME] Cloning (regular) → $CLONE_DIR..."
             git clone "$REPO" "$CLONE_DIR" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
+            # Disable filemode tracking on /mnt/c (NTFS) to avoid spurious 'mode changed' diffs
+            if _is_windows_repo "$REPO_NAME"; then
+                git -C "$CLONE_DIR" config core.filemode false
+            fi
+        fi
+
+        # Symlink ~/projects/<name> → $CLONE_DIR if cloned to a non-default location
+        if [ "$CLONE_DIR" != "$SYMLINK_DIR" ] && [ ! -e "$SYMLINK_DIR" ]; then
+            ln -s "$CLONE_DIR" "$SYMLINK_DIR" && echo "[$REPO_NAME] Symlinked $SYMLINK_DIR → $CLONE_DIR"
         fi
 
         # Special handling for Neovim config
@@ -155,6 +198,35 @@ _clone_single_repo() {
             cd ~
         fi
     fi
+}
+
+# Ensure the branch-notes repo exists on Windows (WSL only) and is symlinked
+# at the path `bn` expects: ~/projects/branch-notes
+setup_branch_notes_symlink() {
+    _is_wsl || return 0
+
+    local target="$WINDOWS_PROJECTS_DIR/branch-notes"
+    local link="$HOME/projects/branch-notes"
+
+    mkdir -p "$WINDOWS_PROJECTS_DIR" || { track_failure "branch-notes" "Failed to create $WINDOWS_PROJECTS_DIR"; return 1; }
+
+    if [ ! -d "$target/.git" ]; then
+        echo "[branch-notes] Initializing repo at $target..."
+        mkdir -p "$target"
+        (cd "$target" && git init -b main >/dev/null && git config core.filemode false) || {
+            track_failure "branch-notes" "Failed to git init $target"
+            return 1
+        }
+    fi
+
+    if [ -L "$link" ]; then
+        return 0
+    fi
+    if [ -e "$link" ]; then
+        track_failure "branch-notes" "$link exists and is not a symlink — refusing to overwrite"
+        return 1
+    fi
+    ln -s "$target" "$link" && echo "[branch-notes] Symlinked $link → $target"
 }
 
 clone_repos() {
@@ -207,6 +279,8 @@ clone_repos() {
     done
     wait
     echo "All repository clones finished."
+
+    setup_branch_notes_symlink
 }
 
 ensure_tmux_version() {
@@ -606,7 +680,7 @@ setup_symlinks() {
 }
 
 setup_personal_notes_stow() {
-    local stow_dir=~/projects/worktree/personal-notes/main/stow
+    local stow_dir=~/projects/personal-notes/stow
 
     if [ ! -d "$stow_dir" ]; then
         echo "personal-notes stow directory not found at $stow_dir — skipping."

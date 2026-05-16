@@ -47,7 +47,7 @@ fi
 
 # --- Config ---
 
-NOTES_DIR="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes"
+NOTES_DIR="$HOME/projects/branch-notes"
 _HOSTNAME=$(hostname)
 
 # --- Helpers: Git Context ---

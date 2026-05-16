@@ -7,7 +7,7 @@ source "$HOME/.bin/tmux/tmux-lib.sh"
 
 resolve_note_context "${1:-$(pwd)}" || exit 0
 
-note_dir="$HOME/projects/worktree/personal-notes/branch-notes/branch-notes/$NOTE_REPO/$NOTE_BRANCH"
+note_dir="$HOME/projects/branch-notes/$NOTE_REPO/$NOTE_BRANCH"
 note="$note_dir/note.md"
 yaml="$note_dir/note.yaml"
 [[ -f "$note" ]] || exit 0
