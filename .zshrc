@@ -95,3 +95,15 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Starship
 eval "$(starship init zsh)"
+
+# free-claude-code: start local proxy then launch claude
+alias deepseek='(cd /Users/edd/projects/worktree/free-claude-code/main && uv run uvicorn server:app --host 0.0.0.0 --port 8082 >/tmp/freecc-proxy.log 2>&1 &) && \
+  for i in {1..30}; do curl -sf http://localhost:8082 >/dev/null 2>&1 && break; sleep 0.2; done && \
+  ANTHROPIC_AUTH_TOKEN="freecc" ANTHROPIC_BASE_URL="http://localhost:8082" claude'
+
+# bun completions
+[ -s "/Users/edd/.bun/_bun" ] && source "/Users/edd/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"

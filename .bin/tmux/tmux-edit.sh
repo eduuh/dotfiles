@@ -15,8 +15,11 @@ pane_path=$("$TMUX_CMD" display-message -p '#{pane_current_path}')
 hash=$(printf '%s' "$pane_path" | shasum | cut -c1-8)
 session="nvim-$hash"
 
+# Detach from any nvim-* session, not just the one matching the outer
+# pane's worktree — `bn nvim-switch` can re-target the popup to a different
+# worktree, after which the popup's session name no longer matches `$session`.
 current_session=$("$TMUX_CMD" display-message -p '#{session_name}')
-if [[ "$current_session" == "$session" ]]; then
+if [[ "$current_session" == nvim-* ]]; then
     exec "$TMUX_CMD" detach-client
 fi
 

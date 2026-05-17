@@ -67,6 +67,7 @@ _bn() {
         'ac:Log an achievement'
         'global:Repo-level global note'
         'g:Repo-level global note'
+        'nvim-switch:Re-target the floating nvim popup to a worktree'
         'help:Show help'
     )
 
@@ -206,6 +207,9 @@ _bn() {
                 )
                 _describe -t global-cmds 'global command' global_cmds
             fi
+            ;;
+        nvim-switch)
+            _path_files -/
             ;;
     esac
 }

@@ -2842,6 +2842,99 @@ LEARNEOF
     esac
 }
 
+cmd_sync() {
+    # Stage and push all uncommitted changes in the branch-notes worktree.
+    # Safe to call frequently — exits cleanly if there's nothing to sync.
+    local changed
+    changed=$(git -C "$NOTES_DIR" status --porcelain 2>/dev/null)
+    if [[ -z "$changed" ]]; then
+        echo "branch-notes: nothing to sync"
+        return 0
+    fi
+
+    # Build a short summary of what changed for the commit message
+    local summary
+    summary=$(git -C "$NOTES_DIR" status --porcelain | \
+        awk '{print $2}' | \
+        sed 's|branch-notes/||' | \
+        paste -sd ', ' -)
+
+    git -C "$NOTES_DIR" add -A
+    git -C "$NOTES_DIR" commit -m "chore(bn): sync [${summary}]"
+    git -C "$NOTES_DIR" push
+    echo "✓ branch-notes synced"
+}
+
+cmd_gh() {
+    require_git_context
+    local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
+    [[ ! -f "$note_file" ]] && { echo "No note found for $NOTE_REPO/$NOTE_BRANCH" >&2; exit 1; }
+
+    # Derive org/repo from personal-notes remote
+    local remote
+    remote=$(git -C "$NOTES_DIR" remote get-url origin 2>/dev/null || echo "")
+    local gh_slug
+    if [[ "$remote" =~ "github.com[:/](.+)(\.git)?$" ]]; then
+        gh_slug="${match[1]%.git}"
+    else
+        gh_slug="eduuh-private/personal-notes"
+    fi
+
+    local notes_branch
+    notes_branch=$(git -C "$NOTES_DIR" branch --show-current 2>/dev/null || echo "branch-notes")
+    local url="https://github.com/${gh_slug}/blob/${notes_branch}/branch-notes/${NOTE_REPO}/${NOTE_BRANCH}/note.md"
+    echo "$url"
+    if command -v pbcopy &>/dev/null; then
+        echo "$url" | pbcopy
+        echo "  (copied to clipboard)" >&2
+    fi
+}
+
+cmd_nvim_switch() {
+    # Re-target the floating tmux nvim popup to a different worktree.
+    # Called from inside the popup nvim by an nvim keymap.
+    #
+    # We respawn the popup's window in-place rather than creating a new
+    # session and switch-client'ing to it: the popup keeps its session and
+    # window attached, only the window's running process (old nvim) is
+    # killed and replaced with a fresh `nvim .` at $target. No client
+    # switch, no torn-down session, no blink.
+    local target="${1:-}"
+    if [[ -z "$target" ]]; then
+        echo "Usage: bn nvim-switch <worktree-path>" >&2
+        exit 1
+    fi
+    if [[ ! -d "$target" ]]; then
+        echo "bn nvim-switch: not a directory: $target" >&2
+        exit 1
+    fi
+    target=$(cd "$target" && pwd -P)
+
+    tmux_init
+    require_tmux
+
+    local current
+    current=$("$TMUX_CMD" display-message -p '#{session_name}' 2>/dev/null)
+
+    if [[ "$current" == nvim-* ]]; then
+        # `run-shell -b` runs server-side, so the respawn (which kills the
+        # old nvim, and with it our caller and this very script) happens
+        # after the request has already been submitted to the server.
+        exec "$TMUX_CMD" run-shell -b \
+            "tmux respawn-window -t '=$current' -k -c '$target' 'nvim .'"
+    fi
+
+    # Fallback: not inside a popup nvim session — create a session for
+    # $target and switch the current client to it.
+    local hash session
+    hash=$(printf '%s' "$target" | shasum | cut -c1-8)
+    session="nvim-$hash"
+    if ! "$TMUX_CMD" has-session -t "=$session" 2>/dev/null; then
+        "$TMUX_CMD" new-session -d -s "$session" -c "$target" 'nvim .'
+    fi
+    exec "$TMUX_CMD" switch-client -t "=$session"
+}
+
 cmd_help() {
     cat << 'HELPEOF'
 Usage: bn [command]
@@ -2916,6 +3009,13 @@ Learning:
   learn list              List learning notes
   learn new <topic>       Create new learning note and open in $EDITOR
   learn open <topic>      Open a learning note in $EDITOR
+
+GitHub:
+  gh                      Print (and copy) GitHub URL to current branch note
+  sync                    Commit and push all pending branch-note changes
+
+Tmux:
+  nvim-switch <path>      Re-target the floating nvim popup to <path>
 
 Sections: todo, blocker, decision, research, collab, ask
 HELPEOF
@@ -3194,6 +3294,9 @@ case "${1:-}" in
     global|g)           shift; cmd_global "$@" ;;
     blog)               shift; cmd_blog "$@" ;;
     learn)              shift; cmd_learn "$@" ;;
+    gh)                 cmd_gh ;;
+    sync)               cmd_sync ;;
+    nvim-switch)        shift; cmd_nvim_switch "$@" ;;
     -h|--help|help)     cmd_help ;;
     "")                 cmd_default ;;
     *)                  echo "Unknown command: $1" >&2; exit 1 ;;
