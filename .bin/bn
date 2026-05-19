@@ -40,6 +40,7 @@
 #   bn search <text>                # Search across all active notes
 #   bn stale [--days N]             # Show notes with no recent modifications
 #   bn global|g [subcmd]            # Repo-level global note
+#   bn tool|tools [list|new|path|open|up|down|restart|logs|ps|doctor]  # Global Docker dev tools
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
 
@@ -2621,6 +2622,284 @@ cmd_global() {
     esac
 }
 
+# Tear down any standalone compose project for a single tool — used before
+# running the top-level project, so a previously-started standalone container
+# doesn't squat on the port (or, with old configs, a container_name).
+_bn_tool_down_standalone() {
+    local tool_dir="$1"
+    [[ -f "$tool_dir/docker-compose.yml" || -f "$tool_dir/docker-compose.yaml" ]] || return 0
+    ( cd "$tool_dir" && docker compose down --remove-orphans >/dev/null 2>&1 ) || true
+}
+
+_bn_tool_down_all_standalone() {
+    local tools_dir="$1" tool
+    for tool in "$tools_dir"/*(N/); do
+        _bn_tool_down_standalone "$tool"
+    done
+}
+
+# Extract host ports from a tool's docker-compose.yml and print URLs.
+# Matches `- "HOST:CONTAINER"` and `- HOST:CONTAINER` short-form mappings.
+_bn_tool_print_urls() {
+    local tool_dir="$1" name="$2"
+    local compose_file="$tool_dir/docker-compose.yml"
+    [[ -f "$tool_dir/docker-compose.yaml" ]] && compose_file="$tool_dir/docker-compose.yaml"
+    [[ -f "$compose_file" ]] || return 0
+    local -a ports
+    ports=( $(grep -oE '^[[:space:]]*-[[:space:]]*"?[0-9]+:[0-9]+' "$compose_file" 2>/dev/null \
+              | sed -E 's/^[[:space:]]*-[[:space:]]*"?([0-9]+):.*/\1/') )
+    [[ ${#ports[@]} -eq 0 ]] && return 0
+    printf '\n→ %s available at:\n' "$name"
+    local p
+    for p in "${ports[@]}"; do
+        printf '    http://localhost:%s\n' "$p"
+    done
+}
+
+# Print URLs for every tool in the tools dir.
+_bn_tool_print_all_urls() {
+    local tools_dir="$1" tool
+    for tool in "$tools_dir"/*(N/); do
+        [[ -f "$tool/docker-compose.yml" || -f "$tool/docker-compose.yaml" ]] || continue
+        _bn_tool_print_urls "$tool" "${tool:t}"
+    done
+}
+
+# Global dev tools — Docker-based local tools whose definitions and data
+# live in personal-notes/tools/. Repo-agnostic; safe to run from anywhere.
+cmd_tools() {
+    local tools_dir="${BN_TOOLS_DIR:-$HOME/projects/personal-notes/tools}"
+    local subcmd="${1:-up-all}"
+    shift 2>/dev/null || true
+
+    # Promote single-tool subcommands to *-all when called without a tool name.
+    # Lets `bn tools stop`, `bn tools restart`, `bn tools logs`, etc. mean "all".
+    if [[ -z "${1:-}" ]]; then
+        case "$subcmd" in
+            up|start)   subcmd="up-all" ;;
+            down|stop)  subcmd="down-all" ;;
+            restart)    subcmd="restart-all" ;;
+            logs)       subcmd="logs-all" ;;
+            ps|status)  subcmd="ps-all" ;;
+        esac
+    fi
+
+    case "$subcmd" in
+        list|l|ls)
+            if [[ ! -d "$tools_dir" ]]; then
+                echo "(no tools dir yet — run 'bn tool new <name>' to create one)"
+                echo "Will be created at: $tools_dir"
+                return
+            fi
+            local found=0 tool name marker
+            for tool in "$tools_dir"/*(N/); do
+                name="${tool:t}"
+                marker=""
+                [[ -f "$tool/docker-compose.yml" || -f "$tool/docker-compose.yaml" ]] && marker=" [compose]"
+                [[ -f "$tool/Dockerfile" ]] && marker="$marker [dockerfile]"
+                printf "  %s%s\n" "$name" "$marker"
+                found=1
+            done
+            (( found )) || echo "(no tools yet — run 'bn tool new <name>')"
+            ;;
+        new|n)
+            local name="$1"
+            [[ -z "$name" ]] && { echo "Usage: bn tool new <name>" >&2; return 1; }
+            if [[ "$name" == */* || "$name" == .* ]]; then
+                echo "Invalid tool name: $name" >&2; return 1
+            fi
+            local tool_dir="$tools_dir/$name"
+            if [[ -e "$tool_dir" ]]; then
+                echo "Tool already exists: $tool_dir" >&2; return 1
+            fi
+            mkdir -p "$tool_dir/data"
+            local title="${(C)${name//-/ }}"
+            local date=$(date +%Y-%m-%d)
+            cat > "$tool_dir/README.md" <<TOOLREADMEEOF
+# $title
+
+> Created: $date
+
+A self-hosted dev tool managed via \`bn tool\`.
+
+## Usage
+
+\`\`\`bash
+cd "$(bn tool path $name)"
+docker compose up -d
+# ... use the tool ...
+docker compose down
+\`\`\`
+
+## Data
+
+Persistent state lives in \`./data/\` (bind-mounted into the container).
+TOOLREADMEEOF
+            cat > "$tool_dir/docker-compose.yml" <<TOOLCOMPOSEEOF
+# $title — local dev tool
+# Run: docker compose up -d
+name: $name
+
+services:
+  app:
+    image: # TODO: image:tag
+    restart: unless-stopped
+    ports:
+      - "0:80" # TODO: pick host port
+    volumes:
+      - ./data:/data
+TOOLCOMPOSEEOF
+            echo "Created: $tool_dir"
+            ${EDITOR:-nvim} "$tool_dir/docker-compose.yml"
+            ;;
+        path|p)
+            local name="$1"
+            if [[ -z "$name" ]]; then
+                echo "$tools_dir"
+            else
+                echo "$tools_dir/$name"
+            fi
+            ;;
+        open|o|edit|e)
+            local name="$1"
+            [[ -z "$name" ]] && { echo "Usage: bn tool open <name>" >&2; return 1; }
+            local tool_dir="$tools_dir/$name"
+            [[ ! -d "$tool_dir" ]] && { echo "Tool not found: $name (in $tools_dir)" >&2; return 1; }
+            local target="$tool_dir/docker-compose.yml"
+            [[ ! -f "$target" ]] && target="$tool_dir/README.md"
+            ${EDITOR:-nvim} "$target"
+            ;;
+        build|build-all|rebuild)
+            if [[ ! -f "$tools_dir/docker-compose.yml" ]]; then
+                echo "No top-level $tools_dir/docker-compose.yml" >&2; return 1
+            fi
+            if ! command -v docker >/dev/null 2>&1; then
+                echo "docker CLI not found — run 'bn tool doctor' for setup help" >&2
+                return 1
+            fi
+            ( cd "$tools_dir" && docker compose build )
+            ;;
+        up-all|down-all|logs-all|ps-all|restart-all)
+            if [[ ! -f "$tools_dir/docker-compose.yml" ]]; then
+                echo "No top-level $tools_dir/docker-compose.yml" >&2; return 1
+            fi
+            if ! command -v docker >/dev/null 2>&1; then
+                echo "docker CLI not found — run 'bn tool doctor' for setup help" >&2
+                return 1
+            fi
+            case "$subcmd" in
+                up-all)
+                    _bn_tool_down_all_standalone "$tools_dir"
+                    ( cd "$tools_dir" && docker compose up -d --remove-orphans ) && _bn_tool_print_all_urls "$tools_dir"
+                    ;;
+                down-all)     ( cd "$tools_dir" && docker compose down ) ;;
+                restart-all)  ( cd "$tools_dir" && docker compose restart ) ;;
+                logs-all)     ( cd "$tools_dir" && docker compose logs -f --tail=100 ) ;;
+                ps-all)       ( cd "$tools_dir" && docker compose ps ) ;;
+            esac
+            ;;
+        up|start|down|stop|logs|ps|status|restart)
+            local name="$1"
+            [[ -z "$name" ]] && { echo "Usage: bn tool $subcmd <name>" >&2; return 1; }
+            local tool_dir="$tools_dir/$name"
+            [[ ! -d "$tool_dir" ]] && { echo "Tool not found: $name (in $tools_dir)" >&2; return 1; }
+            if [[ ! -f "$tools_dir/docker-compose.yml" ]]; then
+                echo "No top-level $tools_dir/docker-compose.yml" >&2; return 1
+            fi
+            if ! command -v docker >/dev/null 2>&1; then
+                echo "docker CLI not found — run 'bn tool doctor' for setup help" >&2
+                return 1
+            fi
+            case "$subcmd" in
+                up|start)
+                    _bn_tool_down_standalone "$tool_dir"
+                    ( cd "$tools_dir" && docker compose up -d --remove-orphans "$name" ) && _bn_tool_print_urls "$tool_dir" "$name"
+                    ;;
+                down|stop)
+                    _bn_tool_down_standalone "$tool_dir"
+                    ( cd "$tools_dir" && docker compose stop "$name" )
+                    ;;
+                restart)        ( cd "$tools_dir" && docker compose restart "$name" ) ;;
+                logs)           ( cd "$tools_dir" && docker compose logs -f --tail=100 "$name" ) ;;
+                ps|status)      ( cd "$tools_dir" && docker compose ps "$name" ) ;;
+            esac
+            ;;
+        doctor)
+            echo "== bn tool doctor =="
+            echo "Tools dir:      $tools_dir"
+            if [[ -d "$tools_dir" ]]; then
+                echo "                ✓ exists"
+            else
+                echo "                ✗ missing (will be created on first 'bn tool new')"
+            fi
+            local real_path
+            real_path=$(readlink -f "$tools_dir" 2>/dev/null || echo "$tools_dir")
+            echo "Resolves to:    $real_path"
+            if [[ "$real_path" == /mnt/c/* ]]; then
+                echo "                ✓ on Windows filesystem — accessible from Windows too"
+                local win_path="${real_path#/mnt/c/}"
+                win_path="C:/${win_path}"
+                win_path="${win_path//\//\\}"
+                printf '                  Windows path: %s\n' "$win_path"
+            fi
+            echo
+            if command -v docker >/dev/null 2>&1; then
+                echo "docker CLI:     ✓ $(command -v docker)"
+                local server_ver
+                server_ver=$(docker version --format '{{.Server.Version}}' 2>/dev/null)
+                if [[ -n "$server_ver" ]]; then
+                    echo "docker daemon:  ✓ reachable (server $server_ver)"
+                    local ctx
+                    ctx=$(docker context show 2>/dev/null)
+                    echo "context:        $ctx"
+                else
+                    echo "docker daemon:  ✗ CLI present but daemon unreachable"
+                    echo "                → start Docker Desktop on Windows"
+                fi
+            else
+                cat <<DOCEOF
+docker CLI:     ✗ not found in WSL
+
+Setup (one time):
+  1. Install Docker Desktop on Windows:
+     https://www.docker.com/products/docker-desktop/
+  2. Open Docker Desktop → Settings → Resources → WSL Integration
+  3. Toggle ON for this distro (and 'Enable integration with my default WSL distro')
+  4. Apply & Restart. Then 'docker' will appear inside WSL automatically.
+
+Bind mounts: tool data lives under personal-notes/tools/<name>/, which is on
+the Windows filesystem (/mnt/c/...). Docker Desktop mounts these natively —
+no path translation needed whether you run from WSL or PowerShell.
+DOCEOF
+            fi
+            ;;
+        *)
+            cat >&2 <<USAGEEOF
+Usage: bn tool <subcommand>
+
+  (no args)            Start all tools (alias for up-all) — default
+  list                 List installed tools
+  new <name>           Scaffold a new tool folder
+  path [name]          Print tools dir, or a specific tool's path
+  open <name>          Edit the tool's compose file
+  up <name>            docker compose up -d (run from anywhere)
+  down <name>          docker compose down
+  restart <name>       docker compose restart
+  logs <name>          docker compose logs -f
+  ps <name>            docker compose ps
+  build                Build any custom images used by the tools (top-level)
+  up-all               Start every tool (top-level compose)
+  down-all             Stop every tool
+  restart-all          Restart every tool
+  logs-all             Follow logs from every tool
+  ps-all               Show running services across all tools
+  doctor               Check setup (docker availability, paths)
+USAGEEOF
+            return 1
+            ;;
+    esac
+}
+
 # PR link management: store, open, or show PR URL
 # Rename the current git branch. Renames git branch, branch-note folder
 # (slashes → dashes), and repushes if the branch had upstream tracking.
@@ -3775,6 +4054,16 @@ Commands:
   achieve --path                  Print path to achievements.md
   global, g [--cat|--edit|--path] Repo-level global note (not branch-specific)
   global add <section> <text>     Add to repo global note
+  tool, tools list                List global dev tools (personal-notes/tools/)
+  tool new <name>                 Scaffold a new tool folder (README + compose stub)
+  tool path [name]                Print tools dir, or a specific tool's path
+  tool open <name>                Open tool's compose file in $EDITOR
+  tool up|down|restart <name>     docker compose lifecycle (run from anywhere)
+  tool logs <name>                Follow compose logs
+  tool ps <name>                  Show running services
+  tool up-all|down-all            Start/stop every tool via top-level compose
+  tool logs-all|ps-all            Aggregate logs/status across all tools
+  tool doctor                     Check docker availability + paths
   cs                              Pick a codespace for current branch (timeout → latest)
   cs list                         List codespaces for current repo
   cs tag [name]                   Tag codespace displayName with <branch>@<host>
@@ -4095,6 +4384,7 @@ case "${1:-}" in
     diff|d)             cmd_diff ;;
     achieve|ac)         shift; cmd_achieve "$@" ;;
     global|g)           shift; cmd_global "$@" ;;
+    tool|tools)         shift; cmd_tools "$@" ;;
     setup)              cmd_setup ;;
     details)            shift; cmd_details "$@" ;;
     cs)                 shift; cmd_cs "$@" ;;
