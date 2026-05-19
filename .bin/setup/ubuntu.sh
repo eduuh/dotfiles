@@ -71,6 +71,76 @@ clean_unneeded_software() {
     sudo apt autoremove -y || track_failure "apt" "Failed to autoremove packages"
 }
 
+install_docker() {
+    if [[ "${CODESPACES:-}" == "true" || -n "${CODESPACE_NAME:-}" || "$PWD" == /workspaces/* ]]; then
+        echo "Skipping Docker install — running inside a Codespace (already provides docker)."
+        return 0
+    fi
+
+    local docker_present=0
+    if command -v docker >/dev/null 2>&1; then
+        docker_present=1
+        echo "docker CLI already present — skipping package install, ensuring config only."
+    fi
+
+    . /etc/os-release
+
+    if (( ! docker_present )); then
+        echo "Installing Docker CE for ${ID} ${VERSION_CODENAME}..."
+
+        if ! sudo apt-get install -y -qq ca-certificates curl; then
+            track_failure "docker" "Failed to install prerequisites (ca-certificates, curl)"
+            return 1
+        fi
+
+    if [[ ! -f /etc/apt/keyrings/docker.asc ]]; then
+        sudo install -m 0755 -d /etc/apt/keyrings
+        if ! sudo curl -fsSL "https://download.docker.com/linux/${ID}/gpg" -o /etc/apt/keyrings/docker.asc; then
+            track_failure "docker" "Failed to fetch Docker GPG key"
+            return 1
+        fi
+        sudo chmod a+r /etc/apt/keyrings/docker.asc
+    fi
+
+    if [[ ! -f /etc/apt/sources.list.d/docker.list ]]; then
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
+            | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+    fi
+
+    if ! sudo apt-get update -qq; then
+        track_failure "docker" "Failed to apt-update after adding Docker repo"
+        return 1
+    fi
+
+    if ! sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+        track_failure "docker" "Failed to install docker-ce + plugins"
+        return 1
+    fi
+    fi  # end: ! docker_present
+
+    if ! getent group docker >/dev/null 2>&1; then
+        sudo groupadd docker || track_failure "docker" "Failed to create docker group"
+    fi
+
+    if ! id -nG "$USER" | tr ' ' '\n' | grep -q '^docker$'; then
+        echo "Adding $USER to the docker group..."
+        if ! sudo usermod -aG docker "$USER"; then
+            track_failure "docker" "Failed to add $USER to docker group"
+        fi
+    fi
+
+    if command -v systemctl >/dev/null 2>&1 && [[ "$(ps -p 1 -o comm=)" == "systemd" ]]; then
+        if ! sudo systemctl enable --now docker; then
+            track_failure "docker" "Failed to enable/start docker service"
+        fi
+    else
+        echo "Note: systemd not detected — start docker manually with: sudo service docker start"
+    fi
+
+    echo "Docker installed. Run 'newgrp docker' or open a new shell to use it without sudo."
+    sudo docker version --format 'Client: {{.Client.Version}} | Server: {{.Server.Version}}' || true
+}
+
 setup_ubuntu() {
     update_system
     install_common_packages
