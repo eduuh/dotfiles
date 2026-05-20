@@ -155,7 +155,14 @@ resolve_note_context() {
         NOTE_REPO="${rel%%/*}"
         NOTE_BRANCH=$(git -C "$dir" branch --show-current 2>/dev/null)
     else
-        NOTE_REPO=$(basename "$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)")
+        local toplevel
+        toplevel=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
+        NOTE_REPO=$(basename "$toplevel")
+        # In-place bare+worktree layout (e.g. ~/projects/nvim/.bare + ~/projects/nvim/main):
+        # toplevel basename is the branch dir, not the repo. Use the parent's name instead.
+        if [[ -n "$toplevel" && -d "${toplevel:h}/.bare" ]]; then
+            NOTE_REPO=$(basename "${toplevel:h}")
+        fi
         NOTE_BRANCH=$(git -C "$dir" branch --show-current 2>/dev/null)
     fi
     [[ -z "$NOTE_REPO" || -z "$NOTE_BRANCH" ]] && return 1

@@ -27,6 +27,9 @@
 #   bn archive [--days N] [--dry-run]  # Archive old closed notes
 #   bn clean [--all]                # Remove empty placeholder todos
 #   bn worktrees|w                  # All active worktrees with details
+#   bn cs                           # Pick & open a codespace for current branch
+#   bn cs list                       # List codespaces for current repo
+#   bn cs tag [name]                 # Tag a codespace's displayName with branch@host
 #   bn pr [url] [--copy|--show]     # Link/open PR for current branch
 #   bn link|wi [id] [--copy|--show] # Link/open work item
 #   bn review|rv [pr-id|new|edit]    # PR review management
@@ -37,6 +40,7 @@
 #   bn search <text>                # Search across all active notes
 #   bn stale [--days N]             # Show notes with no recent modifications
 #   bn global|g [subcmd]            # Repo-level global note
+#   bn tool|tools [list|new|path|open|up|down|restart|logs|ps|doctor]  # Global Docker dev tools
 
 source "$HOME/.bin/tmux/tmux-lib.sh"
 
@@ -2618,7 +2622,363 @@ cmd_global() {
     esac
 }
 
+# Tear down any standalone compose project for a single tool — used before
+# running the top-level project, so a previously-started standalone container
+# doesn't squat on the port (or, with old configs, a container_name).
+_bn_tool_down_standalone() {
+    local tool_dir="$1"
+    [[ -f "$tool_dir/docker-compose.yml" || -f "$tool_dir/docker-compose.yaml" ]] || return 0
+    ( cd "$tool_dir" && docker compose down --remove-orphans >/dev/null 2>&1 ) || true
+}
+
+_bn_tool_down_all_standalone() {
+    local tools_dir="$1" tool
+    for tool in "$tools_dir"/*(N/); do
+        _bn_tool_down_standalone "$tool"
+    done
+}
+
+# Extract host ports from a tool's docker-compose.yml and print URLs.
+# Matches `- "HOST:CONTAINER"` and `- HOST:CONTAINER` short-form mappings.
+_bn_tool_print_urls() {
+    local tool_dir="$1" name="$2"
+    local compose_file="$tool_dir/docker-compose.yml"
+    [[ -f "$tool_dir/docker-compose.yaml" ]] && compose_file="$tool_dir/docker-compose.yaml"
+    [[ -f "$compose_file" ]] || return 0
+    local -a ports
+    ports=( $(grep -oE '^[[:space:]]*-[[:space:]]*"?[0-9]+:[0-9]+' "$compose_file" 2>/dev/null \
+              | sed -E 's/^[[:space:]]*-[[:space:]]*"?([0-9]+):.*/\1/') )
+    [[ ${#ports[@]} -eq 0 ]] && return 0
+    printf '\n→ %s available at:\n' "$name"
+    local p
+    for p in "${ports[@]}"; do
+        printf '    http://localhost:%s\n' "$p"
+    done
+}
+
+# Print URLs for every tool in the tools dir.
+_bn_tool_print_all_urls() {
+    local tools_dir="$1" tool
+    for tool in "$tools_dir"/*(N/); do
+        [[ -f "$tool/docker-compose.yml" || -f "$tool/docker-compose.yaml" ]] || continue
+        _bn_tool_print_urls "$tool" "${tool:t}"
+    done
+}
+
+# Global dev tools — Docker-based local tools whose definitions and data
+# live in personal-notes/tools/. Repo-agnostic; safe to run from anywhere.
+cmd_tools() {
+    local tools_dir="${BN_TOOLS_DIR:-$HOME/projects/personal-notes/tools}"
+    local subcmd="${1:-up-all}"
+    shift 2>/dev/null || true
+
+    # Promote single-tool subcommands to *-all when called without a tool name.
+    # Lets `bn tools stop`, `bn tools restart`, `bn tools logs`, etc. mean "all".
+    if [[ -z "${1:-}" ]]; then
+        case "$subcmd" in
+            up|start)   subcmd="up-all" ;;
+            down|stop)  subcmd="down-all" ;;
+            restart)    subcmd="restart-all" ;;
+            logs)       subcmd="logs-all" ;;
+            ps|status)  subcmd="ps-all" ;;
+        esac
+    fi
+
+    case "$subcmd" in
+        list|l|ls)
+            if [[ ! -d "$tools_dir" ]]; then
+                echo "(no tools dir yet — run 'bn tool new <name>' to create one)"
+                echo "Will be created at: $tools_dir"
+                return
+            fi
+            local found=0 tool name marker
+            for tool in "$tools_dir"/*(N/); do
+                name="${tool:t}"
+                marker=""
+                [[ -f "$tool/docker-compose.yml" || -f "$tool/docker-compose.yaml" ]] && marker=" [compose]"
+                [[ -f "$tool/Dockerfile" ]] && marker="$marker [dockerfile]"
+                printf "  %s%s\n" "$name" "$marker"
+                found=1
+            done
+            (( found )) || echo "(no tools yet — run 'bn tool new <name>')"
+            ;;
+        new|n)
+            local name="$1"
+            [[ -z "$name" ]] && { echo "Usage: bn tool new <name>" >&2; return 1; }
+            if [[ "$name" == */* || "$name" == .* ]]; then
+                echo "Invalid tool name: $name" >&2; return 1
+            fi
+            local tool_dir="$tools_dir/$name"
+            if [[ -e "$tool_dir" ]]; then
+                echo "Tool already exists: $tool_dir" >&2; return 1
+            fi
+            mkdir -p "$tool_dir/data"
+            local title="${(C)${name//-/ }}"
+            local date=$(date +%Y-%m-%d)
+            cat > "$tool_dir/README.md" <<TOOLREADMEEOF
+# $title
+
+> Created: $date
+
+A self-hosted dev tool managed via \`bn tool\`.
+
+## Usage
+
+\`\`\`bash
+cd "$(bn tool path $name)"
+docker compose up -d
+# ... use the tool ...
+docker compose down
+\`\`\`
+
+## Data
+
+Persistent state lives in \`./data/\` (bind-mounted into the container).
+TOOLREADMEEOF
+            cat > "$tool_dir/docker-compose.yml" <<TOOLCOMPOSEEOF
+# $title — local dev tool
+# Run: docker compose up -d
+name: $name
+
+services:
+  app:
+    image: # TODO: image:tag
+    restart: unless-stopped
+    ports:
+      - "0:80" # TODO: pick host port
+    volumes:
+      - ./data:/data
+TOOLCOMPOSEEOF
+            echo "Created: $tool_dir"
+            ${EDITOR:-nvim} "$tool_dir/docker-compose.yml"
+            ;;
+        path|p)
+            local name="$1"
+            if [[ -z "$name" ]]; then
+                echo "$tools_dir"
+            else
+                echo "$tools_dir/$name"
+            fi
+            ;;
+        open|o|edit|e)
+            local name="$1"
+            [[ -z "$name" ]] && { echo "Usage: bn tool open <name>" >&2; return 1; }
+            local tool_dir="$tools_dir/$name"
+            [[ ! -d "$tool_dir" ]] && { echo "Tool not found: $name (in $tools_dir)" >&2; return 1; }
+            local target="$tool_dir/docker-compose.yml"
+            [[ ! -f "$target" ]] && target="$tool_dir/README.md"
+            ${EDITOR:-nvim} "$target"
+            ;;
+        build|build-all|rebuild)
+            if [[ ! -f "$tools_dir/docker-compose.yml" ]]; then
+                echo "No top-level $tools_dir/docker-compose.yml" >&2; return 1
+            fi
+            if ! command -v docker >/dev/null 2>&1; then
+                echo "docker CLI not found — run 'bn tool doctor' for setup help" >&2
+                return 1
+            fi
+            ( cd "$tools_dir" && docker compose build )
+            ;;
+        up-all|down-all|logs-all|ps-all|restart-all)
+            if [[ ! -f "$tools_dir/docker-compose.yml" ]]; then
+                echo "No top-level $tools_dir/docker-compose.yml" >&2; return 1
+            fi
+            if ! command -v docker >/dev/null 2>&1; then
+                echo "docker CLI not found — run 'bn tool doctor' for setup help" >&2
+                return 1
+            fi
+            case "$subcmd" in
+                up-all)
+                    _bn_tool_down_all_standalone "$tools_dir"
+                    ( cd "$tools_dir" && docker compose up -d --remove-orphans ) && _bn_tool_print_all_urls "$tools_dir"
+                    ;;
+                down-all)     ( cd "$tools_dir" && docker compose down ) ;;
+                restart-all)  ( cd "$tools_dir" && docker compose restart ) ;;
+                logs-all)     ( cd "$tools_dir" && docker compose logs -f --tail=100 ) ;;
+                ps-all)       ( cd "$tools_dir" && docker compose ps ) ;;
+            esac
+            ;;
+        up|start|down|stop|logs|ps|status|restart)
+            local name="$1"
+            [[ -z "$name" ]] && { echo "Usage: bn tool $subcmd <name>" >&2; return 1; }
+            local tool_dir="$tools_dir/$name"
+            [[ ! -d "$tool_dir" ]] && { echo "Tool not found: $name (in $tools_dir)" >&2; return 1; }
+            if [[ ! -f "$tools_dir/docker-compose.yml" ]]; then
+                echo "No top-level $tools_dir/docker-compose.yml" >&2; return 1
+            fi
+            if ! command -v docker >/dev/null 2>&1; then
+                echo "docker CLI not found — run 'bn tool doctor' for setup help" >&2
+                return 1
+            fi
+            case "$subcmd" in
+                up|start)
+                    _bn_tool_down_standalone "$tool_dir"
+                    ( cd "$tools_dir" && docker compose up -d --remove-orphans "$name" ) && _bn_tool_print_urls "$tool_dir" "$name"
+                    ;;
+                down|stop)
+                    _bn_tool_down_standalone "$tool_dir"
+                    ( cd "$tools_dir" && docker compose stop "$name" )
+                    ;;
+                restart)        ( cd "$tools_dir" && docker compose restart "$name" ) ;;
+                logs)           ( cd "$tools_dir" && docker compose logs -f --tail=100 "$name" ) ;;
+                ps|status)      ( cd "$tools_dir" && docker compose ps "$name" ) ;;
+            esac
+            ;;
+        doctor)
+            echo "== bn tool doctor =="
+            echo "Tools dir:      $tools_dir"
+            if [[ -d "$tools_dir" ]]; then
+                echo "                ✓ exists"
+            else
+                echo "                ✗ missing (will be created on first 'bn tool new')"
+            fi
+            local real_path
+            real_path=$(readlink -f "$tools_dir" 2>/dev/null || echo "$tools_dir")
+            echo "Resolves to:    $real_path"
+            if [[ "$real_path" == /mnt/c/* ]]; then
+                echo "                ✓ on Windows filesystem — accessible from Windows too"
+                local win_path="${real_path#/mnt/c/}"
+                win_path="C:/${win_path}"
+                win_path="${win_path//\//\\}"
+                printf '                  Windows path: %s\n' "$win_path"
+            fi
+            echo
+            if command -v docker >/dev/null 2>&1; then
+                echo "docker CLI:     ✓ $(command -v docker)"
+                local server_ver
+                server_ver=$(docker version --format '{{.Server.Version}}' 2>/dev/null)
+                if [[ -n "$server_ver" ]]; then
+                    echo "docker daemon:  ✓ reachable (server $server_ver)"
+                    local ctx
+                    ctx=$(docker context show 2>/dev/null)
+                    echo "context:        $ctx"
+                else
+                    echo "docker daemon:  ✗ CLI present but daemon unreachable"
+                    echo "                → start Docker Desktop on Windows"
+                fi
+            else
+                cat <<DOCEOF
+docker CLI:     ✗ not found in WSL
+
+Setup (one time):
+  1. Install Docker Desktop on Windows:
+     https://www.docker.com/products/docker-desktop/
+  2. Open Docker Desktop → Settings → Resources → WSL Integration
+  3. Toggle ON for this distro (and 'Enable integration with my default WSL distro')
+  4. Apply & Restart. Then 'docker' will appear inside WSL automatically.
+
+Bind mounts: tool data lives under personal-notes/tools/<name>/, which is on
+the Windows filesystem (/mnt/c/...). Docker Desktop mounts these natively —
+no path translation needed whether you run from WSL or PowerShell.
+DOCEOF
+            fi
+            ;;
+        *)
+            cat >&2 <<USAGEEOF
+Usage: bn tool <subcommand>
+
+  (no args)            Start all tools (alias for up-all) — default
+  list                 List installed tools
+  new <name>           Scaffold a new tool folder
+  path [name]          Print tools dir, or a specific tool's path
+  open <name>          Edit the tool's compose file
+  up <name>            docker compose up -d (run from anywhere)
+  down <name>          docker compose down
+  restart <name>       docker compose restart
+  logs <name>          docker compose logs -f
+  ps <name>            docker compose ps
+  build                Build any custom images used by the tools (top-level)
+  up-all               Start every tool (top-level compose)
+  down-all             Stop every tool
+  restart-all          Restart every tool
+  logs-all             Follow logs from every tool
+  ps-all               Show running services across all tools
+  doctor               Check setup (docker availability, paths)
+USAGEEOF
+            return 1
+            ;;
+    esac
+}
+
 # PR link management: store, open, or show PR URL
+# Rename the current git branch. Renames git branch, branch-note folder
+# (slashes → dashes), and repushes if the branch had upstream tracking.
+# Does not touch worktree directory or any linked PR.
+cmd_rename() {
+    require_git_context
+    local new_branch="$1"
+    [[ -z "$new_branch" ]] && { echo "Usage: bn rename <new-branch>" >&2; exit 1; }
+
+    if [[ "$new_branch" == *" "* || "$new_branch" == ..* || "$new_branch" == */* && "$new_branch" == *//* ]]; then
+        echo "Invalid branch name: $new_branch" >&2
+        exit 1
+    fi
+
+    local old_branch
+    old_branch=$(git branch --show-current 2>/dev/null)
+    [[ -z "$old_branch" ]] && { echo "Not on a branch (detached HEAD?)" >&2; exit 1; }
+
+    if [[ "$old_branch" == "$new_branch" ]]; then
+        echo "Already named $new_branch — nothing to do."
+        return
+    fi
+
+    if git show-ref --verify --quiet "refs/heads/$new_branch"; then
+        echo "Branch already exists: $new_branch" >&2
+        exit 1
+    fi
+
+    local old_folder="${old_branch//\//-}"
+    local new_folder="${new_branch//\//-}"
+    local old_note_dir="$NOTES_DIR/$NOTE_REPO/$old_folder"
+    local new_note_dir="$NOTES_DIR/$NOTE_REPO/$new_folder"
+
+    if [[ -e "$new_note_dir" ]]; then
+        echo "Note folder already exists: $new_note_dir" >&2
+        exit 1
+    fi
+
+    local upstream remote_name="" remote_branch=""
+    upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || upstream=""
+    if [[ -n "$upstream" ]]; then
+        remote_name="${upstream%%/*}"
+        remote_branch="${upstream#*/}"
+    fi
+
+    echo "Renaming branch: $old_branch → $new_branch"
+    [[ -n "$upstream" ]] && echo "  Upstream: $upstream  (will be repushed)"
+    [[ -d "$old_note_dir" ]] && echo "  Note folder: $old_folder/ → $new_folder/"
+
+    if ! git branch -m "$old_branch" "$new_branch"; then
+        echo "Failed to rename git branch" >&2
+        exit 1
+    fi
+
+    if [[ -d "$old_note_dir" ]]; then
+        mv "$old_note_dir" "$new_note_dir"
+        local yaml_file="$new_note_dir/note.yaml"
+        if [[ -f "$yaml_file" ]] && command -v yq &>/dev/null; then
+            BRANCH="$new_branch" yq -i '.branch = strenv(BRANCH)' "$yaml_file" 2>/dev/null || true
+        fi
+    fi
+
+    if [[ -n "$remote_name" ]]; then
+        echo "Pushing $new_branch to $remote_name..."
+        if git push -u "$remote_name" "$new_branch"; then
+            echo "Deleting old remote ref $remote_name/$remote_branch..."
+            git push "$remote_name" --delete "$remote_branch" || \
+                echo "  (couldn't delete remote $remote_branch — delete manually)" >&2
+        else
+            echo "Note: failed to push $new_branch. Push manually:" >&2
+            echo "  git push -u $remote_name $new_branch" >&2
+            echo "  git push $remote_name --delete $remote_branch" >&2
+        fi
+    fi
+
+    echo ""
+    echo "Done. New branch: $new_branch"
+}
+
 cmd_pr() {
     require_git_context
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
@@ -2981,6 +3341,161 @@ SCRIPTEOF
     echo "Run 'bn build' or 'bn test' in any worktree to run scripts."
 }
 
+# --- Codespaces ---
+
+# Parse owner/repo from origin remote URL.
+# Sets REPLY. Returns 1 if no github remote.
+_cs_origin_repo() {
+    local url
+    url=$(git remote get-url origin 2>/dev/null) || return 1
+    [[ "$url" == *github.com* ]] || return 1
+    REPLY="${url#*github.com[:/]}"
+    REPLY="${REPLY%.git}"
+    REPLY="${REPLY%/}"
+    [[ -n "$REPLY" ]]
+}
+
+# Run gh codespace; surface scope-missing errors with the refresh hint.
+_cs_gh() {
+    local out rc
+    out=$(gh codespace "$@" 2>&1)
+    rc=$?
+    if (( rc != 0 )); then
+        if [[ "$out" == *"codespace"*scope* ]]; then
+            echo "gh is missing the 'codespace' scope." >&2
+            echo "Run: gh auth refresh -h github.com -s codespace" >&2
+            return 2
+        fi
+        echo "$out" >&2
+        return $rc
+    fi
+    printf '%s\n' "$out"
+}
+
+cmd_cs() {
+    command -v gh &>/dev/null || { echo "gh CLI not found" >&2; exit 1; }
+    command -v jq &>/dev/null || { echo "jq required" >&2; exit 1; }
+
+    local sub="${1:-open}"
+    case "$sub" in
+        list|ls)    shift; cmd_cs_list "$@" ;;
+        tag)        shift; cmd_cs_tag "$@" ;;
+        open|"")    cmd_cs_open ;;
+        *)          echo "Unknown cs subcommand: $sub" >&2
+                    echo "Usage: bn cs [open|list|tag]" >&2
+                    exit 1 ;;
+    esac
+}
+
+cmd_cs_list() {
+    _cs_origin_repo || { echo "No github.com origin remote" >&2; exit 1; }
+    local repo="$REPLY"
+    local json
+    json=$(_cs_gh list --repo "$repo" \
+        --json name,displayName,gitStatus,lastUsedAt,state) || exit $?
+    local count
+    count=$(printf '%s' "$json" | jq 'length')
+    if (( count == 0 )); then
+        echo "No codespaces for $repo"
+        return
+    fi
+    printf '%s\n' "$json" | jq -r '
+        sort_by(.lastUsedAt) | reverse | .[] |
+        [.name, (.displayName // "-"), .gitStatus.ref, .state, .lastUsedAt] | @tsv
+    ' | column -t -s $'\t' -N "NAME,DISPLAY,BRANCH,STATE,LAST USED"
+}
+
+cmd_cs_open() {
+    require_git_context
+    _cs_origin_repo || { echo "No github.com origin remote" >&2; exit 1; }
+    local repo="$REPLY"
+    local branch
+    branch=$(git branch --show-current 2>/dev/null)
+    [[ -z "$branch" ]] && { echo "No current branch" >&2; exit 1; }
+
+    echo "Fetching codespaces for $repo..."
+    local json
+    json=$(_cs_gh list --repo "$repo" \
+        --json name,displayName,gitStatus,lastUsedAt,state) || exit $?
+
+    local count
+    count=$(printf '%s' "$json" | jq 'length')
+    if (( count == 0 )); then
+        echo "No codespaces for $repo" >&2
+        echo "Create one: https://github.com/$repo/codespaces" >&2
+        exit 1
+    fi
+
+    # Sort: current-branch matches first, then by lastUsedAt desc.
+    local sorted
+    sorted=$(printf '%s' "$json" | jq --arg b "$branch" '
+        sort_by(.lastUsedAt) | reverse |
+        sort_by(if .gitStatus.ref == $b then 0 else 1 end)
+    ')
+
+    echo ""
+    echo "Codespaces for $repo  (current branch: $branch)"
+    printf '%s' "$sorted" | jq -r --arg b "$branch" '
+        to_entries[] |
+        "  \(.key + 1). \(.value.name)  [\(.value.gitStatus.ref)]  \(.value.state)  \(.value.displayName // "-")\(if .value.gitStatus.ref == $b then "  ← branch match" else "" end)"
+    '
+    echo ""
+
+    local default_name default_ref
+    default_name=$(printf '%s' "$sorted" | jq -r '.[0].name')
+    default_ref=$(printf '%s' "$sorted" | jq -r '.[0].gitStatus.ref')
+
+    local timeout=5
+    local choice=""
+    printf "Select [1-%d] (Enter or %ds → #1 [%s]): " "$count" "$timeout" "$default_ref"
+    if ! IFS= read -t "$timeout" -r choice; then
+        echo ""
+        echo "(timeout — opening #1)"
+    fi
+
+    local idx=0
+    if [[ -n "$choice" ]]; then
+        if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > count )); then
+            echo "Invalid selection: $choice" >&2
+            exit 1
+        fi
+        idx=$((choice - 1))
+    fi
+
+    local name
+    name=$(printf '%s' "$sorted" | jq -r ".[$idx].name")
+    echo "Opening codespace: $name"
+    exec gh codespace code -c "$name"
+}
+
+# Tag a codespace's displayName with <branch>@<hostname> so its workspace
+# is identifiable in `gh cs list`. Defaults to the most recent codespace
+# for the current repo if no name is given.
+cmd_cs_tag() {
+    require_git_context
+    _cs_origin_repo || { echo "No github.com origin remote" >&2; exit 1; }
+    local repo="$REPLY"
+    local branch
+    branch=$(git branch --show-current 2>/dev/null)
+    local cs_name="${1:-}"
+
+    if [[ -z "$cs_name" ]]; then
+        local json
+        json=$(_cs_gh list --repo "$repo" \
+            --json name,gitStatus,lastUsedAt) || exit $?
+        cs_name=$(printf '%s' "$json" | jq -r --arg b "$branch" '
+            sort_by(.lastUsedAt) | reverse |
+            (map(select(.gitStatus.ref == $b)) + map(select(.gitStatus.ref != $b)))
+            | .[0].name // empty
+        ')
+        [[ -z "$cs_name" ]] && { echo "No codespace to tag for $repo" >&2; exit 1; }
+    fi
+
+    local display="${branch}@${_HOSTNAME}"
+    gh codespace edit -c "$cs_name" --display-name "$display"
+    echo "Tagged $cs_name → $display"
+}
+
 cmd_blog() {
     local BLOG_BARE="$HOME/projects/bare/bits-and-atoms.git"
     local BLOG_DRAFTS="$HOME/projects/worktree/bits-and-atoms/drafts"
@@ -3099,7 +3614,7 @@ POSTEOF
     esac
 }
 
-cmd_learn() {
+cmd_learn_blog() {
     local LEARN_DIR="$HOME/projects/worktree/personal-notes/learning"
     local subcmd="${1:-list}"
     shift 2>/dev/null || true
@@ -3107,7 +3622,7 @@ cmd_learn() {
     case "$subcmd" in
         new|n)
             local topic="$1"
-            [[ -z "$topic" ]] && { echo "Usage: bn learn new <topic-name>" >&2; return 1; }
+            [[ -z "$topic" ]] && { echo "Usage: bn learn-blog new <topic-name>" >&2; return 1; }
             local note_file="$LEARN_DIR/${topic}.md"
             [[ -f "$note_file" ]] && { echo "Topic already exists: $note_file" >&2; return 1; }
             local date=$(date +%Y-%m-%d)
@@ -3159,16 +3674,126 @@ LEARNEOF
             ;;
         open|o)
             local topic="$1"
-            [[ -z "$topic" ]] && { echo "Usage: bn learn open <topic>" >&2; return 1; }
+            [[ -z "$topic" ]] && { echo "Usage: bn learn-blog open <topic>" >&2; return 1; }
             local note_file="$LEARN_DIR/${topic}.md"
             [[ ! -f "$note_file" ]] && { echo "Topic not found: $topic" >&2; return 1; }
             ${EDITOR:-nvim} "$note_file"
             ;;
         *)
-            echo "Usage: bn learn <list|new|open>" >&2
+            echo "Usage: bn learn-blog <list|new|open>" >&2
             return 1
             ;;
     esac
+}
+
+# Per-repo learning notes — small topic .md files in <repo>/main/.
+# Reserved files (Details.md, note.md, achievements.md, *.bak, *.yaml) are
+# hidden from listings.
+cmd_learn() {
+    require_git_context
+    local main_dir="$NOTES_DIR/$NOTE_REPO/main"
+    local subcmd="${1:-list}"
+    shift 2>/dev/null || true
+
+    _learn_reserved() {
+        case "${1:l}" in
+            details.md|note.md|achievements.md|notes.md) return 0 ;;
+            *.bak|*.yaml) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+
+    case "$subcmd" in
+        list|l|ls)
+            [[ -d "$main_dir" ]] || { echo "(no learning notes for $NOTE_REPO)"; return; }
+            local found=0
+            for f in "$main_dir"/*.md(N); do
+                _learn_reserved "${f:t}" && continue
+                printf "  %s\n" "${f:t:r}"
+                found=1
+            done
+            (( found )) || echo "(no learning notes for $NOTE_REPO)"
+            ;;
+        new|n)
+            local topic="$1"
+            [[ -z "$topic" ]] && { echo "Usage: bn learn new <topic>" >&2; return 1; }
+            mkdir -p "$main_dir"
+            local note_file="$main_dir/${topic}.md"
+            if [[ -f "$note_file" ]]; then
+                echo "Already exists: $note_file" >&2
+                ${EDITOR:-nvim} "$note_file"
+                return
+            fi
+            local title="${(C)${topic//-/ }}"
+            local date=$(date +%Y-%m-%d)
+            cat > "$note_file" <<LEARNEOF
+# $title
+
+> Repo: $NOTE_REPO · Created: $date
+
+## Context
+
+
+
+## Notes
+
+-
+
+## References
+
+-
+LEARNEOF
+            echo "Created: $note_file"
+            ${EDITOR:-nvim} "$note_file"
+            ;;
+        open|o|edit|e)
+            local topic="$1"
+            [[ -z "$topic" ]] && { echo "Usage: bn learn open <topic>" >&2; return 1; }
+            local note_file="$main_dir/${topic}.md"
+            [[ ! -f "$note_file" ]] && { echo "Topic not found: $topic (in $main_dir)" >&2; return 1; }
+            ${EDITOR:-nvim} "$note_file"
+            ;;
+        cat|c)
+            local topic="$1"
+            [[ -z "$topic" ]] && { echo "Usage: bn learn cat <topic>" >&2; return 1; }
+            local note_file="$main_dir/${topic}.md"
+            [[ ! -f "$note_file" ]] && { echo "Topic not found: $topic (in $main_dir)" >&2; return 1; }
+            cat "$note_file"
+            ;;
+        path|p)
+            echo "$main_dir"
+            ;;
+        *)
+            echo "Usage: bn learn [list|new <topic>|open <topic>|cat <topic>|path]" >&2
+            return 1
+            ;;
+    esac
+}
+
+# Auto-commit + push tracked changes. Designed to be safe under cron.
+# - Stages tracked changes only (`git add -u`)
+# - Skips silently if nothing to commit
+# - Pushes only if upstream is configured
+cmd_autopush() {
+    require_git_context
+    local msg="$*"
+    [[ -z "$msg" ]] && msg="wip: auto-commit $(date +'%Y-%m-%d %H:%M:%S')"
+
+    git add -u
+    if git diff --cached --quiet; then
+        echo "No tracked changes to commit."
+        return
+    fi
+
+    git commit -m "$msg" || { echo "Commit failed" >&2; exit 1; }
+
+    local upstream
+    upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || upstream=""
+    if [[ -n "$upstream" ]]; then
+        git push
+    else
+        echo "No upstream — committed locally, skipping push."
+    fi
 }
 
 # --- Cron Jobs ---
@@ -3215,8 +3840,14 @@ _cron_list() {
 _cron_new() {
     require_git_context
     require_yq
-    local name="$1"
-    [[ -z "$name" ]] && { echo "Usage: bn cron new <name>" >&2; exit 1; }
+    local name="" template=""
+    while [[ -n "${1:-}" ]]; do
+        case "$1" in
+            --template) template="$2"; shift 2 ;;
+            *)          [[ -z "$name" ]] && name="$1"; shift ;;
+        esac
+    done
+    [[ -z "$name" ]] && { echo "Usage: bn cron new <name> [--template autopush]" >&2; exit 1; }
     local crons_dir=$(_crons_dir "$NOTE_REPO")
     mkdir -p "$crons_dir"
     local cron_file="$crons_dir/${name}.yaml"
@@ -3226,7 +3857,20 @@ _cron_new() {
     fi
     local worktree
     worktree=$(pwd)
-    cat > "$cron_file" << EOF
+
+    case "$template" in
+        autopush)
+            cat > "$cron_file" << EOF
+name: $name
+schedule: "*/30 * * * *"
+worktree: $worktree
+enabled: true
+steps:
+  - bn autopush
+EOF
+            ;;
+        ""|default)
+            cat > "$cron_file" << EOF
 name: $name
 schedule: "0 9 * * *"
 worktree: $worktree
@@ -3237,6 +3881,12 @@ steps:
   - bn build
   - bn run
 EOF
+            ;;
+        *)
+            echo "Unknown template: $template (known: autopush)" >&2
+            exit 1
+            ;;
+    esac
     echo "Created: $cron_file"
     ${EDITOR:-nvim} "$cron_file"
 }
@@ -3372,6 +4022,8 @@ Commands:
   script, sc [new|edit|list]      Manage repo scripts
   cron list                       List cron jobs for current repo
   cron new <name>                 Create a cron job (opens editor)
+  cron new <name> --template autopush  Pre-fill cron with `bn autopush` step (default: */30 min)
+  autopush, ap [msg]              Stage tracked changes, commit, push if upstream set
   cron edit <name>                Edit a cron job
   cron run <name> [--repo <r>]    Run a cron job's steps immediately
   cron setup                      Install enabled crons into system crontab
@@ -3385,6 +4037,7 @@ Commands:
   clean [--all]                   Remove empty placeholder todos
   reset [--force]                 Remove all non-main worktrees + close notes
   worktrees, w                    All active worktrees with full todo lists
+  rename, mv <new>                Rename current branch + note folder (repushes if tracked)
   pr [url]                        Link PR url, or open linked PR in browser
   pr --copy                       Copy PR url to clipboard
   pr --show                       Print PR url without opening
@@ -3401,6 +4054,19 @@ Commands:
   achieve --path                  Print path to achievements.md
   global, g [--cat|--edit|--path] Repo-level global note (not branch-specific)
   global add <section> <text>     Add to repo global note
+  tool, tools list                List global dev tools (personal-notes/tools/)
+  tool new <name>                 Scaffold a new tool folder (README + compose stub)
+  tool path [name]                Print tools dir, or a specific tool's path
+  tool open <name>                Open tool's compose file in $EDITOR
+  tool up|down|restart <name>     docker compose lifecycle (run from anywhere)
+  tool logs <name>                Follow compose logs
+  tool ps <name>                  Show running services
+  tool up-all|down-all            Start/stop every tool via top-level compose
+  tool logs-all|ps-all            Aggregate logs/status across all tools
+  tool doctor                     Check docker availability + paths
+  cs                              Pick a codespace for current branch (timeout → latest)
+  cs list                         List codespaces for current repo
+  cs tag [name]                   Tag codespace displayName with <branch>@<host>
 
 Scripts:
   Scripts live in <notes>/<repo>/main/scripts/ and run with cwd = repo dir.
@@ -3419,10 +4085,17 @@ Blog (bits-and-atoms):
   blog publish <slug>     Mark published, commit, push drafts, open draft PR to main
   blog open <slug>        Open a post in $EDITOR
 
-Learning:
-  learn list              List learning notes
-  learn new <topic>       Create new learning note and open in $EDITOR
-  learn open <topic>      Open a learning note in $EDITOR
+Repo learning notes (per-repo, kept in <repo>/main/):
+  learn                   List repo learning notes
+  learn new <topic>       Create new note in <repo>/main/<topic>.md
+  learn open <topic>      Open repo learning note in $EDITOR
+  learn cat <topic>       Print contents of repo learning note
+  learn path              Print <repo>/main/ path
+
+Blog learning notes (personal-notes/learning worktree):
+  learn-blog list         List blog learning notes
+  learn-blog new <topic>  Create new blog learning note
+  learn-blog open <topic> Open blog learning note in $EDITOR
 
 Sections: todo, blocker, decision, research, collab, ask
 HELPEOF
@@ -3704,15 +4377,20 @@ case "${1:-}" in
     reset)              shift; cmd_reset "$@" ;;
     worktrees|w)        cmd_worktrees ;;
     pr)                 shift; cmd_pr "$@" ;;
+    rename|mv)          shift; cmd_rename "$@" ;;
+    autopush|ap)        shift; cmd_autopush "$@" ;;
     link|wi)            shift; cmd_link "$@" ;;
     review|rv)          shift; cmd_review "$@" ;;
     diff|d)             cmd_diff ;;
     achieve|ac)         shift; cmd_achieve "$@" ;;
     global|g)           shift; cmd_global "$@" ;;
+    tool|tools)         shift; cmd_tools "$@" ;;
     setup)              cmd_setup ;;
     details)            shift; cmd_details "$@" ;;
+    cs)                 shift; cmd_cs "$@" ;;
     blog)               shift; cmd_blog "$@" ;;
     learn)              shift; cmd_learn "$@" ;;
+    learn-blog|lb)      shift; cmd_learn_blog "$@" ;;
     cron)               shift; cmd_cron "$@" ;;
     -h|--help|help)     cmd_help ;;
     "")                 cmd_default ;;
