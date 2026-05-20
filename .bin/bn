@@ -20,7 +20,9 @@
 #   bn refresh-all|ra               # Refresh all main worktrees
 #   bn main|m                       # Print main note dir + list scripts
 #   bn build|b [name]               # Run a script (default: build)
-#   bn run                          # Run 'run' script in background; copies Details.md link
+#   bn run [start|restart]          # Run 'run' script in background; copies Details.md link
+#   bn run logs [--tail N]          # Follow run.log (or print last N lines and exit)
+#   bn run status                   # Show whether run script is alive + PID + uptime
 #   bn cron [list|new|edit|run|setup|teardown|remove]  # Manage branch cron jobs
 #   bn script|sc [new|edit|list]    # Manage repo scripts
 #   bn files|f [name|new|edit]       # Investigation file management
@@ -2050,6 +2052,19 @@ cmd_build() {
 }
 
 cmd_run() {
+    local subcmd="${1:-start}"
+    case "$subcmd" in
+        start|restart)   cmd_run_start ;;
+        logs)            shift; cmd_run_logs "$@" ;;
+        status)          cmd_run_status ;;
+        *)
+            echo "Usage: bn run [start|restart|logs [--tail N]|status]" >&2
+            return 1
+            ;;
+    esac
+}
+
+cmd_run_start() {
     require_git_context
     ensure_scripts_dir "$NOTE_REPO"
 
@@ -2101,6 +2116,64 @@ cmd_run() {
     local pid=$!
     echo $pid > "$pid_file"
     echo "PID: $pid"
+}
+
+cmd_run_logs() {
+    require_git_context
+    local log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
+    if [[ ! -f "$log_file" ]]; then
+        echo "No log yet at: $log_file" >&2
+        echo "Start the run script first with: bn run" >&2
+        return 1
+    fi
+    if [[ "${1:-}" == "--tail" ]]; then
+        local n="${2:-50}"
+        tail -n "$n" "$log_file"
+    else
+        tail -n 50 -f "$log_file"
+    fi
+}
+
+# Compute uptime (seconds) for a PID using /proc; empty if unavailable.
+_bn_run_uptime_seconds() {
+    local pid="$1"
+    [[ -r "/proc/$pid/stat" && -r "/proc/stat" ]] || return 1
+    local btime clk_tck jiffies start_epoch now
+    btime=$(awk '/^btime / {print $2; exit}' /proc/stat)
+    clk_tck=$(getconf CLK_TCK 2>/dev/null || echo 100)
+    jiffies=$(awk '{print $22}' "/proc/$pid/stat")
+    [[ -z "$btime" || -z "$jiffies" ]] && return 1
+    start_epoch=$(( btime + jiffies / clk_tck ))
+    now=$(date +%s)
+    echo $(( now - start_epoch ))
+}
+
+cmd_run_status() {
+    require_git_context
+    local log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
+    local pid_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.pid"
+
+    if [[ ! -f "$pid_file" ]]; then
+        echo "Not running (no pid file)"
+        [[ -f "$log_file" ]] && echo "Last log: $log_file"
+        return 0
+    fi
+
+    local pid
+    pid=$(cat "$pid_file")
+    if kill -0 "$pid" 2>/dev/null; then
+        local secs uptime_str
+        if secs=$(_bn_run_uptime_seconds "$pid"); then
+            printf -v uptime_str '%02d:%02d:%02d' \
+                $((secs/3600)) $(((secs%3600)/60)) $((secs%60))
+            echo "Running (PID $pid) — uptime $uptime_str"
+        else
+            echo "Running (PID $pid)"
+        fi
+    else
+        echo "Stopped (stale pid file: $pid)"
+    fi
+    [[ -f "$log_file" ]] && echo "Log: $log_file"
 }
 
 # Script management: new, edit, list
@@ -4018,7 +4091,9 @@ Commands:
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
   build, b [name]                 Run a script (default: build)
-  run                             Run 'run' script in background; copies Details.md link to clipboard
+  run [start|restart]             Run 'run' script in background; copies Details.md link to clipboard
+  run logs [--tail N]             Follow run.log (or print last N lines and exit)
+  run status                      Show whether run script is alive + PID + uptime
   script, sc [new|edit|list]      Manage repo scripts
   cron list                       List cron jobs for current repo
   cron new <name>                 Create a cron job (opens editor)
@@ -4368,7 +4443,7 @@ case "${1:-}" in
     search)             shift; cmd_search "$@" ;;
     stale)              shift; cmd_stale "$@" ;;
     build|b)            shift; cmd_build "$@" ;;
-    run)               cmd_run ;;
+    run)               shift; cmd_run "$@" ;;
     test|t)             cmd_build test ;;
     script|sc)          shift; cmd_script "$@" ;;
     archive)            shift; cmd_archive "$@" ;;
