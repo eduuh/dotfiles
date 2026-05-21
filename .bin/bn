@@ -19,7 +19,9 @@
 #   bn refresh|rf                    # Fetch, pull, build current branch
 #   bn refresh-all|ra               # Refresh all main worktrees
 #   bn main|m                       # Print main note dir + list scripts
-#   bn build|b [name]               # Run a script (default: build)
+#   bn build|b [name|worktree]      # Run a script (default: build) — or, if
+#                                   # arg is a sibling worktree, fetch + ff-pull
+#                                   # that worktree and build it there.
 #   bn run [start|restart]          # Run 'run' script in background; copies Details.md link
 #   bn run logs [--tail N]          # Follow run.log (or print last N lines and exit)
 #   bn run status                   # Show whether run script is alive + PID + uptime
@@ -2030,20 +2032,42 @@ cmd_main() {
 
 # Run a named script (default: build).
 cmd_build() {
-    local name="${1:-build}"
     require_git_context
     ensure_scripts_dir "$NOTE_REPO"
 
+    local arg="${1:-}"
+
+    # Worktree mode: `bn build <branch>` resolves to a sibling worktree of the
+    # current one, then does fetch + ff-only pull before running the build
+    # script there. Lets cron jobs (e.g. "build latest main daily") stay
+    # one-liners. Sibling = same parent dir; works for both project layouts:
+    #   1. ~/projects/worktree/<repo>/<branch>   (BARE_DIR convention)
+    #   2. ~/projects/<repo>/<branch>            (nvim's bare+worktree layout)
+    if [[ -n "$arg" ]]; then
+        local cwd_top
+        cwd_top=$(git rev-parse --show-toplevel 2>/dev/null)
+        local maybe_wt="${cwd_top:h}/$arg"
+        if [[ -n "$cwd_top" && -d "$maybe_wt" ]]; then
+            echo "Fetching origin for $NOTE_REPO..."
+            git -C "$maybe_wt" fetch origin || return $?
+            echo "Pulling $arg (ff-only)..."
+            git -C "$maybe_wt" pull --ff-only || return $?
+            run_script "$NOTE_REPO" "build" "$maybe_wt"
+            return $?
+        fi
+    fi
+
+    # Script mode: treat $arg as a script name (defaults to "build"). Same as
+    # before. Allows `bn test` (dispatched as `cmd_build test`) to keep working.
+    local name="${arg:-build}"
     local script
     resolve_script "$NOTE_REPO" "$name"; script=$REPLY
     if [[ ! -f "$script" ]]; then
-        echo "No script '$name' for $NOTE_REPO" >&2
+        echo "No script '$name' for $NOTE_REPO (and '$name' is not a worktree of $NOTE_REPO)" >&2
         echo "Create one with: bn script new $name" >&2
         exit 1
     fi
-    if [[ ! -x "$script" ]]; then
-        chmod +x "$script"
-    fi
+    [[ ! -x "$script" ]] && chmod +x "$script"
 
     local work_dir
     work_dir=$(pwd)
@@ -3920,7 +3944,7 @@ _cron_new() {
             *)          [[ -z "$name" ]] && name="$1"; shift ;;
         esac
     done
-    [[ -z "$name" ]] && { echo "Usage: bn cron new <name> [--template autopush]" >&2; exit 1; }
+    [[ -z "$name" ]] && { echo "Usage: bn cron new <name> [--template autopush|build-main]" >&2; exit 1; }
     local crons_dir=$(_crons_dir "$NOTE_REPO")
     mkdir -p "$crons_dir"
     local cron_file="$crons_dir/${name}.yaml"
@@ -3942,6 +3966,17 @@ steps:
   - bn autopush
 EOF
             ;;
+        build-main)
+            local main_wt="$WORKTREE_DIR/$NOTE_REPO/main"
+            cat > "$cron_file" << EOF
+name: $name
+schedule: "10 13 * * *"
+worktree: $main_wt
+enabled: true
+steps:
+  - bn build main
+EOF
+            ;;
         ""|default)
             cat > "$cron_file" << EOF
 name: $name
@@ -3956,7 +3991,7 @@ steps:
 EOF
             ;;
         *)
-            echo "Unknown template: $template (known: autopush)" >&2
+            echo "Unknown template: $template (known: autopush, build-main)" >&2
             exit 1
             ;;
     esac
@@ -3981,11 +4016,12 @@ _cron_edit() {
 }
 
 _cron_run() {
-    local name="" repo=""
+    local name="" repo="" no_tmux=0
     while [[ -n "${1:-}" ]]; do
         case "$1" in
-            --repo) repo="$2"; shift 2 ;;
-            *)      [[ -z "$name" ]] && name="$1"; shift ;;
+            --repo)    repo="$2"; shift 2 ;;
+            --no-tmux) no_tmux=1; shift ;;
+            *)         [[ -z "$name" ]] && name="$1"; shift ;;
         esac
     done
     if [[ -n "$repo" ]]; then
@@ -3993,7 +4029,7 @@ _cron_run() {
     else
         require_git_context
     fi
-    [[ -z "$name" ]] && { echo "Usage: bn cron run <name> [--repo <repo>]" >&2; exit 1; }
+    [[ -z "$name" ]] && { echo "Usage: bn cron run <name> [--repo <repo>] [--no-tmux]" >&2; exit 1; }
     require_yq
     local crons_dir=$(_crons_dir "$NOTE_REPO")
     local cron_file="$crons_dir/${name}.yaml"
@@ -4005,6 +4041,20 @@ _cron_run() {
     [[ "$enabled" == "false" ]] && { echo "Cron '$name' is disabled" >&2; exit 1; }
     [[ -z "$worktree" || ! -d "$worktree" ]] && { echo "Worktree not found: $worktree" >&2; exit 1; }
 
+    # If --no-tmux requested OR tmux isn't available, run inline (the old path).
+    # Otherwise dispatch to a tmux window so the build is visible — cron runs
+    # silently otherwise, and that's the whole point of this redirection.
+    if (( no_tmux )) || ! command -v tmux >/dev/null 2>&1; then
+        _cron_run_inline "$name" "$worktree" "$cron_file"
+    else
+        _cron_run_in_tmux "$name" "$worktree" "$cron_file"
+    fi
+}
+
+# Inline execution: same as the original behavior. Output goes wherever the
+# caller's stdio is pointing (cron's mail/log when fired from crontab).
+_cron_run_inline() {
+    local name="$1" worktree="$2" cron_file="$3"
     echo "Running cron '$name' in $worktree..."
     local step_count i step
     step_count=$(yq '.steps | length' "$cron_file")
@@ -4014,6 +4064,69 @@ _cron_run() {
         (cd "$worktree" && eval "$step") || { echo "  ✗ Failed: $step" >&2; exit 1; }
     done
     echo "  ✓ Done"
+}
+
+# Tmux execution: writes the steps into a temp script and runs that script in
+# a fresh window of the repo's tmux session. Creates the session detached if
+# it doesn't exist, so the cron job always lands somewhere visible. Returns
+# immediately after dispatching — the window keeps the shell open after the
+# script exits so you can scroll back through the output.
+_cron_run_in_tmux() {
+    local name="$1" worktree="$2" cron_file="$3"
+    # Use the case-preserved repo dir name from the worktree path, since that
+    # matches what `tat` uses when it creates per-repo sessions ($NOTE_REPO is
+    # lowercased and would miss "1JS" etc.).
+    #
+    # Layout matters:
+    #   ~/projects/worktree/<repo>/<branch>  → repo = ${worktree:h:t}
+    #   ~/projects/<repo>/<branch>           → repo = ${worktree:h:t}
+    #   ~/projects/<repo>                    → repo = ${worktree:t}   (in-place clone)
+    local session
+    if [[ "${worktree:h:t}" == "projects" || "${worktree:h}" == "$HOME" ]]; then
+        session="${worktree:t}"
+    else
+        session="${worktree:h:t}"
+    fi
+
+    # Build a runner script that mirrors the inline behavior but inside the
+    # tmux window. Quoted heredoc keeps the script literal — no $expansion
+    # leaks across the boundary.
+    local script_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
+    [[ -d "$script_dir" ]] || script_dir="/tmp"
+    local script="$script_dir/cron-run-$name.sh"
+    local log="$script_dir/cron-run-$name.log"
+
+    {
+        echo "#!/usr/bin/env zsh"
+        echo "# Auto-generated by 'bn cron run $name' — runs the steps from"
+        echo "# $cron_file and tees output to $log."
+        echo "exec > >(tee -a '$log') 2>&1"
+        echo "echo \"=== \$(date '+%Y-%m-%d %H:%M:%S')  cron '$name' starting in $worktree ===\""
+        echo "cd '$worktree' || exit 1"
+        local step_count i step
+        step_count=$(yq '.steps | length' "$cron_file")
+        for (( i = 0; i < step_count; i++ )); do
+            step=$(yq ".steps[$i]" "$cron_file")
+            printf 'printf "\\n→ %%s\\n" %q\n' "$step"
+            printf '%s || { echo "✗ failed: %s" >&2; exit 1; }\n' "$step" "$step"
+        done
+        echo "echo"
+        echo "echo \"=== done at \$(date '+%H:%M:%S'). Press enter to close, Ctrl-D to keep this shell. ===\""
+        echo "read || true"
+        echo "exec zsh -i"
+    } > "$script"
+    chmod +x "$script"
+
+    # Ensure a session exists (detached) so new-window has somewhere to land.
+    if ! tmux has-session -t "=$session" 2>/dev/null; then
+        tmux new-session -d -s "$session" -c "$worktree" -n "main"
+    fi
+
+    local win_name="cron:$name"
+    tmux new-window -t "$session" -n "$win_name" -c "$worktree" "zsh -i '$script'"
+    echo "Dispatched cron '$name' to tmux window '$session:$win_name'."
+    echo "Attach with: tmux attach -t $session"
+    echo "Log mirror:  $log"
 }
 
 _cron_setup() {
@@ -4090,14 +4203,16 @@ Commands:
   refresh, rf                     Fetch, pull, build current branch
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
-  build, b [name]                 Run a script (default: build)
+  build, b [name|worktree]        Run a script (default: build); if arg names a
+                                  sibling worktree, fetch + ff-pull + build there
   run [start|restart]             Run 'run' script in background; copies Details.md link to clipboard
   run logs [--tail N]             Follow run.log (or print last N lines and exit)
   run status                      Show whether run script is alive + PID + uptime
   script, sc [new|edit|list]      Manage repo scripts
   cron list                       List cron jobs for current repo
   cron new <name>                 Create a cron job (opens editor)
-  cron new <name> --template autopush  Pre-fill cron with `bn autopush` step (default: */30 min)
+  cron new <name> --template autopush     Pre-fill cron with `bn autopush` step (default: */30 min)
+  cron new <name> --template build-main   Pre-fill cron with `bn build main` step (default: 13:10 daily)
   autopush, ap [msg]              Stage tracked changes, commit, push if upstream set
   cron edit <name>                Edit a cron job
   cron run <name> [--repo <r>]    Run a cron job's steps immediately
