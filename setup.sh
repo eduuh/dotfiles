@@ -61,7 +61,6 @@ main() {
         install_starship
         install_pnpm
         install_talosctl
-        install_famtask_mcp
         setup_git_hooks
         change_shell_to_zsh
     fi
