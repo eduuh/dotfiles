@@ -305,6 +305,21 @@ clone_repos() {
     echo "All repository clones finished."
 
     setup_branch_notes_symlink
+    _clone_work_repos_from_personal_notes
+}
+
+# After personal repos are cloned, source a work-repo clone script from
+# personal-notes if it exists. The script defines a WORK_REPOS array (or
+# calls _clone_single_repo directly) so the list of work repos stays in
+# the private personal-notes repo instead of this public dotfiles repo.
+_clone_work_repos_from_personal_notes() {
+    local work_script="${WORK_CLONE_SCRIPT:-$HOME/projects/personal-notes/scripts/clone-work.sh}"
+    if [[ ! -f "$work_script" ]]; then
+        return 0
+    fi
+    echo "Sourcing work clone script: $work_script"
+    source "$work_script"
+    echo "Work repo clones finished."
 }
 
 ensure_tmux_version() {
