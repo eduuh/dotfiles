@@ -37,23 +37,30 @@ Auto-detects platform (macOS, Ubuntu, Arch, Codespaces) and installs packages, c
 After setup, optionally run:
 
 ```bash
-./setup-projects.sh   # Clone personal project repos (parallel)
-./setup-work.sh       # Clone work repos (needs private clone-work.sh — see below)
+./setup-projects.sh   # Clone project repos (parallel)
 ./setup-rust.sh       # Install Rust toolchain
 ```
 
-`setup-work.sh` sources `~/.config/dotfiles/clone-work.sh` if it exists.
-Keep the work repo list in a private repo (e.g. one under the
-`edwinmuraya-microsoft` org) and clone it to that path on each machine:
+`setup-projects.sh` clones the personal repo list, then sources
+`~/projects/personal-notes/scripts/clone-work.sh` if it exists. Put your
+work repo list there (personal-notes is private, so it stays out of this
+public repo). The script can use the helpers in `.bin/setup/common.sh`:
 
 ```bash
-mkdir -p ~/.config/dotfiles
-git clone git@github.com:edwinmuraya-microsoft/dotfiles-work.git ~/.config/dotfiles
-./setup-work.sh
+# ~/projects/personal-notes/scripts/clone-work.sh
+WORK_REPOS=(
+    "git@github.com:my-org/repo-a.git"
+    "git@github.com:my-org/repo-b.git"
+)
+for r in "${WORK_REPOS[@]}"; do
+    _clone_single_repo "$r" &
+done
+wait
 ```
 
-Work repos are cloned in the bare + worktree layout so `wt` and `tat`
-pick them up automatically.
+Work repos that aren't in `REGULAR_CLONE_REPOS` land in the bare +
+worktree layout (`~/projects/bare`, `~/projects/worktree`) so `wt` and
+`tat` pick them up automatically.
 
 On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
