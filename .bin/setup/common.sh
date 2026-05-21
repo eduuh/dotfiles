@@ -85,11 +85,11 @@ detect_distro() {
 }
 
 # Repos that get regular (non-bare) clones at ~/projects/reponame
-REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh)
+REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh notes)
 
 # Repos that should live on the Windows filesystem when on WSL
 # (cloned to $WINDOWS_PROJECTS_DIR/<name>, symlinked at ~/projects/<name>)
-WINDOWS_CLONE_REPOS=(personal-notes)
+WINDOWS_CLONE_REPOS=(personal-notes notes)
 
 _is_regular_repo() {
     local name="$1"
@@ -245,12 +245,12 @@ _setup_one_branch_notes_repo() {
     ln -s "$target" "$link" && echo "[$name] Symlinked $link → $target"
 }
 
-# Provision both branch-notes repos (personal + work). bn picks the right one
-# per repo via $HOME/.config/bn/work-repos (allowlist, gitignored).
+# Provision the personal branch-notes repo (work notes are cloned from the
+# `notes` remote by clone-work.sh). bn picks the right one per repo via
+# $HOME/.config/bn/work-repos (allowlist, gitignored).
 setup_branch_notes_symlink() {
     _is_wsl || return 0
     _setup_one_branch_notes_repo "branch-notes"
-    _setup_one_branch_notes_repo "branch-notes-work"
 }
 
 clone_repos() {

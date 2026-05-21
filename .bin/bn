@@ -57,7 +57,14 @@ fi
 # --- Config ---
 
 _NOTES_DIR_PERSONAL="$HOME/projects/branch-notes"
-_NOTES_DIR_WORK="$HOME/projects/branch-notes-work"
+# Work branch notes live under `bn/` inside the work notes repo. The repo
+# is named `notes` upstream; some machines still have the old
+# `branch-notes-work` dir name — fall back to it transitionally.
+if [[ -d "$HOME/projects/notes/bn" ]]; then
+    _NOTES_DIR_WORK="$HOME/projects/notes/bn"
+else
+    _NOTES_DIR_WORK="$HOME/projects/branch-notes-work/bn"
+fi
 
 # Work-repo allowlist is per-machine (sensitive) — kept out of public dotfiles.
 # Format: one repo name per line, '#' comments allowed.
