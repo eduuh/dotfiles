@@ -12,6 +12,20 @@
 
 ## Setup
 
+The setup script runs under zsh, so install it first if it's not already present:
+
+```bash
+# Debian/Ubuntu/WSL
+sudo apt-get update && sudo apt-get install -y zsh git
+
+# Arch
+sudo pacman -S --needed zsh git
+
+# macOS — already ships with zsh; install git via Xcode CLI tools or Homebrew
+```
+
+Then clone and run:
+
 ```bash
 git clone https://github.com/eduuh/dotfiles.git ~/projects/dotfiles
 cd ~/projects/dotfiles && ./setup.sh
