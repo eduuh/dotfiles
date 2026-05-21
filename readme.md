@@ -25,6 +25,13 @@ git clone https://github.com/eduuh/dotfiles.git ~/projects/dotfiles
 cd ~/projects/dotfiles && ./setup.sh
 ```
 
+Python setup (venv + pynvim/requests, and on Ubuntu the `python3.10` /
+`python3.10-venv` apt install) is opt-in. Enable it when you need it:
+
+```bash
+SETUP_PYTHON=1 ./setup.sh
+```
+
 Auto-detects platform (macOS, Ubuntu, Arch, Codespaces) and installs packages, configs, and symlinks via [GNU Stow](https://www.gnu.org/software/stow/).
 
 After setup, optionally run:

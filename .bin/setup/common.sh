@@ -613,6 +613,11 @@ setup_python() {
         return 0
     fi
 
+    if [[ "${SETUP_PYTHON:-0}" != "1" ]]; then
+        echo "Skipping Python setup (set SETUP_PYTHON=1 to enable)."
+        return 0
+    fi
+
     echo "Setting up Python environment..."
     local venv_dir="$HOME/.local/state/python3"
     if [ -d "$venv_dir" ] && ! "$venv_dir/bin/python3" -m pip --version &> /dev/null; then
