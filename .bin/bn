@@ -25,6 +25,7 @@
 #   bn run [start|restart]          # Run 'run' script in background; copies Details.md link
 #   bn run logs [--tail N]          # Follow run.log (or print last N lines and exit)
 #   bn run status                   # Show whether run script is alive + PID + uptime
+#   bn kill <port>                  # SIGTERM (then SIGKILL) processes on a TCP port
 #   bn cron [list|new|edit|run|setup|teardown|remove]  # Manage branch cron jobs
 #   bn script|sc [new|edit|list]    # Manage repo scripts
 #   bn files|f [name|new|edit]       # Investigation file management
@@ -3893,6 +3894,55 @@ cmd_autopush() {
     fi
 }
 
+# Kill whatever is listening on a TCP port. Handy when a `bn run` background
+# server outlives its tracker, or a stuck dev server squats on the port.
+cmd_kill() {
+    local port="$1"
+    [[ -z "$port" ]] && { echo "Usage: bn kill <port>" >&2; exit 1; }
+    if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+        echo "Port must be numeric: $port" >&2; exit 1
+    fi
+
+    if ! command -v lsof >/dev/null 2>&1; then
+        echo "lsof not found — install it to use bn kill" >&2; exit 1
+    fi
+
+    local -a pids
+    pids=( ${(f)"$(lsof -ti TCP:"$port" -sTCP:LISTEN 2>/dev/null)"} )
+    if (( ${#pids[@]} == 0 )); then
+        echo "No process listening on :$port."
+        return 0
+    fi
+
+    echo "Killing ${#pids[@]} process(es) on :$port:"
+    local pid
+    for pid in "${pids[@]}"; do
+        local cmd
+        cmd=$(ps -p "$pid" -o args= 2>/dev/null | cut -c1-80)
+        printf "  %-7s %s\n" "$pid" "$cmd"
+    done
+
+    kill "${pids[@]}" 2>/dev/null
+
+    # Give them up to 2s to exit gracefully, then SIGKILL the survivors.
+    local i survivor
+    for i in 1 2 3 4; do
+        sleep 0.5
+        local -a still
+        still=()
+        for pid in "${pids[@]}"; do
+            kill -0 "$pid" 2>/dev/null && still+=("$pid")
+        done
+        (( ${#still[@]} == 0 )) && break
+        pids=("${still[@]}")
+    done
+    if (( ${#pids[@]} > 0 )); then
+        echo "  (forcing SIGKILL on ${pids[*]})"
+        kill -9 "${pids[@]}" 2>/dev/null
+    fi
+    echo "  ✓ Done."
+}
+
 # --- Cron Jobs ---
 
 _crons_dir() { echo "$(notes_dir_for "$1")/$1/main/crons"; }
@@ -4214,6 +4264,7 @@ Commands:
   cron new <name> --template autopush     Pre-fill cron with `bn autopush` step (default: */30 min)
   cron new <name> --template build-main   Pre-fill cron with `bn build main` step (default: 13:10 daily)
   autopush, ap [msg]              Stage tracked changes, commit, push if upstream set
+  kill <port>                     SIGTERM (then SIGKILL) anything listening on a TCP port
   cron edit <name>                Edit a cron job
   cron run <name> [--repo <r>]    Run a cron job's steps immediately
   cron setup                      Install enabled crons into system crontab
@@ -4569,6 +4620,7 @@ case "${1:-}" in
     pr)                 shift; cmd_pr "$@" ;;
     rename|mv)          shift; cmd_rename "$@" ;;
     autopush|ap)        shift; cmd_autopush "$@" ;;
+    kill)               shift; cmd_kill "$@" ;;
     link|wi)            shift; cmd_link "$@" ;;
     review|rv)          shift; cmd_review "$@" ;;
     diff|d)             cmd_diff ;;
