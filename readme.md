@@ -37,9 +37,23 @@ Auto-detects platform (macOS, Ubuntu, Arch, Codespaces) and installs packages, c
 After setup, optionally run:
 
 ```bash
-./setup-projects.sh   # Clone project repos (parallel)
+./setup-projects.sh   # Clone personal project repos (parallel)
+./setup-work.sh       # Clone work repos (needs private clone-work.sh — see below)
 ./setup-rust.sh       # Install Rust toolchain
 ```
+
+`setup-work.sh` sources `~/.config/dotfiles/clone-work.sh` if it exists.
+Keep the work repo list in a private repo (e.g. one under the
+`edwinmuraya-microsoft` org) and clone it to that path on each machine:
+
+```bash
+mkdir -p ~/.config/dotfiles
+git clone git@github.com:edwinmuraya-microsoft/dotfiles-work.git ~/.config/dotfiles
+./setup-work.sh
+```
+
+Work repos are cloned in the bare + worktree layout so `wt` and `tat`
+pick them up automatically.
 
 On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
