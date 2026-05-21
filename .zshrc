@@ -42,7 +42,10 @@ export NVM_DIR="$HOME/.nvm"
 [ -f "$HOME/.zsh/ws.zsh" ] && source "$HOME/.zsh/ws.zsh"
 
 # pnpm
-export PNPM_HOME="/Users/edd/Library/pnpm"
+case "$(uname -s)" in
+  Darwin) export PNPM_HOME="$HOME/Library/pnpm" ;;
+  *)      export PNPM_HOME="$HOME/.local/share/pnpm" ;;
+esac
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;

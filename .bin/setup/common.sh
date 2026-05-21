@@ -609,16 +609,21 @@ setup_python() {
     fi
 
     echo "Setting up Python environment..."
-    if [ -d "$HOME/.local/state/python3" ]; then
+    local venv_dir="$HOME/.local/state/python3"
+    if [ -d "$venv_dir" ] && ! "$venv_dir/bin/python3" -m pip --version &> /dev/null; then
+        echo "Existing venv is missing pip — recreating."
+        rm -rf "$venv_dir"
+    fi
+    if [ -d "$venv_dir" ]; then
         echo "Python virtual environment already exists."
-        source ~/.local/state/python3/bin/activate
+        source "$venv_dir/bin/activate"
     else
         echo "Creating Python virtual environment..."
-        if ! python3 -m venv ~/.local/state/python3; then
+        if ! python3 -m venv "$venv_dir"; then
             track_failure "python" "Failed to create Python virtual environment"
             return 0
         fi
-        source ~/.local/state/python3/bin/activate
+        source "$venv_dir/bin/activate"
     fi
 
     if ! pip install --upgrade pip pynvim requests; then
