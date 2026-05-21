@@ -572,9 +572,14 @@ install_pnpm() {
     fi
 
     echo "Installing PNPM..."
+    # Override any inherited PNPM_HOME (e.g. a macOS path leaking into a Linux
+    # shell from a shared .zshrc) so the installer writes to the correct
+    # per-OS location.
+    case "$(uname -s)" in
+        Darwin) export PNPM_HOME="$HOME/Library/pnpm" ;;
+        *)      export PNPM_HOME="$HOME/.local/share/pnpm" ;;
+    esac
     if curl -fsSL https://get.pnpm.io/install.sh | sh -s -- -y; then
-        # Source PNPM environment for the current session
-        export PNPM_HOME="$HOME/.local/share/pnpm"
         case ":$PATH:" in
             *":$PNPM_HOME:"*) ;;
             *) export PATH="$PNPM_HOME:$PATH" ;;
