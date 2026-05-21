@@ -47,22 +47,26 @@ install_ubuntu_specific_packages() {
         fi
     done
 
-    if ! grep -q "deadsnakes/ppa" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
-        echo "Adding deadsnakes PPA for Python versions..."
-        if ! sudo add-apt-repository ppa:deadsnakes/ppa -y; then
-            track_failure "apt" "Failed to add deadsnakes PPA"
+    if [[ "${SETUP_PYTHON:-0}" == "1" ]]; then
+        if ! grep -q "deadsnakes/ppa" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+            echo "Adding deadsnakes PPA for Python versions..."
+            if ! sudo add-apt-repository ppa:deadsnakes/ppa -y; then
+                track_failure "apt" "Failed to add deadsnakes PPA"
+            fi
+        else
+            echo "deadsnakes PPA already added."
         fi
-    else
-        echo "deadsnakes PPA already added."
-    fi
 
-    if ! dpkg -s python3.10 python3.10-venv &> /dev/null; then
-        echo "Installing Python 3.10 + venv..."
-        if ! sudo apt-get install -y python3.10 python3.10-venv; then
-            track_failure "python" "Failed to install Python 3.10"
+        if ! dpkg -s python3.10 python3.10-venv &> /dev/null; then
+            echo "Installing Python 3.10 + venv..."
+            if ! sudo apt-get install -y python3.10 python3.10-venv; then
+                track_failure "python" "Failed to install Python 3.10"
+            fi
+        else
+            echo "Python 3.10 (+ venv) is already installed."
         fi
     else
-        echo "Python 3.10 (+ venv) is already installed."
+        echo "Skipping Python 3.10 install (set SETUP_PYTHON=1 to enable)."
     fi
 }
 
