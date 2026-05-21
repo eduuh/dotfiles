@@ -56,13 +56,13 @@ install_ubuntu_specific_packages() {
         echo "deadsnakes PPA already added."
     fi
 
-    if ! dpkg -s python3.10 &> /dev/null; then
-        echo "Installing Python 3.10..."
+    if ! dpkg -s python3.10 python3.10-venv &> /dev/null; then
+        echo "Installing Python 3.10 + venv..."
         if ! sudo apt-get install -y python3.10 python3.10-venv; then
             track_failure "python" "Failed to install Python 3.10"
         fi
     else
-        echo "Python 3.10 is already installed."
+        echo "Python 3.10 (+ venv) is already installed."
     fi
 }
 
