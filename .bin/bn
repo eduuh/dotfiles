@@ -19,7 +19,9 @@
 #   bn refresh|rf                    # Fetch, pull, build current branch
 #   bn refresh-all|ra               # Refresh all main worktrees
 #   bn main|m                       # Print main note dir + list scripts
-#   bn build|b [name]               # Run a script (default: build)
+#   bn build|b [name|worktree]      # Run a script (default: build) — or, if
+#                                   # arg is a sibling worktree, fetch + ff-pull
+#                                   # that worktree and build it there.
 #   bn run [start|restart]          # Run 'run' script in background; copies Details.md link
 #   bn run logs [--tail N]          # Follow run.log (or print last N lines and exit)
 #   bn run status                   # Show whether run script is alive + PID + uptime
@@ -2030,20 +2032,42 @@ cmd_main() {
 
 # Run a named script (default: build).
 cmd_build() {
-    local name="${1:-build}"
     require_git_context
     ensure_scripts_dir "$NOTE_REPO"
 
+    local arg="${1:-}"
+
+    # Worktree mode: `bn build <branch>` resolves to a sibling worktree of the
+    # current one, then does fetch + ff-only pull before running the build
+    # script there. Lets cron jobs (e.g. "build latest main daily") stay
+    # one-liners. Sibling = same parent dir; works for both project layouts:
+    #   1. ~/projects/worktree/<repo>/<branch>   (BARE_DIR convention)
+    #   2. ~/projects/<repo>/<branch>            (nvim's bare+worktree layout)
+    if [[ -n "$arg" ]]; then
+        local cwd_top
+        cwd_top=$(git rev-parse --show-toplevel 2>/dev/null)
+        local maybe_wt="${cwd_top:h}/$arg"
+        if [[ -n "$cwd_top" && -d "$maybe_wt" ]]; then
+            echo "Fetching origin for $NOTE_REPO..."
+            git -C "$maybe_wt" fetch origin || return $?
+            echo "Pulling $arg (ff-only)..."
+            git -C "$maybe_wt" pull --ff-only || return $?
+            run_script "$NOTE_REPO" "build" "$maybe_wt"
+            return $?
+        fi
+    fi
+
+    # Script mode: treat $arg as a script name (defaults to "build"). Same as
+    # before. Allows `bn test` (dispatched as `cmd_build test`) to keep working.
+    local name="${arg:-build}"
     local script
     resolve_script "$NOTE_REPO" "$name"; script=$REPLY
     if [[ ! -f "$script" ]]; then
-        echo "No script '$name' for $NOTE_REPO" >&2
+        echo "No script '$name' for $NOTE_REPO (and '$name' is not a worktree of $NOTE_REPO)" >&2
         echo "Create one with: bn script new $name" >&2
         exit 1
     fi
-    if [[ ! -x "$script" ]]; then
-        chmod +x "$script"
-    fi
+    [[ ! -x "$script" ]] && chmod +x "$script"
 
     local work_dir
     work_dir=$(pwd)
@@ -3920,7 +3944,7 @@ _cron_new() {
             *)          [[ -z "$name" ]] && name="$1"; shift ;;
         esac
     done
-    [[ -z "$name" ]] && { echo "Usage: bn cron new <name> [--template autopush]" >&2; exit 1; }
+    [[ -z "$name" ]] && { echo "Usage: bn cron new <name> [--template autopush|build-main]" >&2; exit 1; }
     local crons_dir=$(_crons_dir "$NOTE_REPO")
     mkdir -p "$crons_dir"
     local cron_file="$crons_dir/${name}.yaml"
@@ -3942,6 +3966,17 @@ steps:
   - bn autopush
 EOF
             ;;
+        build-main)
+            local main_wt="$WORKTREE_DIR/$NOTE_REPO/main"
+            cat > "$cron_file" << EOF
+name: $name
+schedule: "10 13 * * *"
+worktree: $main_wt
+enabled: true
+steps:
+  - bn build main
+EOF
+            ;;
         ""|default)
             cat > "$cron_file" << EOF
 name: $name
@@ -3956,7 +3991,7 @@ steps:
 EOF
             ;;
         *)
-            echo "Unknown template: $template (known: autopush)" >&2
+            echo "Unknown template: $template (known: autopush, build-main)" >&2
             exit 1
             ;;
     esac
@@ -4090,14 +4125,16 @@ Commands:
   refresh, rf                     Fetch, pull, build current branch
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
-  build, b [name]                 Run a script (default: build)
+  build, b [name|worktree]        Run a script (default: build); if arg names a
+                                  sibling worktree, fetch + ff-pull + build there
   run [start|restart]             Run 'run' script in background; copies Details.md link to clipboard
   run logs [--tail N]             Follow run.log (or print last N lines and exit)
   run status                      Show whether run script is alive + PID + uptime
   script, sc [new|edit|list]      Manage repo scripts
   cron list                       List cron jobs for current repo
   cron new <name>                 Create a cron job (opens editor)
-  cron new <name> --template autopush  Pre-fill cron with `bn autopush` step (default: */30 min)
+  cron new <name> --template autopush     Pre-fill cron with `bn autopush` step (default: */30 min)
+  cron new <name> --template build-main   Pre-fill cron with `bn build main` step (default: 13:10 daily)
   autopush, ap [msg]              Stage tracked changes, commit, push if upstream set
   cron edit <name>                Edit a cron job
   cron run <name> [--repo <r>]    Run a cron job's steps immediately
