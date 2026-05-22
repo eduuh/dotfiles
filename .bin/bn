@@ -2087,17 +2087,48 @@ cmd_run() {
     local subcmd="${1:-start}"
     case "$subcmd" in
         start|restart)   cmd_run_start ;;
+        attach|a)        cmd_run_attach ;;
+        stop)            cmd_run_stop ;;
         logs)            shift; cmd_run_logs "$@" ;;
+        status)          cmd_run_status ;;
         *)
-            echo "Usage: bn run [start|restart|logs [--tail N]]" >&2
+            echo "Usage: bn run [start|restart|attach|stop|logs [--tail N]|status]" >&2
             return 1
             ;;
     esac
 }
 
+# tmux identifier for the current repo/branch run. Inside tmux it's a window
+# name; outside tmux it's a session name (detached, attach with `bn run attach`).
+_bn_run_name() {
+    echo "bn-run/$NOTE_REPO/$NOTE_BRANCH"
+}
+
+_bn_run_in_tmux() {
+    [[ -n "$TMUX" ]]
+}
+
+_bn_run_current_session() {
+    tmux display-message -p '#S'
+}
+
+_bn_run_exists() {
+    local name=$(_bn_run_name)
+    if _bn_run_in_tmux; then
+        tmux list-windows -t "$(_bn_run_current_session)" -F '#W' 2>/dev/null | grep -qFx "$name"
+    else
+        tmux has-session -t "$name" 2>/dev/null
+    fi
+}
+
 cmd_run_start() {
     require_git_context
     ensure_scripts_dir "$NOTE_REPO"
+
+    if ! command -v tmux >/dev/null 2>&1; then
+        echo "tmux is required for 'bn run'." >&2
+        return 1
+    fi
 
     local main_dir="$NOTES_DIR/$NOTE_REPO/main"
     local details_file="$main_dir/Details.md"
@@ -2126,9 +2157,92 @@ cmd_run_start() {
     fi
     [[ ! -x "$script" ]] && chmod +x "$script"
 
+    local work_dir log_file name
+    work_dir=$(pwd)
+    log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
+    name=$(_bn_run_name)
+
+    # tee to log so the same stream the pane shows is also captured.
+    # `read` keeps the pane alive after the script exits so you can still
+    # attach and see the tail (Enter dismisses it).
+    local cmd="'$script' 2>&1 | tee -a '$log_file'; echo; echo '[bn run] script exited — press Enter to close'; read"
+
+    if _bn_run_in_tmux; then
+        local session=$(_bn_run_current_session)
+        if _bn_run_exists; then
+            echo "Stopping previous run window: $name"
+            tmux kill-window -t "$session:$name"
+        fi
+        tmux new-window -d -t "$session:" -n "$name" -c "$work_dir" "$cmd"
+        echo "Started in tmux window: $session:$name"
+    else
+        if _bn_run_exists; then
+            echo "Stopping previous run session: $name"
+            tmux kill-session -t "$name"
+        fi
+        tmux new-session -d -s "$name" -c "$work_dir" "$cmd"
+        echo "Started in tmux session: $name (detached — not currently inside tmux)"
+    fi
+    echo "  Attach:  bn run attach"
+    echo "  Logs:    bn run logs"
+    echo "  Log:     $log_file"
+}
+
+cmd_run_attach() {
+    require_git_context
+    if ! _bn_run_exists; then
+        echo "No active run for $NOTE_REPO/$NOTE_BRANCH" >&2
+        echo "Start one with: bn run" >&2
+        return 1
+    fi
+    local name=$(_bn_run_name)
+    if _bn_run_in_tmux; then
+        tmux select-window -t "$(_bn_run_current_session):$name"
+    else
+        tmux attach -t "$name"
+    fi
+}
+
+cmd_run_stop() {
+    require_git_context
+    if ! _bn_run_exists; then
+        echo "No active run"
+        return 0
+    fi
+    local name=$(_bn_run_name)
+    if _bn_run_in_tmux; then
+        tmux kill-window -t "$(_bn_run_current_session):$name"
+        echo "Stopped run window: $name"
+    else
+        tmux kill-session -t "$name"
+        echo "Stopped run session: $name"
+    fi
+}
+
+cmd_run_status() {
+    require_git_context
     local log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
-    echo "Log: $log_file"
-    "$script" 2>&1 | tee -a "$log_file"
+    if _bn_run_exists; then
+        local name=$(_bn_run_name)
+        if _bn_run_in_tmux; then
+            echo "Running (window $(_bn_run_current_session):$name)"
+        else
+            local created now secs uptime_str
+            created=$(tmux display-message -p -t "$name" '#{session_created}' 2>/dev/null)
+            now=$(date +%s)
+            if [[ -n "$created" ]]; then
+                secs=$(( now - created ))
+                printf -v uptime_str '%02d:%02d:%02d' \
+                    $((secs/3600)) $(((secs%3600)/60)) $((secs%60))
+                echo "Running (session $name) — uptime $uptime_str"
+            else
+                echo "Running (session $name)"
+            fi
+        fi
+    else
+        echo "Not running"
+    fi
+    [[ -f "$log_file" ]] && echo "Log: $log_file"
 }
 
 cmd_run_logs() {
@@ -4207,8 +4321,11 @@ Commands:
   main, m                         Print main note dir + list scripts
   build, b [name|worktree]        Run a script (default: build); if arg names a
                                   sibling worktree, fetch + ff-pull + build there
-  run [start|restart]             Run 'run' script foreground; copies Details.md link to clipboard, tees to run.log
+  run [start|restart]             Run 'run' script in a new tmux window (current session); copies Details.md link
+  run attach, run a               Select the run window — see live TTY output
+  run stop                        Kill the run window/session
   run logs [--tail N]             Follow run.log (or print last N lines and exit)
+  run status                      Show whether the run window/session is alive
   script, sc [new|edit|list|open] Manage repo scripts (open = nvim in scripts dir)
   cron list                       List cron jobs for current repo
   cron new <name>                 Create a cron job (opens editor)
