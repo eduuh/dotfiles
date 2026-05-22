@@ -2040,6 +2040,20 @@ cmd_main() {
 
 # Run a named script (default: build).
 cmd_build() {
+    # Subcommands for the build tmux window (mirroring `bn run`).
+    case "${1:-}" in
+        attach|a) _bn_tmux_attach "$_BN_BUILD_PREFIX" build; return $? ;;
+        stop)     _bn_tmux_kill "$_BN_BUILD_PREFIX" build; return $? ;;
+        status)
+            _bn_tmux_status "$_BN_BUILD_PREFIX" build
+            if [[ -n "$NOTE_REPO" && -n "$NOTE_BRANCH" ]]; then
+                local lf="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/build.log"
+                [[ -f "$lf" ]] && echo "Log: $lf"
+            fi
+            return 0
+            ;;
+    esac
+
     require_git_context
     ensure_scripts_dir "$NOTE_REPO"
 
@@ -2065,8 +2079,8 @@ cmd_build() {
         fi
     fi
 
-    # Script mode: treat $arg as a script name (defaults to "build"). Same as
-    # before. Allows `bn test` (dispatched as `cmd_build test`) to keep working.
+    # Script mode: treat $arg as a script name (defaults to "build"). Allows
+    # `bn test` (dispatched as `cmd_build test`) to keep working.
     local name="${arg:-build}"
     local script
     resolve_script "$NOTE_REPO" "$name"; script=$REPLY
@@ -2077,8 +2091,21 @@ cmd_build() {
     fi
     [[ ! -x "$script" ]] && chmod +x "$script"
 
-    local work_dir
-    work_dir=$(pwd)
+    local work_dir=$(pwd)
+
+    # Run the default `build` in a shared tmux window so it doesn't block the
+    # current shell and only one build runs at a time across worktrees. Other
+    # script names (test, lint, etc.) stay foreground.
+    if [[ "$name" == "build" ]] && command -v tmux >/dev/null 2>&1; then
+        local log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/build.log"
+        local win_name="${_BN_BUILD_PREFIX}$NOTE_REPO/$NOTE_BRANCH"
+        local cmd="'$script' 2>&1 | tee -a '$log_file'; echo; echo '[bn build] script exited — press Enter to close'; read"
+        _bn_tmux_launch_single "$_BN_BUILD_PREFIX" "$win_name" "$work_dir" "$cmd" build
+        echo "  Attach:  bn build attach"
+        echo "  Log:     $log_file"
+        return 0
+    fi
+
     echo "Running scripts/$name for $NOTE_REPO..."
     (cd "$work_dir" && "$script")
 }
@@ -2098,39 +2125,122 @@ cmd_run() {
     esac
 }
 
-# Only one `bn run` window/session is live at a time so the user can focus on
-# testing one worktree. The window/session is named after the worktree
-# currently running so it's identifiable in the tmux window list. On the next
-# `bn run` invocation (possibly from a different worktree) the existing window
-# is killed and replaced.
+# --- Single-window tmux launchers (shared by `bn run` and `bn build`) ---
+#
+# Only one tmux window/session matching a given prefix is live at a time. The
+# window/session is named after the worktree currently running it so the tmux
+# window list identifies what's executing. Re-invoking (possibly from another
+# worktree) kills the previous one and creates a new one.
+
 _BN_RUN_PREFIX="bn-run/"
+_BN_BUILD_PREFIX="bn-build/"
 
-_bn_run_name() {
-    echo "${_BN_RUN_PREFIX}$NOTE_REPO/$NOTE_BRANCH"
-}
-
-_bn_run_in_tmux() {
+_bn_in_tmux() {
     [[ -n "$TMUX" ]]
 }
 
-_bn_run_current_session() {
+_bn_current_session() {
     tmux display-message -p '#S'
 }
 
-# Echoes the name of the existing bn-run window/session, or empty if none.
-_bn_run_existing() {
-    if _bn_run_in_tmux; then
-        tmux list-windows -t "$(_bn_run_current_session)" -F '#W' 2>/dev/null \
-            | grep -m1 "^${_BN_RUN_PREFIX}" || true
+# Echo the existing window/session name matching the given prefix, or empty.
+_bn_tmux_existing() {
+    local prefix="$1"
+    if _bn_in_tmux; then
+        tmux list-windows -t "$(_bn_current_session)" -F '#W' 2>/dev/null \
+            | grep -m1 "^${prefix}" || true
     else
         tmux list-sessions -F '#S' 2>/dev/null \
-            | grep -m1 "^${_BN_RUN_PREFIX}" || true
+            | grep -m1 "^${prefix}" || true
     fi
 }
 
-_bn_run_exists() {
-    [[ -n "$(_bn_run_existing)" ]]
+# Replace any existing window/session matching the prefix with a new one.
+# Args: <prefix> <new_name> <cwd> <shell_cmd> <label_for_logs>
+_bn_tmux_launch_single() {
+    local prefix="$1" name="$2" cwd="$3" cmd="$4" label="$5"
+    local existing=$(_bn_tmux_existing "$prefix")
+    if _bn_in_tmux; then
+        local session=$(_bn_current_session)
+        if [[ -n "$existing" ]]; then
+            echo "Replacing existing $label window: $existing"
+            tmux kill-window -t "$session:$existing"
+        fi
+        tmux new-window -d -t "$session:" -n "$name" -c "$cwd" "$cmd"
+        echo "Started in tmux window: $session:$name"
+    else
+        if [[ -n "$existing" ]]; then
+            echo "Replacing existing $label session: $existing"
+            tmux kill-session -t "$existing"
+        fi
+        tmux new-session -d -s "$name" -c "$cwd" "$cmd"
+        echo "Started in tmux session: $name (detached — not currently inside tmux)"
+    fi
 }
+
+# Attach to (or switch to) the existing window/session for the given prefix.
+_bn_tmux_attach() {
+    local prefix="$1" label="$2"
+    local existing=$(_bn_tmux_existing "$prefix")
+    if [[ -z "$existing" ]]; then
+        echo "No active $label" >&2
+        return 1
+    fi
+    if _bn_in_tmux; then
+        tmux select-window -t "$(_bn_current_session):$existing"
+    else
+        tmux attach -t "$existing"
+    fi
+}
+
+# Kill the window/session for the given prefix.
+_bn_tmux_kill() {
+    local prefix="$1" label="$2"
+    local existing=$(_bn_tmux_existing "$prefix")
+    if [[ -z "$existing" ]]; then
+        echo "No active $label"
+        return 0
+    fi
+    if _bn_in_tmux; then
+        tmux kill-window -t "$(_bn_current_session):$existing"
+        echo "Stopped $label window: $existing"
+    else
+        tmux kill-session -t "$existing"
+        echo "Stopped $label session: $existing"
+    fi
+}
+
+# Print status for the window/session matching the prefix.
+_bn_tmux_status() {
+    local prefix="$1" label="$2"
+    local existing=$(_bn_tmux_existing "$prefix")
+    if [[ -n "$existing" ]]; then
+        if _bn_in_tmux; then
+            echo "Running (window $(_bn_current_session):$existing)"
+        else
+            local created now secs uptime_str
+            created=$(tmux display-message -p -t "$existing" '#{session_created}' 2>/dev/null)
+            now=$(date +%s)
+            if [[ -n "$created" ]]; then
+                secs=$(( now - created ))
+                printf -v uptime_str '%02d:%02d:%02d' \
+                    $((secs/3600)) $(((secs%3600)/60)) $((secs%60))
+                echo "Running (session $existing) — uptime $uptime_str"
+            else
+                echo "Running (session $existing)"
+            fi
+        fi
+    else
+        echo "Not running"
+    fi
+}
+
+# Back-compat aliases for the run-specific helpers used elsewhere.
+_bn_run_name() { echo "${_BN_RUN_PREFIX}$NOTE_REPO/$NOTE_BRANCH"; }
+_bn_run_existing() { _bn_tmux_existing "$_BN_RUN_PREFIX"; }
+_bn_run_in_tmux() { _bn_in_tmux; }
+_bn_run_current_session() { _bn_current_session; }
+_bn_run_exists() { [[ -n "$(_bn_run_existing)" ]]; }
 
 cmd_run_start() {
     require_git_context
@@ -2171,86 +2281,20 @@ cmd_run_start() {
     local work_dir log_file name
     work_dir=$(pwd)
     log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
-    name=$(_bn_run_name)
-
-    # tee to log so the same stream the pane shows is also captured.
-    # `read` keeps the pane alive after the script exits so you can still
-    # attach and see the tail (Enter dismisses it).
+    name="${_BN_RUN_PREFIX}$NOTE_REPO/$NOTE_BRANCH"
     local cmd="'$script' 2>&1 | tee -a '$log_file'; echo; echo '[bn run] script exited — press Enter to close'; read"
 
-    local existing=$(_bn_run_existing)
-    if _bn_run_in_tmux; then
-        local session=$(_bn_run_current_session)
-        if [[ -n "$existing" ]]; then
-            echo "Replacing existing run window: $existing"
-            tmux kill-window -t "$session:$existing"
-        fi
-        tmux new-window -d -t "$session:" -n "$name" -c "$work_dir" "$cmd"
-        echo "Started in tmux window: $session:$name"
-    else
-        if [[ -n "$existing" ]]; then
-            echo "Replacing existing run session: $existing"
-            tmux kill-session -t "$existing"
-        fi
-        tmux new-session -d -s "$name" -c "$work_dir" "$cmd"
-        echo "Started in tmux session: $name (detached — not currently inside tmux)"
-    fi
+    _bn_tmux_launch_single "$_BN_RUN_PREFIX" "$name" "$work_dir" "$cmd" run
     echo "  Attach:  bn run attach"
     echo "  Logs:    bn run logs"
     echo "  Log:     $log_file"
 }
 
-cmd_run_attach() {
-    local existing=$(_bn_run_existing)
-    if [[ -z "$existing" ]]; then
-        echo "No active run" >&2
-        echo "Start one with: bn run" >&2
-        return 1
-    fi
-    if _bn_run_in_tmux; then
-        tmux select-window -t "$(_bn_run_current_session):$existing"
-    else
-        tmux attach -t "$existing"
-    fi
-}
-
-cmd_run_stop() {
-    local existing=$(_bn_run_existing)
-    if [[ -z "$existing" ]]; then
-        echo "No active run"
-        return 0
-    fi
-    if _bn_run_in_tmux; then
-        tmux kill-window -t "$(_bn_run_current_session):$existing"
-        echo "Stopped run window: $existing"
-    else
-        tmux kill-session -t "$existing"
-        echo "Stopped run session: $existing"
-    fi
-}
+cmd_run_attach() { _bn_tmux_attach "$_BN_RUN_PREFIX" run; }
+cmd_run_stop()   { _bn_tmux_kill "$_BN_RUN_PREFIX" run; }
 
 cmd_run_status() {
-    local existing=$(_bn_run_existing)
-    if [[ -n "$existing" ]]; then
-        if _bn_run_in_tmux; then
-            echo "Running (window $(_bn_run_current_session):$existing)"
-        else
-            local created now secs uptime_str
-            created=$(tmux display-message -p -t "$existing" '#{session_created}' 2>/dev/null)
-            now=$(date +%s)
-            if [[ -n "$created" ]]; then
-                secs=$(( now - created ))
-                printf -v uptime_str '%02d:%02d:%02d' \
-                    $((secs/3600)) $(((secs%3600)/60)) $((secs%60))
-                echo "Running (session $existing) — uptime $uptime_str"
-            else
-                echo "Running (session $existing)"
-            fi
-        fi
-    else
-        echo "Not running"
-    fi
-    # Log only meaningful when there's a git context; skip if we can't resolve.
+    _bn_tmux_status "$_BN_RUN_PREFIX" run
     if [[ -n "$NOTE_REPO" && -n "$NOTE_BRANCH" ]]; then
         local log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
         [[ -f "$log_file" ]] && echo "Log: $log_file"
@@ -4335,8 +4379,10 @@ Commands:
   refresh, rf                     Fetch, pull, build current branch
   refresh-all, ra                 Refresh all main worktrees
   main, m                         Print main note dir + list scripts
-  build, b [name|worktree]        Run a script (default: build); if arg names a
-                                  sibling worktree, fetch + ff-pull + build there
+  build, b [name|worktree]        Run a script (default: build) — the default 'build' runs
+                                  in a shared tmux window (single across worktrees). If arg
+                                  names a sibling worktree, fetch + ff-pull + build there.
+  build attach|stop|status        Manage the shared build tmux window
   run [start|restart]             Run 'run' script in a new tmux window (current session); copies Details.md link
   run attach, run a               Select the run window — see live TTY output
   run stop                        Kill the run window/session
