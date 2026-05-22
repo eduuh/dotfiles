@@ -2098,10 +2098,15 @@ cmd_run() {
     esac
 }
 
-# tmux identifier for the current repo/branch run. Inside tmux it's a window
-# name; outside tmux it's a session name (detached, attach with `bn run attach`).
+# Only one `bn run` window/session is live at a time so the user can focus on
+# testing one worktree. The window/session is named after the worktree
+# currently running so it's identifiable in the tmux window list. On the next
+# `bn run` invocation (possibly from a different worktree) the existing window
+# is killed and replaced.
+_BN_RUN_PREFIX="bn-run/"
+
 _bn_run_name() {
-    echo "bn-run/$NOTE_REPO/$NOTE_BRANCH"
+    echo "${_BN_RUN_PREFIX}$NOTE_REPO/$NOTE_BRANCH"
 }
 
 _bn_run_in_tmux() {
@@ -2112,13 +2117,19 @@ _bn_run_current_session() {
     tmux display-message -p '#S'
 }
 
-_bn_run_exists() {
-    local name=$(_bn_run_name)
+# Echoes the name of the existing bn-run window/session, or empty if none.
+_bn_run_existing() {
     if _bn_run_in_tmux; then
-        tmux list-windows -t "$(_bn_run_current_session)" -F '#W' 2>/dev/null | grep -qFx "$name"
+        tmux list-windows -t "$(_bn_run_current_session)" -F '#W' 2>/dev/null \
+            | grep -m1 "^${_BN_RUN_PREFIX}" || true
     else
-        tmux has-session -t "$name" 2>/dev/null
+        tmux list-sessions -F '#S' 2>/dev/null \
+            | grep -m1 "^${_BN_RUN_PREFIX}" || true
     fi
+}
+
+_bn_run_exists() {
+    [[ -n "$(_bn_run_existing)" ]]
 }
 
 cmd_run_start() {
@@ -2167,18 +2178,19 @@ cmd_run_start() {
     # attach and see the tail (Enter dismisses it).
     local cmd="'$script' 2>&1 | tee -a '$log_file'; echo; echo '[bn run] script exited — press Enter to close'; read"
 
+    local existing=$(_bn_run_existing)
     if _bn_run_in_tmux; then
         local session=$(_bn_run_current_session)
-        if _bn_run_exists; then
-            echo "Stopping previous run window: $name"
-            tmux kill-window -t "$session:$name"
+        if [[ -n "$existing" ]]; then
+            echo "Replacing existing run window: $existing"
+            tmux kill-window -t "$session:$existing"
         fi
         tmux new-window -d -t "$session:" -n "$name" -c "$work_dir" "$cmd"
         echo "Started in tmux window: $session:$name"
     else
-        if _bn_run_exists; then
-            echo "Stopping previous run session: $name"
-            tmux kill-session -t "$name"
+        if [[ -n "$existing" ]]; then
+            echo "Replacing existing run session: $existing"
+            tmux kill-session -t "$existing"
         fi
         tmux new-session -d -s "$name" -c "$work_dir" "$cmd"
         echo "Started in tmux session: $name (detached — not currently inside tmux)"
@@ -2189,60 +2201,60 @@ cmd_run_start() {
 }
 
 cmd_run_attach() {
-    require_git_context
-    if ! _bn_run_exists; then
-        echo "No active run for $NOTE_REPO/$NOTE_BRANCH" >&2
+    local existing=$(_bn_run_existing)
+    if [[ -z "$existing" ]]; then
+        echo "No active run" >&2
         echo "Start one with: bn run" >&2
         return 1
     fi
-    local name=$(_bn_run_name)
     if _bn_run_in_tmux; then
-        tmux select-window -t "$(_bn_run_current_session):$name"
+        tmux select-window -t "$(_bn_run_current_session):$existing"
     else
-        tmux attach -t "$name"
+        tmux attach -t "$existing"
     fi
 }
 
 cmd_run_stop() {
-    require_git_context
-    if ! _bn_run_exists; then
+    local existing=$(_bn_run_existing)
+    if [[ -z "$existing" ]]; then
         echo "No active run"
         return 0
     fi
-    local name=$(_bn_run_name)
     if _bn_run_in_tmux; then
-        tmux kill-window -t "$(_bn_run_current_session):$name"
-        echo "Stopped run window: $name"
+        tmux kill-window -t "$(_bn_run_current_session):$existing"
+        echo "Stopped run window: $existing"
     else
-        tmux kill-session -t "$name"
-        echo "Stopped run session: $name"
+        tmux kill-session -t "$existing"
+        echo "Stopped run session: $existing"
     fi
 }
 
 cmd_run_status() {
-    require_git_context
-    local log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
-    if _bn_run_exists; then
-        local name=$(_bn_run_name)
+    local existing=$(_bn_run_existing)
+    if [[ -n "$existing" ]]; then
         if _bn_run_in_tmux; then
-            echo "Running (window $(_bn_run_current_session):$name)"
+            echo "Running (window $(_bn_run_current_session):$existing)"
         else
             local created now secs uptime_str
-            created=$(tmux display-message -p -t "$name" '#{session_created}' 2>/dev/null)
+            created=$(tmux display-message -p -t "$existing" '#{session_created}' 2>/dev/null)
             now=$(date +%s)
             if [[ -n "$created" ]]; then
                 secs=$(( now - created ))
                 printf -v uptime_str '%02d:%02d:%02d' \
                     $((secs/3600)) $(((secs%3600)/60)) $((secs%60))
-                echo "Running (session $name) — uptime $uptime_str"
+                echo "Running (session $existing) — uptime $uptime_str"
             else
-                echo "Running (session $name)"
+                echo "Running (session $existing)"
             fi
         fi
     else
         echo "Not running"
     fi
-    [[ -f "$log_file" ]] && echo "Log: $log_file"
+    # Log only meaningful when there's a git context; skip if we can't resolve.
+    if [[ -n "$NOTE_REPO" && -n "$NOTE_BRANCH" ]]; then
+        local log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
+        [[ -f "$log_file" ]] && echo "Log: $log_file"
+    fi
 }
 
 cmd_run_logs() {
@@ -3408,6 +3420,10 @@ cmd_details() {
             ${EDITOR:-nvim} "$details_file"
             ;;
         path) echo "$details_file" ;;
+        open|o)
+            mkdir -p "$main_dir"
+            (cd "$main_dir" && ${EDITOR:-nvim} .)
+            ;;
         "")
             if [[ -f "$details_file" ]]; then
                 cat "$details_file"
@@ -3416,7 +3432,7 @@ cmd_details() {
                 echo "Create with: bn details new"
             fi
             ;;
-        *) echo "Usage: bn details [new|edit|path]" >&2; exit 1 ;;
+        *) echo "Usage: bn details [new|edit|path|open]" >&2; exit 1 ;;
     esac
 }
 
@@ -4327,6 +4343,8 @@ Commands:
   run logs [--tail N]             Follow run.log (or print last N lines and exit)
   run status                      Show whether the run window/session is alive
   script, sc [new|edit|list|open] Manage repo scripts (open = nvim in scripts dir)
+  details [new|edit|path|open]    Manage Details.md (open = nvim in main folder)
+  dd                              Shortcut for `bn details open`
   cron list                       List cron jobs for current repo
   cron new <name>                 Create a cron job (opens editor)
   cron new <name> --template autopush     Pre-fill cron with `bn autopush` step (default: */30 min)
@@ -4697,6 +4715,7 @@ case "${1:-}" in
     tool|tools)         shift; cmd_tools "$@" ;;
     setup)              cmd_setup ;;
     details)            shift; cmd_details "$@" ;;
+    dd)                 cmd_details open ;;
     cs)                 shift; cmd_cs "$@" ;;
     blog)               shift; cmd_blog "$@" ;;
     learn)              shift; cmd_learn "$@" ;;
