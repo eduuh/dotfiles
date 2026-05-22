@@ -2087,18 +2087,30 @@ cmd_run() {
     local subcmd="${1:-start}"
     case "$subcmd" in
         start|restart)   cmd_run_start ;;
+        attach|a)        cmd_run_attach ;;
+        stop)            cmd_run_stop ;;
         logs)            shift; cmd_run_logs "$@" ;;
         status)          cmd_run_status ;;
         *)
-            echo "Usage: bn run [start|restart|logs [--tail N]|status]" >&2
+            echo "Usage: bn run [start|restart|attach|stop|logs [--tail N]|status]" >&2
             return 1
             ;;
     esac
 }
 
+# tmux session name for the current repo/branch run.
+_bn_run_session() {
+    echo "bn-run/$NOTE_REPO/$NOTE_BRANCH"
+}
+
 cmd_run_start() {
     require_git_context
     ensure_scripts_dir "$NOTE_REPO"
+
+    if ! command -v tmux >/dev/null 2>&1; then
+        echo "tmux is required for 'bn run'." >&2
+        return 1
+    fi
 
     local main_dir="$NOTES_DIR/$NOTE_REPO/main"
     local details_file="$main_dir/Details.md"
@@ -2127,27 +2139,54 @@ cmd_run_start() {
     fi
     [[ ! -x "$script" ]] && chmod +x "$script"
 
-    local work_dir log_file pid_file
+    local work_dir log_file session
     work_dir=$(pwd)
     log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
-    pid_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.pid"
+    session=$(_bn_run_session)
 
-    if [[ -f "$pid_file" ]]; then
-        local old_pid
-        old_pid=$(cat "$pid_file")
-        if kill -0 "$old_pid" 2>/dev/null; then
-            echo "Stopping previous run (PID $old_pid)..."
-            kill "$old_pid"
-        fi
-        rm -f "$pid_file"
+    if tmux has-session -t "$session" 2>/dev/null; then
+        echo "Stopping previous run session: $session"
+        tmux kill-session -t "$session"
     fi
 
-    echo "Starting run script in background..."
-    echo "Log: $log_file"
-    (cd "$work_dir" && exec "$script" >> "$log_file" 2>&1) &
-    local pid=$!
-    echo $pid > "$pid_file"
-    echo "PID: $pid"
+    # Pipe through tee so the log captures the same stream the tmux pane shows.
+    # `read` keeps the pane alive briefly after the script exits so you can
+    # attach and see the tail (Enter dismisses it).
+    tmux new-session -d -s "$session" -c "$work_dir" \
+        "'$script' 2>&1 | tee -a '$log_file'; echo; echo '[bn run] script exited — press Enter to close session'; read"
+
+    echo "Started in tmux session: $session"
+    echo "  Attach:  bn run attach"
+    echo "  Logs:    bn run logs"
+    echo "  Log:     $log_file"
+}
+
+cmd_run_attach() {
+    require_git_context
+    local session
+    session=$(_bn_run_session)
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+        echo "No active run session for $NOTE_REPO/$NOTE_BRANCH" >&2
+        echo "Start one with: bn run" >&2
+        return 1
+    fi
+    if [[ -n "$TMUX" ]]; then
+        tmux switch-client -t "$session"
+    else
+        tmux attach -t "$session"
+    fi
+}
+
+cmd_run_stop() {
+    require_git_context
+    local session
+    session=$(_bn_run_session)
+    if tmux has-session -t "$session" 2>/dev/null; then
+        tmux kill-session -t "$session"
+        echo "Stopped session: $session"
+    else
+        echo "No active run session"
+    fi
 }
 
 cmd_run_logs() {
@@ -2166,44 +2205,26 @@ cmd_run_logs() {
     fi
 }
 
-# Compute uptime (seconds) for a PID using /proc; empty if unavailable.
-_bn_run_uptime_seconds() {
-    local pid="$1"
-    [[ -r "/proc/$pid/stat" && -r "/proc/stat" ]] || return 1
-    local btime clk_tck jiffies start_epoch now
-    btime=$(awk '/^btime / {print $2; exit}' /proc/stat)
-    clk_tck=$(getconf CLK_TCK 2>/dev/null || echo 100)
-    jiffies=$(awk '{print $22}' "/proc/$pid/stat")
-    [[ -z "$btime" || -z "$jiffies" ]] && return 1
-    start_epoch=$(( btime + jiffies / clk_tck ))
-    now=$(date +%s)
-    echo $(( now - start_epoch ))
-}
-
 cmd_run_status() {
     require_git_context
     local log_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.log"
-    local pid_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/run.pid"
+    local session
+    session=$(_bn_run_session)
 
-    if [[ ! -f "$pid_file" ]]; then
-        echo "Not running (no pid file)"
-        [[ -f "$log_file" ]] && echo "Last log: $log_file"
-        return 0
-    fi
-
-    local pid
-    pid=$(cat "$pid_file")
-    if kill -0 "$pid" 2>/dev/null; then
-        local secs uptime_str
-        if secs=$(_bn_run_uptime_seconds "$pid"); then
+    if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$session" 2>/dev/null; then
+        local created now secs uptime_str
+        created=$(tmux display-message -p -t "$session" '#{session_created}' 2>/dev/null)
+        now=$(date +%s)
+        if [[ -n "$created" ]]; then
+            secs=$(( now - created ))
             printf -v uptime_str '%02d:%02d:%02d' \
                 $((secs/3600)) $(((secs%3600)/60)) $((secs%60))
-            echo "Running (PID $pid) — uptime $uptime_str"
+            echo "Running (session $session) — uptime $uptime_str"
         else
-            echo "Running (PID $pid)"
+            echo "Running (session $session)"
         fi
     else
-        echo "Stopped (stale pid file: $pid)"
+        echo "Not running"
     fi
     [[ -f "$log_file" ]] && echo "Log: $log_file"
 }
@@ -4262,9 +4283,11 @@ Commands:
   main, m                         Print main note dir + list scripts
   build, b [name|worktree]        Run a script (default: build); if arg names a
                                   sibling worktree, fetch + ff-pull + build there
-  run [start|restart]             Run 'run' script in background; copies Details.md link to clipboard
+  run [start|restart]             Run 'run' script in a detached tmux session; copies Details.md link to clipboard
+  run attach, run a               Attach to (or switch to) the run session — see live TTY output
+  run stop                        Kill the run session
   run logs [--tail N]             Follow run.log (or print last N lines and exit)
-  run status                      Show whether run script is alive + PID + uptime
+  run status                      Show whether the run session is alive + uptime
   script, sc [new|edit|list]      Manage repo scripts
   cron list                       List cron jobs for current repo
   cron new <name>                 Create a cron job (opens editor)
