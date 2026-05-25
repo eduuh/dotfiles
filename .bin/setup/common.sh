@@ -217,8 +217,13 @@ _clone_single_repo() {
 # Provision one branch-notes-style repo on Windows + symlink under ~/projects/.
 # Used for both the personal `branch-notes` repo and the `branch-notes-work` repo
 # for work-classified projects (allowlist in ~/.config/bn/work-repos).
+#
+# Usage: _setup_one_branch_notes_repo <name> [remote_url]
+# If a remote URL is provided and the target has no .git yet, the repo is
+# cloned from it. Otherwise the target is initialized as an empty repo.
 _setup_one_branch_notes_repo() {
     local name="$1"
+    local remote="$2"
     local win_dir target link
     win_dir=$(_windows_projects_dir) || { track_failure "$name" "Could not resolve Windows projects dir"; return 1; }
     target="$win_dir/$name"
@@ -227,12 +232,21 @@ _setup_one_branch_notes_repo() {
     mkdir -p "$win_dir" || { track_failure "$name" "Failed to create $win_dir"; return 1; }
 
     if [ ! -d "$target/.git" ]; then
-        echo "[$name] Initializing repo at $target..."
-        mkdir -p "$target"
-        (cd "$target" && git init -b main >/dev/null && git config core.filemode false) || {
-            track_failure "$name" "Failed to git init $target"
-            return 1
-        }
+        if [ -n "$remote" ]; then
+            echo "[$name] Cloning from $remote → $target..."
+            git clone "$remote" "$target" || {
+                track_failure "$name" "Failed to clone $remote"
+                return 1
+            }
+            git -C "$target" config core.filemode false
+        else
+            echo "[$name] Initializing repo at $target..."
+            mkdir -p "$target"
+            (cd "$target" && git init -b main >/dev/null && git config core.filemode false) || {
+                track_failure "$name" "Failed to git init $target"
+                return 1
+            }
+        fi
     fi
 
     if [ -L "$link" ]; then
@@ -305,21 +319,22 @@ clone_repos() {
     echo "All repository clones finished."
 
     setup_branch_notes_symlink
-    _clone_work_repos_from_personal_notes
+    _run_work_setup_from_personal_notes
 }
 
-# After personal repos are cloned, source a work-repo clone script from
-# personal-notes if it exists. The script defines a WORK_REPOS array (or
-# calls _clone_single_repo directly) so the list of work repos stays in
-# the private personal-notes repo instead of this public dotfiles repo.
-_clone_work_repos_from_personal_notes() {
-    local work_script="${WORK_CLONE_SCRIPT:-$HOME/projects/personal-notes/scripts/clone-work.sh}"
+# After personal repos are cloned, source a work-repo setup script from
+# personal-notes if it exists. The script defines a WORK_REPOS array, calls
+# _clone_single_repo, and/or calls _setup_one_branch_notes_repo with a remote
+# URL — so the list of work repos and their URLs stay in the private
+# personal-notes repo instead of this public dotfiles repo.
+_run_work_setup_from_personal_notes() {
+    local work_script="${WORK_SETUP_SCRIPT:-$HOME/projects/personal-notes/scripts/setup-work-repos.sh}"
     if [[ ! -f "$work_script" ]]; then
         return 0
     fi
-    echo "Sourcing work clone script: $work_script"
+    echo "Sourcing work setup script: $work_script"
     source "$work_script"
-    echo "Work repo clones finished."
+    echo "Work repo setup finished."
 }
 
 ensure_tmux_version() {
