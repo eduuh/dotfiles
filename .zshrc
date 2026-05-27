@@ -24,7 +24,17 @@ alias l='ls -CF'
 alias yolo='claude --dangerously-skip-permissions'
 alias po="$HOME/.bin/pkg-open.sh"
 alias nvimd='nvim -c "DiffviewOpen origin/main"'
-alias bn="$HOME/.bin/bn"
+# Wrap bn so `bn sync` routes to the sidecar script — the underlying bn
+# binary doesn't implement a sync subcommand, but CLAUDE.md (and muscle
+# memory) treat it as one. All other subcommands pass straight through.
+bn() {
+    if [[ "$1" == "sync" ]]; then
+        shift
+        "$HOME/.bin/bn-sync" "$@"
+    else
+        "$HOME/.bin/bn" "$@"
+    fi
+}
 
 # Load NVM
 export NVM_DIR="$HOME/.nvm"
@@ -32,6 +42,9 @@ export NVM_DIR="$HOME/.nvm"
 
 # Load Cargo
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+
+# Helix runtime (manual Linux install; brew/macOS manages its own)
+[ -d "$HOME/.local/share/helix/runtime" ] && export HELIX_RUNTIME="$HOME/.local/share/helix/runtime"
 
 # Load FZF
 [ -f "$HOME/.fzf.zsh" ] && source "$HOME/.fzf.zsh"
