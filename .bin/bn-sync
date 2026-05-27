@@ -1,0 +1,79 @@
+#!/usr/bin/env zsh
+# bn-sync — commit + push pending changes in the branch-notes repo.
+#
+# bn writes notes directly to disk; this is the missing "sync to remote" step
+# that the CLAUDE.md docs promise. Safe to run any time: no-ops when the
+# working tree is clean.
+#
+# Usage:
+#   bn-sync               # commit + push
+#   bn-sync --dry-run     # show what would be committed, don't do it
+#   bn-sync -m "msg"      # override the auto-generated commit message
+#
+# The auto-generated message lists the changed paths, mirroring the prior
+# "chore(bn): sync [path1,path2]" convention.
+
+set -e
+
+notes_dir="${HOME}/projects/branch-notes"
+
+if [[ ! -d "$notes_dir/.git" ]]; then
+    print -u2 "bn-sync: $notes_dir is not a git repo. Run 'git init' there first."
+    exit 1
+fi
+
+dry_run=false
+custom_msg=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run|-n) dry_run=true; shift ;;
+        -m|--message)  custom_msg="$2"; shift 2 ;;
+        -h|--help)
+            sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0
+            ;;
+        *) print -u2 "bn-sync: unknown arg '$1'"; exit 2 ;;
+    esac
+done
+
+cd "$notes_dir"
+
+# Snapshot what changed before we stage. `git status -s` lists modified +
+# untracked together; trim status flags down to the bare paths for the
+# commit-message manifest.
+changed=$(git status -s | awk '{ $1=""; sub(/^ +/, ""); print }')
+
+if [[ -z "$changed" ]]; then
+    echo "bn-sync: nothing to commit"
+    exit 0
+fi
+
+count=$(printf '%s\n' "$changed" | wc -l | tr -d ' ')
+manifest=$(printf '%s\n' "$changed" | paste -sd ',' -)
+
+if $dry_run; then
+    echo "bn-sync: would commit $count file(s):"
+    printf '  %s\n' "${(@f)changed}"
+    exit 0
+fi
+
+git add -A
+
+if [[ -n "$custom_msg" ]]; then
+    msg="$custom_msg"
+else
+    msg="chore(bn): sync [$manifest]"
+fi
+
+git commit -m "$msg" >/dev/null
+
+# Push to whatever remote 'main' (or current branch) tracks. Quiet on
+# success; surface output on failure so the user sees auth errors etc.
+if ! out=$(git push 2>&1); then
+    print -u2 "bn-sync: push failed:"
+    print -u2 "$out"
+    exit 1
+fi
+
+echo "bn-sync: pushed $count file(s)"
