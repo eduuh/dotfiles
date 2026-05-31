@@ -307,6 +307,7 @@ clone_repos() {
                 "git@github.com:eduuh-private/eduuh-blog-template.git"
                 "git@github.com:eduuh-private/life.git"
                 "git@github.com:eduuh/bits-and-atoms.git"
+                "git@github.com:eduuh/atlas.git"
             )
         fi
     fi
