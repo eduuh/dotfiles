@@ -41,6 +41,7 @@
 #   bn diff|d                       # Git diff stat + open todos
 #   bn achieve|ac "<title>"          # Log an achievement
 #   bn achieve --list|--edit|--path  # Manage achievements
+#   bn sync                         # Sync branch note to Atlas Execution Map
 #   bn reset [--force]              # Remove all non-main worktrees + close notes
 #   bn search <text>                # Search across all active notes
 #   bn stale [--days N]             # Show notes with no recent modifications
@@ -74,6 +75,22 @@ _atlas_available() {
 
     return 0
 }
+
+# Ensure Execution Map exists for current branch (creates if doesn't exist)
+_ensure_execution_map() {
+    if ! _atlas_available; then
+        return 0  # Fall back to local if Atlas not available
+    fi
+
+    local repo branch
+    repo="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+    repo="${repo##*/}"
+    branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+
+    # Use bnr to ensure the Execution Map exists for this branch
+    $_BNR_CLI cat > /dev/null 2>&1
+}
+
 
 # Try to use bnr (Atlas) for an operation, fall back to local
 _try_atlas_or_local() {
@@ -1359,6 +1376,7 @@ cmd_plan() {
 
 cmd_default() {
     require_git_context
+    _ensure_execution_map  # Create Execution Map in Atlas if available
     ensure_note
     echo "$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
 }
@@ -1590,6 +1608,57 @@ _append_achievement() {
     rm -f "$tmpfile"
 
     echo "Achievement logged to: $achievements_file"
+}
+
+cmd_sync() {
+    local repo branch
+
+    # Get current repo and branch
+    repo="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not in a git repo" >&2; return 1; }
+    repo="${repo##*/}"  # Get repo name only
+    branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || { echo "Not in a git repo" >&2; return 1; }
+
+    # Try to sync to Atlas first
+    if _atlas_available; then
+        # Get local note content
+        local note_dir="$(_get_notes_dir)"
+        local note_file="$note_dir/note.md"
+
+        if [[ ! -f "$note_file" ]]; then
+            echo "No note found to sync" >&2
+            return 1
+        fi
+
+        # Parse and upload each section to Atlas
+        local sections=(goal todo blocker decision research collab ask note)
+        local content
+
+        for section in "${sections[@]}"; do
+            content=$(_parse_section "$note_file" "$section")
+            if [[ -n "$content" ]]; then
+                # Use bnr add to sync each section
+                echo "$content" | while IFS= read -r line; do
+                    [[ -z "$line" ]] && continue
+                    $_BNR_CLI add "$section" "$line" 2>/dev/null
+                done
+            fi
+        done
+
+        echo "✓ Synced branch notes to Atlas: $repo / $branch"
+        return 0
+    fi
+
+    # Fall back: commit and push local notes
+    local notes_dir="$(_get_notes_dir)"
+    if [[ -z "$notes_dir" ]]; then
+        echo "Note not found" >&2
+        return 1
+    fi
+
+    cd "$notes_dir" || return 1
+    git add -A
+    git commit -m "bn: sync $repo/$branch" 2>/dev/null
+    git push origin HEAD 2>/dev/null && echo "✓ Synced to git"
 }
 
 cmd_achieve() {
@@ -4898,6 +4967,7 @@ case "${1:-}" in
     learn)              shift; cmd_learn "$@" ;;
     learn-blog|lb)      shift; cmd_learn_blog "$@" ;;
     cron)               shift; cmd_cron "$@" ;;
+    sync)               cmd_sync ;;
     -h|--help|help)     cmd_help ;;
     "")                 cmd_default ;;
     *)                  echo "Unknown command: $1" >&2; exit 1 ;;
