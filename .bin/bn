@@ -56,6 +56,38 @@ fi
 
 # --- Config ---
 
+# Atlas integration: use remote bnr for core operations, fall back to local
+_USE_ATLAS=${BN_USE_ATLAS:-true}
+_BNR_CLI="node ${HOME}/projects/worktree/atlas/bn-remote/tools/bn/src/index.ts"
+
+# Check if bnr is available and configured
+_atlas_available() {
+    if [[ "$_USE_ATLAS" != "true" ]]; then
+        return 1
+    fi
+
+    # Check if config exists
+    [[ -f "$HOME/.config/bn/config.json" ]] || return 1
+
+    # Check if bnr CLI exists
+    [[ -f "${HOME}/projects/worktree/atlas/bn-remote/tools/bn/src/index.ts" ]] || return 1
+
+    return 0
+}
+
+# Try to use bnr (Atlas) for an operation, fall back to local
+_try_atlas_or_local() {
+    local cmd="$1" && shift
+
+    if _atlas_available; then
+        # Try Atlas operation
+        $_BNR_CLI $cmd "$@" 2>/dev/null && return 0
+    fi
+
+    # Fall back to local (return error code so caller knows it failed)
+    return 1
+}
+
 _NOTES_DIR_PERSONAL="$HOME/projects/branch-notes"
 # Work branch notes live under `bn/` inside the work notes repo. The repo
 # is named `notes` upstream; some machines still have the old
@@ -1072,6 +1104,13 @@ cmd_path() {
 
 cmd_cat() {
     require_git_context
+
+    # Try Atlas first (if available)
+    if _atlas_available; then
+        $_BNR_CLI cat "$@" 2>/dev/null && return 0
+    fi
+
+    # Fall back to local
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
     # Auto-prune: if note is active, repo is bare-based, and worktree is gone
     if [[ -f "$note_file" && -d "$BARE_DIR/${NOTE_REPO}.git" ]]; then
@@ -1333,6 +1372,12 @@ cmd_add() {
     local text="$*"
     [[ -z "$text" ]] && { echo "Usage: branch-note add <section> <text>" >&2; exit 1; }
 
+    # Try Atlas first (if available)
+    if _atlas_available; then
+        $_BNR_CLI add "$section" "$text" 2>/dev/null && return 0
+    fi
+
+    # Fall back to local
     local heading
     heading=$(section_heading "$section")
     [[ -z "$heading" ]] && { echo "Unknown section: $section (use: todo, blocker, decision, research, collab, ask)" >&2; exit 1; }
@@ -1620,6 +1665,11 @@ cmd_close() {
 cmd_done() {
     local query="$*"
     [[ -z "$query" ]] && { echo "Usage: bn done <id|text>" >&2; exit 1; }
+
+    # Try Atlas first (if available)
+    if _atlas_available; then
+        $_BNR_CLI done "$query" 2>/dev/null && return 0
+    fi
 
     require_git_context
     local note_dir="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH"
@@ -2580,6 +2630,13 @@ cmd_brief() {
 
 cmd_status() {
     require_git_context
+
+    # Try Atlas first (if available)
+    if _atlas_available; then
+        $_BNR_CLI status 2>/dev/null && return 0
+    fi
+
+    # Fall back to local
     local note_file="$NOTES_DIR/$NOTE_REPO/$NOTE_BRANCH/note.md"
     if [[ ! -f "$note_file" ]]; then
         echo "$NOTE_REPO/$NOTE_BRANCH: no note"
