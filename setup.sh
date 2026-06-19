@@ -4,18 +4,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Script directory: $SCRIPT_DIR"
 source "$SCRIPT_DIR/.bin/setup/common.sh"
 
-# Ask for sudo upfront and keep the session alive
-sudo -v
-while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
-SUDO_PID=$!
+# --- Phase 2: the unattended install. Phase 1 (prep) must have run first. ---
+READY_MARKER="$HOME/.local/state/dotfiles/ready"
+if [[ ! -f "$READY_MARKER" ]]; then
+    echo "No prep marker at $READY_MARKER — the interactive Phase 1 hasn't run."
+    echo "Run it first:   ./prep.sh"
+    echo "(fresh machine: curl -fsSL https://raw.githubusercontent.com/eduuh/dotfiles/main/bootstrap.sh | bash)"
+    exit 1
+fi
+source "$READY_MARKER"   # sets TARGET, PROFILE
+echo "Phase 2 · install   target=${TARGET:-?}  profile=${PROFILE:-?}"
+
+# prep cached sudo; keep it alive WITHOUT prompting. Bail if it has lapsed so the
+# long install never blocks on a password. Skipped on codespace / root.
+SUDO_PID=""
+if [[ "$TARGET" != "codespace" && "${EUID:-$(id -u)}" != "0" ]]; then
+    if ! sudo -n true 2>/dev/null; then
+        echo "sudo credentials not cached — re-run ./prep.sh, then ./setup.sh."
+        exit 1
+    fi
+    while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+    SUDO_PID=$!
+fi
 
 main() {
     local distro=$(detect_distro)
 
-    # Run GitHub SSH setup script first to ensure we can clone repositories
-    echo "Setting up GitHub CLI and SSH keys..."
-    if ! "$SCRIPT_DIR/.bin/gh-keys"; then
-        track_failure "github" "Failed to setup GitHub CLI/SSH keys"
+    # GitHub auth + SSH keys are handled in prep (Phase 1), so cloning works here.
+    # Bootstrap cloned dotfiles WITHOUT submodules (private, pre-auth); now that
+    # prep established auth, populate them (bn, tmux-workflow).
+    echo "Updating dotfiles submodules..."
+    if ! git -C "$SCRIPT_DIR" submodule update --init --recursive; then
+        track_failure "submodules" "Failed to init/update dotfiles submodules"
     fi
 
     # For macOS, install Homebrew and all packages via Brewfile
@@ -70,7 +90,7 @@ main() {
     echo "To install Rust:         ./setup-rust.sh"
 
     # Clean up sudo keepalive
-    kill "$SUDO_PID" 2>/dev/null
+    [[ -n "$SUDO_PID" ]] && kill "$SUDO_PID" 2>/dev/null
 
     # Print summary of any failures
     print_failure_summary
