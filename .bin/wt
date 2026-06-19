@@ -5,12 +5,14 @@
 
 set -e
 
-# Repositories that should NOT be cloned as bare (regular clone instead)
-# These repos will be cloned to ~/projects/reponame (without .git suffix)
-REGULAR_CLONE_REPOS=(
-    "dotfiles"
-    "nvim"
-)
+# Repositories that should NOT be cloned as bare (regular clone instead).
+# Single source of truth, shared with the install bootstrap (see
+# .bin/setup/regular-repos.zsh). Everything else clones bare + worktree.
+if [[ -f "${0:A:h}/setup/regular-repos.zsh" ]]; then
+    source "${0:A:h}/setup/regular-repos.zsh"
+else
+    REGULAR_CLONE_REPOS=(dotfiles nvim)
+fi
 
 usage() {
     cat << EOF
