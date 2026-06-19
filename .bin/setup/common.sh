@@ -61,6 +61,46 @@ reset_steps() {
     echo "Cleared step state ($SETUP_DONE_FILE)."
 }
 
+# --- Profiles & targets ----------------------------------------------------
+# Nested tiers: core ⊂ dev ⊂ desktop. The active PROFILE includes its own tier
+# and every tier below it. TARGET is one of codespace|wsl|linux|mac|termux.
+# Both come from the prep "ready" marker.
+_profile_rank() {
+    case "$1" in core) echo 1;; dev) echo 2;; desktop) echo 3;; *) echo 0;; esac
+}
+
+# True if the active PROFILE includes tier $1.
+_profile_includes() {
+    [[ $(_profile_rank "${PROFILE:-desktop}") -ge $(_profile_rank "$1") ]]
+}
+
+# True if the active TARGET is in $1 ("all" or a comma list like "linux,mac").
+_target_matches() {
+    [[ "$1" == "all" ]] && return 0
+    local t
+    for t in ${(s:,:)1}; do
+        [[ "$t" == "${TARGET:-}" ]] && return 0
+    done
+    return 1
+}
+
+# step <name> <min_profile> <targets> <command> [args...]
+#   min_profile: core|dev|desktop — run only if the active PROFILE includes it
+#   targets:     "all" or csv (e.g. "linux,mac") — run only if TARGET matches
+# Passes through to run_step (so it's still idempotent + resumable).
+step() {
+    local name="$1" min_profile="$2" targets="$3"; shift 3
+    if ! _profile_includes "$min_profile"; then
+        echo "· [$name] skipped (profile ${PROFILE:-?} < $min_profile)"
+        return 0
+    fi
+    if ! _target_matches "$targets"; then
+        echo "· [$name] skipped (target ${TARGET:-?} not in $targets)"
+        return 0
+    fi
+    run_step "$name" "$@"
+}
+
 # Install a package with error tracking (generic wrapper)
 install_package() {
     local pkg="$1"

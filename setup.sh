@@ -4,11 +4,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Script directory: $SCRIPT_DIR"
 source "$SCRIPT_DIR/.bin/setup/common.sh"
 
-# --- flags: `--force` re-runs every step; `reset` clears recorded step state ---
-for arg in "$@"; do
-    case "$arg" in
-        --force) SETUP_FORCE=true ;;
-        reset)   reset_steps; exit 0 ;;
+# --- flags ---
+#   --force          re-run every step
+#   --profile <tier> override the profile from the prep marker (core|dev|desktop)
+#   reset            clear recorded step state and exit
+SETUP_PROFILE_OVERRIDE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force)     SETUP_FORCE=true; shift ;;
+        --profile)   SETUP_PROFILE_OVERRIDE="$2"; shift 2 ;;
+        --profile=*) SETUP_PROFILE_OVERRIDE="${1#*=}"; shift ;;
+        reset)       reset_steps; exit 0 ;;
+        *)           shift ;;
     esac
 done
 
@@ -21,6 +28,7 @@ if [[ ! -f "$READY_MARKER" ]]; then
     exit 1
 fi
 source "$READY_MARKER"   # sets TARGET, PROFILE
+PROFILE="${SETUP_PROFILE_OVERRIDE:-$PROFILE}"   # --profile wins over the marker
 echo "Phase 2 · install   target=${TARGET:-?}  profile=${PROFILE:-?}"
 
 # prep cached sudo; keep it alive WITHOUT prompting. Bail if it has lapsed so the
@@ -68,18 +76,19 @@ main() {
         *) track_failure "distro" "Unsupported distribution: $distro"; print_failure_summary; exit 1 ;;
     esac
 
-    # Each step records on success → re-runs skip it, a failed run resumes here.
-    run_step submodules         _init_submodules
-    run_step "platform-$distro" run_platform_setup "$distro"
+    # step <name> <min-profile> <targets> <cmd…> — profile/target filtered,
+    # then idempotent + resumable. Records on success; failed steps resume.
+    step submodules         core all   _init_submodules
+    step "platform-$distro" core all   run_platform_setup "$distro"
 
     if [ "$distro" != "termux" ]; then
-        run_step tmux-plugins install_tmux_plugins
-        run_step zoxide       install_zoxide
-        run_step starship     install_starship
-        run_step pnpm         install_pnpm
-        run_step talosctl     install_talosctl
-        run_step git-hooks    setup_git_hooks
-        run_step shell-zsh    change_shell_to_zsh
+        step tmux-plugins core all   install_tmux_plugins
+        step zoxide       core all   install_zoxide
+        step starship     core all   install_starship
+        step pnpm         dev  all   install_pnpm
+        step talosctl     dev  all   install_talosctl
+        step git-hooks    core all   setup_git_hooks
+        step shell-zsh    core all   change_shell_to_zsh
     fi
 
     echo ""
