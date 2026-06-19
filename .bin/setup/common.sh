@@ -153,6 +153,7 @@ _clone_single_repo() {
                 else
                     echo "[$REPO_NAME] Updating..."
                     git pull origin "$(git symbolic-ref --short HEAD)" || echo "[$REPO_NAME] Failed to pull."
+                    git submodule update --init --recursive || echo "[$REPO_NAME] Failed to update submodules."
                 fi
                 cd ~
             else
@@ -165,7 +166,7 @@ _clone_single_repo() {
                 mkdir -p "$win_dir" || { echo "[$REPO_NAME] Failed to create $win_dir."; return 1; }
             fi
             echo "[$REPO_NAME] Cloning (regular) → $CLONE_DIR..."
-            git clone "$REPO" "$CLONE_DIR" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
+            git clone --recurse-submodules "$REPO" "$CLONE_DIR" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
             # Disable filemode tracking on /mnt/c (NTFS) to avoid spurious 'mode changed' diffs
             if _is_windows_repo "$REPO_NAME"; then
                 git -C "$CLONE_DIR" config core.filemode false
