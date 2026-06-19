@@ -167,7 +167,6 @@ setup_codespace() {
     update_system
     install_common_packages
     ensure_tmux_version
-    install_neovim
     install_fzf
     install_claude_code
     setup_python
