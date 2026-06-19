@@ -169,8 +169,13 @@ detect_distro() {
     fi
 }
 
-# Repos that get regular (non-bare) clones at ~/projects/reponame
-REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh notes bn tmux-workflow)
+# Repos that get regular (non-bare) clones at ~/projects/reponame.
+# Single source of truth, shared with .bin/wt (see regular-repos.zsh).
+if [[ -f "$_COMMON_DIR/regular-repos.zsh" ]]; then
+    source "$_COMMON_DIR/regular-repos.zsh"
+else
+    REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh notes bn tmux-workflow)
+fi
 
 # Repos that should live on the Windows filesystem when on WSL
 # (cloned to $WINDOWS_PROJECTS_DIR/<name>, symlinked at ~/projects/<name>)
@@ -285,17 +290,11 @@ _clone_single_repo() {
             fi
             cd ~
         else
-            echo "[$REPO_NAME] Cloning (bare)..."
-            git clone --bare "$REPO" "$BARE_PATH" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
-
-            cd "$BARE_PATH" || return 1
-            git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-            git fetch origin
-            local DEFAULT_BRANCH=$(git symbolic-ref --short HEAD)
-
-            mkdir -p "$WT_BASE"
-            git worktree add "$WT_BASE/$DEFAULT_BRANCH" "$DEFAULT_BRANCH"
-            cd ~
+            # Fresh bare clone — delegate to the worktree manager so there's one
+            # implementation of "bare clone + default-branch worktree". wt uses
+            # the same regular-repos.zsh classification, so it agrees this is bare.
+            echo "[$REPO_NAME] Cloning (bare) via wt..."
+            "$_COMMON_DIR/../wt" clone "$REPO" || track_failure "$REPO_NAME" "wt clone failed for $REPO"
         fi
     fi
 }
