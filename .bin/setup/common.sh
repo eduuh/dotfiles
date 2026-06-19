@@ -21,6 +21,46 @@ run_or_track() {
     return 0
 }
 
+# --- Resumable step runner -------------------------------------------------
+# Records completed steps so a re-run skips them and a failed run resumes where
+# it stopped. State lives alongside the prep "ready" marker.
+SETUP_STATE_DIR="${SETUP_STATE_DIR:-$HOME/.local/state/dotfiles}"
+SETUP_DONE_FILE="${SETUP_DONE_FILE:-$SETUP_STATE_DIR/done}"
+SETUP_FORCE="${SETUP_FORCE:-false}"
+
+_step_is_done() {
+    [[ -f "$SETUP_DONE_FILE" ]] && grep -qxF "$1" "$SETUP_DONE_FILE"
+}
+
+_step_mark_done() {
+    mkdir -p "$SETUP_STATE_DIR"
+    grep -qxF "$1" "$SETUP_DONE_FILE" 2>/dev/null || print -r -- "$1" >> "$SETUP_DONE_FILE"
+}
+
+# run_step <name> <command> [args...]
+# Runs the command once; skips if already recorded (unless SETUP_FORCE=true).
+# Records on SUCCESS only, so a failed step is retried on the next run.
+run_step() {
+    local name="$1"; shift
+    if [[ "$SETUP_FORCE" != "true" ]] && _step_is_done "$name"; then
+        echo "✓ [$name] already done — skipping"
+        return 0
+    fi
+    echo "▶ [$name] ..."
+    if "$@"; then
+        _step_mark_done "$name"
+        return 0
+    fi
+    track_failure "$name" "step '$name' failed"
+    return 1
+}
+
+# Forget recorded steps so the next run re-does everything.
+reset_steps() {
+    rm -f "$SETUP_DONE_FILE"
+    echo "Cleared step state ($SETUP_DONE_FILE)."
+}
+
 # Install a package with error tracking (generic wrapper)
 install_package() {
     local pkg="$1"
