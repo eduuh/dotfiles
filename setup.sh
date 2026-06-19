@@ -4,6 +4,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Script directory: $SCRIPT_DIR"
 source "$SCRIPT_DIR/.bin/setup/common.sh"
 
+# --- flags: `--force` re-runs every step; `reset` clears recorded step state ---
+for arg in "$@"; do
+    case "$arg" in
+        --force) SETUP_FORCE=true ;;
+        reset)   reset_steps; exit 0 ;;
+    esac
+done
+
 # --- Phase 2: the unattended install. Phase 1 (prep) must have run first. ---
 READY_MARKER="$HOME/.local/state/dotfiles/ready"
 if [[ ! -f "$READY_MARKER" ]]; then
@@ -27,62 +35,51 @@ if [[ "$TARGET" != "codespace" && "${EUID:-$(id -u)}" != "0" ]]; then
     SUDO_PID=$!
 fi
 
+# Populate dotfiles submodules (bn, tmux-workflow). Bootstrap skipped them
+# pre-auth; prep has since established GitHub auth.
+_init_submodules() {
+    git -C "$SCRIPT_DIR" submodule update --init --recursive
+}
+
+# OS-specific package/config setup for $1 (one resumable step).
+run_platform_setup() {
+    local distro="$1"
+    case "$distro" in
+        ubuntu|debian) source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; setup_ubuntu ;;
+        arch)          source "$SCRIPT_DIR/.bin/setup/arch.sh";   setup_arch ;;
+        codespace)     source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; setup_codespace ;;
+        darwin)
+            source "$SCRIPT_DIR/.bin/setup/mac.sh"
+            install_homebrew
+            install_brew_bundle
+            setup_kanata_service
+            setup_mac
+            ;;
+        termux)        source "$SCRIPT_DIR/.bin/setup/termux.sh"; setup_termux ;;
+        *) return 2 ;;
+    esac
+}
+
 main() {
     local distro=$(detect_distro)
 
-    # GitHub auth + SSH keys are handled in prep (Phase 1), so cloning works here.
-    # Bootstrap cloned dotfiles WITHOUT submodules (private, pre-auth); now that
-    # prep established auth, populate them (bn, tmux-workflow).
-    echo "Updating dotfiles submodules..."
-    if ! git -C "$SCRIPT_DIR" submodule update --init --recursive; then
-        track_failure "submodules" "Failed to init/update dotfiles submodules"
-    fi
-
-    # For macOS, install Homebrew and all packages via Brewfile
-    if [ "$distro" = "darwin" ]; then
-        echo "Detected macOS. Installing Homebrew and packages..."
-        source "$SCRIPT_DIR/.bin/setup/mac.sh"
-        install_homebrew
-        install_brew_bundle
-        setup_kanata_service
-    fi
-
     case "$distro" in
-        ubuntu|debian)
-            source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"
-            setup_ubuntu
-            ;;
-        arch)
-            source "$SCRIPT_DIR/.bin/setup/arch.sh"
-            setup_arch
-            ;;
-        codespace)
-            source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"
-            setup_codespace
-            ;;
-        darwin)
-            # mac.sh is already sourced; finish configuration
-            setup_mac
-            ;;
-        termux)
-            source "$SCRIPT_DIR/.bin/setup/termux.sh"
-            setup_termux
-            ;;
-        *)
-            track_failure "distro" "Unsupported distribution: $distro"
-            print_failure_summary
-            exit 1
-            ;;
+        ubuntu|debian|arch|codespace|darwin|termux) ;;
+        *) track_failure "distro" "Unsupported distribution: $distro"; print_failure_summary; exit 1 ;;
     esac
 
+    # Each step records on success → re-runs skip it, a failed run resumes here.
+    run_step submodules         _init_submodules
+    run_step "platform-$distro" run_platform_setup "$distro"
+
     if [ "$distro" != "termux" ]; then
-        install_tmux_plugins
-        install_zoxide
-        install_starship
-        install_pnpm
-        install_talosctl
-        setup_git_hooks
-        change_shell_to_zsh
+        run_step tmux-plugins install_tmux_plugins
+        run_step zoxide       install_zoxide
+        run_step starship     install_starship
+        run_step pnpm         install_pnpm
+        run_step talosctl     install_talosctl
+        run_step git-hooks    setup_git_hooks
+        run_step shell-zsh    change_shell_to_zsh
     fi
 
     echo ""
@@ -92,7 +89,6 @@ main() {
     # Clean up sudo keepalive
     [[ -n "$SUDO_PID" ]] && kill "$SUDO_PID" 2>/dev/null
 
-    # Print summary of any failures
     print_failure_summary
 }
 
