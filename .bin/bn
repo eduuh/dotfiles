@@ -79,6 +79,17 @@ if [[ -r "$_WORK_REPOS_FILE" ]]; then
     done < "$_WORK_REPOS_FILE"
 fi
 
+# Work-item tracker base URL is org-specific (sensitive) — kept out of the
+# public repo, same as the work-repo allowlist above. Notes link "<base>/<id>".
+# Configure via $BN_WORKITEM_BASE_URL or the file below (its contents = the base
+# URL of your tracker; the work-item id is appended as "<base>/<id>").
+_WORKITEM_BASE_URL_FILE="${BN_WORKITEM_BASE_URL_FILE:-$HOME/.config/bn/workitem-base-url}"
+_WORKITEM_BASE_URL="${BN_WORKITEM_BASE_URL:-}"
+if [[ -z "$_WORKITEM_BASE_URL" && -r "$_WORKITEM_BASE_URL_FILE" ]]; then
+    _WORKITEM_BASE_URL="$(< "$_WORKITEM_BASE_URL_FILE")"
+    _WORKITEM_BASE_URL="${_WORKITEM_BASE_URL//[[:space:]]/}"
+fi
+
 # Default NOTES_DIR is the personal repo. resolve_note_context overrides this
 # for the current NOTE_REPO when a context is loaded.
 NOTES_DIR="$_NOTES_DIR_PERSONAL"
@@ -3352,12 +3363,13 @@ cmd_link() {
     if [[ -n "$id" ]]; then
         ensure_note
         _set_frontmatter "$note_file" "work_item" "$id"
-        local wi_url_entry="https://dev.azure.com/ORG/PROJECT/_workitems/edit/${id}"
+        local collab_entry="WI $id"
+        [[ -n "$_WORKITEM_BASE_URL" ]] && collab_entry="WI $id: ${_WORKITEM_BASE_URL%/}/${id}"
         local yaml_file="${note_file%.md}.yaml"
         if [[ -f "$yaml_file" ]]; then
-            _yaml_add "$yaml_file" "collab" "WI $id: $wi_url_entry" >/dev/null
+            _yaml_add "$yaml_file" "collab" "$collab_entry" >/dev/null
         else
-            insert_into_section "$note_file" "## Collaboration" "- WI $id: $wi_url_entry" 2>/dev/null || true
+            insert_into_section "$note_file" "## Collaboration" "- $collab_entry" 2>/dev/null || true
         fi
         echo "Work item linked: $id"
         return
@@ -3378,8 +3390,13 @@ cmd_link() {
         return 1
     fi
 
-    # Build URL (Azure DevOps)
-    local wi_url="https://dev.azure.com/ORG/PROJECT/_workitems/edit/${wi}"
+    # Build URL from the configured work-item tracker base.
+    if [[ -z "$_WORKITEM_BASE_URL" ]]; then
+        echo "Work item: $wi"
+        echo "(set BN_WORKITEM_BASE_URL or ~/.config/bn/workitem-base-url for a clickable link)" >&2
+        return 0
+    fi
+    local wi_url="${_WORKITEM_BASE_URL%/}/${wi}"
 
     case "$action" in
         copy) _copy_to_clipboard "$wi_url" && echo "Copied: $wi_url" ;;
