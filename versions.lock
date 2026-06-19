@@ -1,0 +1,20 @@
+# versions.lock — pinned tool versions for the install (Phase 2).
+#
+# Snapshot of upstream "latest" as of 2026-06-20. Sourced by
+# .bin/setup/common.sh; every machine that runs setup.sh converges to exactly
+# these versions. Bump deliberately. Shell syntax: KEY=value, no spaces around =.
+# Any value may be overridden from the environment, e.g. NVIM_VERSION=v0.11.0 ./setup.sh
+
+# --- pinned & wired into install_* ---
+NVIM_VERSION=v0.12.3        # neovim — releases/download/<tag>/nvim-linux-<arch>.tar.gz
+FZF_VERSION=0.73.1          # fzf — no leading v (matches the release URL template)
+LAZYGIT_VERSION=0.62.2      # lazygit — no leading v
+TMUX_VERSION=3.5a           # tmux — built from source
+NVM_VERSION=v0.40.1         # nvm — install.sh tag
+PNPM_VERSION=11.8.0         # pnpm — honoured by the get.pnpm.io installer via $PNPM_VERSION
+RUST_TOOLCHAIN=1.96.0       # rust — rustup --default-toolchain
+
+# --- reference only (vendor installer owns the version; not yet pinnable) ---
+ZOXIDE_VERSION=0.9.9        # zoxide install.sh tracks upstream
+STARSHIP_VERSION=1.25.1     # starship install.sh tracks upstream
+TALOSCTL_VERSION=v1.13.4    # talos.dev/install tracks upstream (WSL-skipped anyway)

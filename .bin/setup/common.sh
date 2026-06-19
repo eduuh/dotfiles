@@ -1,5 +1,10 @@
 #!/bin/zsh
 
+# Pinned tool versions (repo-root versions.lock). ${(%):-%x} resolves this file's
+# path even when sourced, so the lock loads regardless of who sources common.sh.
+_COMMON_DIR="${${(%):-%x}:A:h}"
+[[ -f "$_COMMON_DIR/../../versions.lock" ]] && source "$_COMMON_DIR/../../versions.lock"
+
 # Failure tracking - collect errors instead of exiting
 typeset -ga SETUP_FAILURES=()
 
@@ -457,7 +462,7 @@ ensure_tmux_version() {
     fi
 
     # Build tmux from source
-    local tmux_version="3.5a"
+    local tmux_version="${TMUX_VERSION:-3.5a}"
     local build_dir="/tmp/tmux-build"
 
     rm -rf "$build_dir"
@@ -517,7 +522,12 @@ install_neovim() {
 
     local arch=$(uname -m)
     local tarball="nvim-linux-${arch}.tar.gz"
-    local url="https://github.com/neovim/neovim/releases/latest/download/${tarball}"
+    local url
+    if [[ -n "${NVIM_VERSION:-}" ]]; then
+        url="https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/${tarball}"
+    else
+        url="https://github.com/neovim/neovim/releases/latest/download/${tarball}"
+    fi
 
     if ! curl -sL "$url" -o "/tmp/${tarball}"; then
         track_failure "neovim" "Failed to download Neovim"
@@ -537,8 +547,10 @@ install_fzf() {
     local install_dir="$HOME/.local/bin"
     mkdir -p "$install_dir"
 
-    local version
-    version=$(curl -s "https://api.github.com/repos/junegunn/fzf/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
+    local version="${FZF_VERSION:-}"
+    if [[ -z "$version" ]]; then
+        version=$(curl -s "https://api.github.com/repos/junegunn/fzf/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
+    fi
     if [[ -z "$version" ]]; then
         track_failure "fzf" "Failed to fetch fzf version"
         return 1
@@ -574,8 +586,10 @@ install_lazygit() {
         }
     fi
 
-    local lazygit_version
-    lazygit_version=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
+    local lazygit_version="${LAZYGIT_VERSION:-}"
+    if [[ -z "$lazygit_version" ]]; then
+        lazygit_version=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": *"v\K[^"]*')
+    fi
     if [[ -z "$lazygit_version" ]]; then
         track_failure "lazygit" "Failed to fetch lazygit version"
         return 0
@@ -652,8 +666,8 @@ install_rust() {
         return 0
     fi
 
-    echo "Installing Rust..."
-    if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; then
+    echo "Installing Rust (toolchain ${RUST_TOOLCHAIN:-stable})..."
+    if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN:-stable}"; then
         # Source the cargo environment for the current session
         [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
     else
@@ -692,6 +706,8 @@ install_pnpm() {
         Darwin) export PNPM_HOME="$HOME/Library/pnpm" ;;
         *)      export PNPM_HOME="$HOME/.local/share/pnpm" ;;
     esac
+    # The get.pnpm.io installer honours $PNPM_VERSION; export it so the piped sh sees it.
+    [[ -n "${PNPM_VERSION:-}" ]] && export PNPM_VERSION
     if curl -fsSL https://get.pnpm.io/install.sh | sh -s -- -y; then
         case ":$PATH:" in
             *":$PNPM_HOME:"*) ;;
@@ -761,7 +777,7 @@ install_nvm() {
     fi
 
     echo "Installing NVM..."
-    if ! curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash -s -- --no-use --silent; then
+    if ! curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION:-v0.40.1}/install.sh" | bash -s -- --no-use --silent; then
         track_failure "nvm" "Failed to install NVM"
         return 0
     fi
