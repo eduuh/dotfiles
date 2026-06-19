@@ -85,7 +85,7 @@ detect_distro() {
 }
 
 # Repos that get regular (non-bare) clones at ~/projects/reponame
-REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh notes)
+REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh notes bn tmux-workflow)
 
 # Repos that should live on the Windows filesystem when on WSL
 # (cloned to $WINDOWS_PROJECTS_DIR/<name>, symlinked at ~/projects/<name>)
@@ -289,6 +289,8 @@ clone_repos() {
             "git@github.com:eduuh/nvim.git"
             "git@github.com:eduuh-private/personal-notes.git"
             "git@github.com:eduuh/eduuh.git"
+            "git@github.com:eduuh/bn.git"
+            "git@github.com:eduuh/tmux-workflow.git"
         )
 
         if [ "$is_wsl" = true ] && [ "$(hostname)" = "edwin" ]; then
