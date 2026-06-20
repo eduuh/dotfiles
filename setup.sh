@@ -79,6 +79,7 @@ main() {
     # step <name> <min-profile> <targets> <cmd…> — profile/target filtered,
     # then idempotent + resumable. Records on success; failed steps resume.
     step submodules         core all   _init_submodules
+    step rust               core wsl,linux,mac,termux install_rust
     step bn                 core all   build_bn
     step "platform-$distro" core all   run_platform_setup "$distro"
 
@@ -92,9 +93,10 @@ main() {
         step shell-zsh    core all   change_shell_to_zsh
     fi
 
-    echo ""
-    echo "To clone project repos:  ./setup-projects.sh"
-    echo "To install Rust:         ./setup-rust.sh"
+    # Project repos: prep already established GitHub auth, so cloning is safe here.
+    # Idempotent — existing clones are skipped. (setup-projects.sh still works standalone.)
+    step projects   core all   clone_repos
+    step notes-stow core all   setup_personal_notes_stow
 
     # Clean up sudo keepalive
     [[ -n "$SUDO_PID" ]] && kill "$SUDO_PID" 2>/dev/null
