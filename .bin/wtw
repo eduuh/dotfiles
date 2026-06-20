@@ -29,4 +29,10 @@ if [[ -z "$WT_ROOT" ]]; then
 fi
 
 export WT_ROOT
+
+# Windows-side clone manifest (machine-local; keeps work repo URLs out of the
+# public dotfiles). Used by `wtw clone-all`.
+win_manifest="${XDG_CONFIG_HOME:-$HOME/.config}/wt/win-repos"
+[[ -f "$win_manifest" ]] && export WT_MANIFEST="$win_manifest"
+
 exec "${0:A:h}/wt" "$@"
