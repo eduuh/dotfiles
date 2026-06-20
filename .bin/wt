@@ -14,6 +14,20 @@ else
     REGULAR_CLONE_REPOS=(dotfiles nvim)
 fi
 
+# Project layout. Defaults to ~/projects (fast ext4). $WT_ROOT lets a wrapper
+# (e.g. wtw) point this same worktree logic at a different root — such as the
+# Windows filesystem — without duplicating any of the logic below.
+PROJECT_ROOT="${WT_ROOT:-$HOME/projects}"
+BARE_DIR="$PROJECT_ROOT/bare"
+WORKTREE_DIR="$PROJECT_ROOT/worktree"
+
+# Colors (previously inherited from the retired tmux-lib.sh)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
 usage() {
     cat << EOF
 Usage: wt <command> [args]
