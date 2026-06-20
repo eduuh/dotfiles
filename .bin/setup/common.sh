@@ -5,6 +5,13 @@
 _COMMON_DIR="${${(%):-%x}:A:h}"
 [[ -f "$_COMMON_DIR/../../versions.lock" ]] && source "$_COMMON_DIR/../../versions.lock"
 
+# Optional external env vars, defaulted so common.sh is safe under `set -u`. prep.sh sources
+# this with `set -u`; an unset reference there aborts the whole source, which would drop
+# every function defined below the first such reference (e.g. detect_distro / _is_wsl).
+: "${CODESPACES:=}"
+: "${TERMUX_VERSION:=}"
+: "${WINDOWS_PROJECTS_DIR:=}"
+
 # Failure tracking - collect errors instead of exiting
 typeset -ga SETUP_FAILURES=()
 
