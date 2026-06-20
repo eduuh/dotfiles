@@ -43,7 +43,7 @@ if [[ "$TARGET" != "codespace" && "${EUID:-$(id -u)}" != "0" ]]; then
     SUDO_PID=$!
 fi
 
-# Populate dotfiles submodules (bn; tmux-workflow lives inside it). Bootstrap skipped them
+# Populate dotfiles submodules (bn; the tmux workflow scripts live inside it). Bootstrap skipped them
 # pre-auth; prep has since established GitHub auth.
 _init_submodules() {
     git -C "$SCRIPT_DIR" submodule update --init --recursive
