@@ -49,6 +49,52 @@ _init_submodules() {
     git -C "$SCRIPT_DIR" submodule update --init --recursive
 }
 
+# Project cloning is the slowest part of setup (a large work repo can take hours), and
+# nothing else depends on it — so never wait on it. Open the clone as a tmux WINDOW and let
+# setup.sh finish: it runs in the session setup.sh was launched from, or — when setup.sh
+# isn't inside tmux — in the persistent `planning` session (created if absent). The runner
+# (setup-projects.sh) records the `projects` step on completion, so a later run skips it.
+_PROJECTS_LOG="${SETUP_STATE_DIR:-$HOME/.local/state/dotfiles}/projects-clone.log"
+_PROJECTS_WINDOW="bn-clone"
+_PLANNING_SESSION="planning"
+
+_projects_launch() {
+    if [[ "$SETUP_FORCE" != "true" ]] && _step_is_done projects; then
+        echo "✓ [projects] already done — skipping"
+        return 0
+    fi
+    local runner="$SCRIPT_DIR/setup-projects.sh"
+
+    # No tmux at all: detach with nohup so the clone survives setup.sh exiting.
+    if ! command -v tmux >/dev/null 2>&1; then
+        mkdir -p "$(dirname "$_PROJECTS_LOG")"
+        nohup "$runner" > "$_PROJECTS_LOG" 2>&1 < /dev/null &
+        echo "→ [projects] cloning in background (no tmux; log: $_PROJECTS_LOG) — setup won't wait."
+        return 0
+    fi
+
+    # Target the session setup.sh runs in; otherwise the persistent planning session.
+    local target
+    if [[ -n "$TMUX" ]]; then
+        target=$(tmux display-message -p '#S')
+    else
+        target="$_PLANNING_SESSION"
+        tmux has-session -t "$target" 2>/dev/null || tmux new-session -d -s "$target"
+    fi
+
+    # Don't open a second clone window if one is already running in that session.
+    if tmux list-windows -t "$target" -F '#W' 2>/dev/null | grep -qx "$_PROJECTS_WINDOW"; then
+        echo "↻ [projects] clone window '$_PROJECTS_WINDOW' already open in '$target' — leaving it"
+        return 0
+    fi
+
+    tmux new-window -d -t "$target" -n "$_PROJECTS_WINDOW" "$runner"
+    echo "→ [projects] cloning in tmux window '$_PROJECTS_WINDOW' (session '$target') — setup won't wait."
+    if [[ -z "$TMUX" ]]; then
+        echo "             watch it:  tmux attach -t $target"
+    fi
+}
+
 # OS-specific package/config setup for $1 (one resumable step).
 run_platform_setup() {
     local distro="$1"
@@ -83,6 +129,10 @@ main() {
     step bn                 core all   build_bn
     step "platform-$distro" core all   run_platform_setup "$distro"
 
+    # tmux is installed by the platform step above; fire the clone into a detached session
+    # now so it runs alongside the remaining tool steps and keeps going after setup exits.
+    _projects_launch
+
     if [ "$distro" != "termux" ]; then
         step tmux-plugins core all   install_tmux_plugins
         step zoxide       core all   install_zoxide
@@ -92,11 +142,6 @@ main() {
         step git-hooks    core all   setup_git_hooks
         step shell-zsh    core all   change_shell_to_zsh
     fi
-
-    # Project repos: prep already established GitHub auth, so cloning is safe here.
-    # Idempotent — existing clones are skipped. (setup-projects.sh still works standalone.)
-    step projects   core all   clone_repos
-    step notes-stow core all   setup_personal_notes_stow
 
     # Clean up sudo keepalive
     [[ -n "$SUDO_PID" ]] && kill "$SUDO_PID" 2>/dev/null
