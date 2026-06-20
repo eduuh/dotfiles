@@ -75,6 +75,17 @@ wt() {
     fi
 }
 
+# Same wrapper for repos that live on the Windows filesystem (wtw go must cd too)
+wtw() {
+    if [[ "$1" == "go" ]]; then
+        local dir
+        dir=$("$HOME/.bin/wtw" go "${@:2}")
+        [[ -n "$dir" && -d "$dir" ]] && cd "$dir"
+    else
+        "$HOME/.bin/wtw" "$@"
+    fi
+}
+
 # Branch note quick-add
 t() { "$HOME/.bin/bn" add todo "$*" }
 unalias r 2>/dev/null  # override zsh's default r=fc (repeat last command)
