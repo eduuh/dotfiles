@@ -174,7 +174,7 @@ detect_distro() {
 if [[ -f "$_COMMON_DIR/regular-repos.zsh" ]]; then
     source "$_COMMON_DIR/regular-repos.zsh"
 else
-    REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh notes bn tmux-workflow)
+    REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh notes bn)
 fi
 
 # Repos that should live on the Windows filesystem when on WSL
@@ -375,7 +375,6 @@ clone_repos() {
             "git@github.com:eduuh-private/personal-notes.git"
             "git@github.com:eduuh/eduuh.git"
             "git@github.com:eduuh/bn.git"
-            "git@github.com:eduuh/tmux-workflow.git"
         )
 
         if [ "$is_wsl" = true ] && [ "$(hostname)" = "edwin" ]; then

@@ -15,5 +15,4 @@ REGULAR_CLONE_REPOS=(
     eduuh
     notes
     bn
-    tmux-workflow
 )

@@ -1,6 +1,3 @@
 [submodule ".bin/bn-repo"]
 	path = .bin/bn-repo
 	url = git@github.com:eduuh/bn.git
-[submodule ".bin/tmux-workflow"]
-	path = .bin/tmux-workflow
-	url = git@github.com:eduuh/tmux-workflow.git
