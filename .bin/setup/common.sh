@@ -674,6 +674,26 @@ install_rust() {
     fi
 }
 
+build_bn() {
+    # Compile the Rust bn from the bn-repo submodule. The committed .bin/bn shim
+    # prefers this binary and falls back to the bash bn when it's absent, so a
+    # failed/skipped build degrades gracefully rather than breaking bn.
+    if [[ $CODESPACES == "true" ]]; then
+        echo "Codespace: skipping Rust bn build (bn falls back to the bash implementation)."
+        return 0
+    fi
+
+    if ! command -v cargo &> /dev/null; then
+        install_rust
+        command -v cargo &> /dev/null || { echo "cargo unavailable; bn uses the bash fallback."; return 0; }
+    fi
+
+    echo "Building Rust bn…"
+    if ! cargo build --release --manifest-path "$_COMMON_DIR/../bn-repo/Cargo.toml" -p bn-cli; then
+        track_failure "bn" "Failed to build Rust bn"
+    fi
+}
+
 install_playwright() {
     if command -v playwright &> /dev/null; then
         echo "Playwright is already installed."
