@@ -8,9 +8,11 @@
 # Rule of thumb: tools/config you don't branch-develop are flat; project repos
 # where you do feature-branch work are bare+worktree.
 
+# nvim is intentionally NOT here: its config is branch-developed (main/shellcmd),
+# so it clones bare + worktree like project repos, with ~/.config/nvim → its main
+# worktree. See _setup_nvim_config in common.sh.
 REGULAR_CLONE_REPOS=(
     dotfiles
-    nvim
     personal-notes
     eduuh
     notes
