@@ -79,6 +79,7 @@ main() {
     # step <name> <min-profile> <targets> <cmd…> — profile/target filtered,
     # then idempotent + resumable. Records on success; failed steps resume.
     step submodules         core all   _init_submodules
+    step bn                 core all   build_bn
     step "platform-$distro" core all   run_platform_setup "$distro"
 
     if [ "$distro" != "termux" ]; then

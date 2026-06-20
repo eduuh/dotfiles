@@ -1,1 +1,9 @@
-/home/edd/projects/bn/target/release/bn
+#!/usr/bin/env sh
+# bn dispatcher. Prefer the compiled Rust binary; fall back to the bash bn.
+# The Rust binary is built from the bn-repo submodule by setup (cargo build).
+# Where Rust isn't built (e.g. Codespaces, which skip the toolchain) the bash
+# bn takes over, so `bn` always resolves to a working implementation.
+d=$(dirname "$0")
+rs="$d/bn-repo/target/release/bn"
+[ -x "$rs" ] && exec "$rs" "$@"
+exec "$d/bn-bash" "$@"
