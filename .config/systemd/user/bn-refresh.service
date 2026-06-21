@@ -1,0 +1,9 @@
+[Unit]
+Description=bn — refresh all branch-note worktrees (fetch, fast-forward, rebuild)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# `bn run` records the outcome to the event log so `bn cron status` / `bn doctor` see it.
+ExecStart=%h/.bin/bn run refresh-all
