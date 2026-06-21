@@ -12,17 +12,23 @@
 
 ## Setup
 
-The setup script runs under zsh, so install it first if it's not already present:
+Fresh machine — one command bootstraps everything:
 
 ```bash
-sudo apt-get install -y zsh git
+curl -fsSL https://raw.githubusercontent.com/eduuh/dotfiles/main/bootstrap.sh | bash
 ```
 
-Then clone and run:
+It installs `git`/`zsh`, clones dotfiles into the bare + worktree layout
+(`~/projects/bare/dotfiles.git` + `~/projects/worktree/dotfiles/main`), then hands
+off to the attended `prep.sh` (sudo, GitHub auth) and the unattended `setup.sh`.
+Symlinks are always stowed from the `main` worktree, so you can `wt add
+feature/x` and edit dotfiles in multiple worktrees without disturbing them.
+
+Already cloned? Run the phases directly from the main worktree:
 
 ```bash
-git clone https://github.com/eduuh/dotfiles.git ~/projects/dotfiles
-cd ~/projects/dotfiles && ./setup.sh
+cd ~/projects/worktree/dotfiles/main
+./prep.sh && ./setup.sh
 ```
 
 Python setup (venv + pynvim/requests, and on Ubuntu the `python3.10` /
@@ -66,7 +72,7 @@ On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
 ## Key Tools
 
-- **`tat`** — Tmux session picker with zoxide frecency and fzf preview
+- **`tat`** — Tmux session picker (lives in the `bn` workflow submodule)
 - **`wt`** — Git worktree manager for bare repos (`wt clone`, `wt add`, `wt list`, `wt remove`)
 - **`bn`** — Branch notes manager for per-branch task tracking
 - **`ssh-export`** — Copy SSH key setup script to clipboard for bootstrapping new environments
@@ -92,4 +98,4 @@ Setup auto-detects Codespaces (`$CODESPACES=true`) and adjusts:
 
 ## Related
 
-[win-dot](https://github.com/eduuh/win-dot) · [arch-dotfiles](https://github.com/eduuh/arch-dotfiles) · [thetrader](https://github.com/eduuh/thetrader)
+[win-dot](https://github.com/eduuh/win-dot) · [arch-dotfiles](https://github.com/eduuh/arch-dotfiles)

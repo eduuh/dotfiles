@@ -5,6 +5,12 @@
 # git + zsh exist, clones the (public) dotfiles over https WITHOUT submodules
 # (private submodules need auth, which prep establishes), then hands off.
 #
+# dotfiles is cloned into the bare + worktree layout (like every other repo):
+#   ~/projects/bare/dotfiles.git          bare repo
+#   ~/projects/worktree/dotfiles/main     main worktree (stow source, prep runs here)
+# so you can `wt add feature/x` and work dotfiles across multiple worktrees while
+# the $HOME symlinks always stow from main.
+#
 # Run on a fresh machine:
 #   curl -fsSL https://raw.githubusercontent.com/eduuh/dotfiles/main/bootstrap.sh | bash
 #
@@ -13,7 +19,9 @@
 set -euo pipefail
 
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/eduuh/dotfiles.git}"
-DOTFILES_DIR="${DOTFILES_DIR:-$HOME/projects/dotfiles}"
+PROJECT_ROOT="${PROJECT_ROOT:-$HOME/projects}"
+DOTFILES_BARE="$PROJECT_ROOT/bare/dotfiles.git"
+DOTFILES_MAIN="$PROJECT_ROOT/worktree/dotfiles/main"
 
 log() { printf '\033[1;36m[bootstrap]\033[0m %s\n' "$*"; }
 err() { printf '\033[1;31m[bootstrap]\033[0m %s\n' "$*" >&2; }
@@ -48,21 +56,28 @@ main() {
   ensure_pkg git  git
   ensure_pkg zsh  zsh
 
-  if [ -d "$DOTFILES_DIR/.git" ]; then
-    log "dotfiles already present at $DOTFILES_DIR — skipping clone"
+  if [ -e "$DOTFILES_MAIN/prep.sh" ]; then
+    log "dotfiles worktree already present at $DOTFILES_MAIN — skipping clone"
   else
-    log "cloning dotfiles → $DOTFILES_DIR (https, no submodules)"
-    mkdir -p "$(dirname "$DOTFILES_DIR")"
-    git clone "$DOTFILES_REPO" "$DOTFILES_DIR"
+    log "cloning dotfiles → bare + worktree (https, no submodules)"
+    mkdir -p "$(dirname "$DOTFILES_BARE")" "$(dirname "$DOTFILES_MAIN")"
+    git clone --bare "$DOTFILES_REPO" "$DOTFILES_BARE"
+    # Track all branches so `wt add` can check out any of them later.
+    git --git-dir="$DOTFILES_BARE" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+    git --git-dir="$DOTFILES_BARE" fetch origin
+    local def
+    def=$(git --git-dir="$DOTFILES_BARE" symbolic-ref --short HEAD 2>/dev/null || echo main)
+    git --git-dir="$DOTFILES_BARE" worktree add "$PROJECT_ROOT/worktree/dotfiles/$def" "$def"
+    DOTFILES_MAIN="$PROJECT_ROOT/worktree/dotfiles/$def"
   fi
 
   log "handing off to prep (Phase 1)…"
   # Restore a real TTY for prep's interactive prompts (curl | bash leaves stdin
   # on the pipe). Fall back to a plain exec where there's no controlling tty.
   if [ -e /dev/tty ]; then
-    exec zsh "$DOTFILES_DIR/prep.sh" "$@" < /dev/tty
+    exec zsh "$DOTFILES_MAIN/prep.sh" "$@" < /dev/tty
   else
-    exec zsh "$DOTFILES_DIR/prep.sh" "$@"
+    exec zsh "$DOTFILES_MAIN/prep.sh" "$@"
   fi
 }
 
