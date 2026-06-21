@@ -915,22 +915,28 @@ setup_personal_notes_stow() {
 
 setup_git_hooks() {
     echo "Setting up git hooks for all projects..."
-    local hook_source="$HOME/projects/worktree/dotfiles/main/.bin/git-hooks/pre-push"
-    [ -f "$hook_source" ] || hook_source="$HOME/projects/dotfiles/.bin/git-hooks/pre-push"
+    local hook_src_dir="$HOME/projects/worktree/dotfiles/main/.bin/git-hooks"
+    [ -d "$hook_src_dir" ] || hook_src_dir="$HOME/projects/dotfiles/.bin/git-hooks"
 
-    if [ ! -f "$hook_source" ]; then
-        track_failure "git-hooks" "Pre-push hook not found at $hook_source"
+    if [ ! -d "$hook_src_dir" ]; then
+        track_failure "git-hooks" "Hook source dir not found at $hook_src_dir"
         return 0
     fi
 
-    # Bare repos in ~/projects/bare/*.git
+    # Symlink every hook in .bin/git-hooks/ into a repo's hooks dir (pre-push,
+    # pre-commit, …). Adding a new hook there needs no change here.
+    _link_hooks() {
+        local dest="$1" hook
+        mkdir -p "$dest"
+        for hook in "$hook_src_dir"/*(N.); do
+            ln -sf "$hook" "$dest/${hook:t}" || track_failure "git-hooks" "Failed to link ${hook:t} into $dest"
+        done
+    }
+
+    # Bare repos — hooks are shared across all their worktrees.
     for bare in ~/projects/bare/*.git(N/); do
-        local hook_dir="$bare/hooks"
-        echo "Installing pre-push hook in $(basename "$bare")..."
-        mkdir -p "$hook_dir"
-        if ! ln -sf "$hook_source" "$hook_dir/pre-push"; then
-            track_failure "git-hooks" "Failed to install hook in $(basename "$bare")"
-        fi
+        echo "Installing hooks in $(basename "$bare")..."
+        _link_hooks "$bare/hooks"
     done
 
     # Regular clones (personal-notes). nvim and dotfiles are bare+worktree — their
@@ -938,12 +944,8 @@ setup_git_hooks() {
     for project in personal-notes; do
         local git_dir=~/projects/"$project"/.git
         if [ -d "$git_dir" ]; then
-            local hook_dir="$git_dir/hooks"
-            echo "Installing pre-push hook in $project..."
-            mkdir -p "$hook_dir"
-            if ! ln -sf "$hook_source" "$hook_dir/pre-push"; then
-                track_failure "git-hooks" "Failed to install hook in $project"
-            fi
+            echo "Installing hooks in $project..."
+            _link_hooks "$git_dir/hooks"
         fi
     done
 }

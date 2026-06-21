@@ -1,0 +1,40 @@
+#!/bin/sh
+# Defence: never commit on a main branch, and never commit in a stow-source main
+# worktree. All real work happens in a dedicated feature worktree (wt add <branch>),
+# so `main` worktrees stay clean and branch work never pollutes them.
+#
+# Installed into every bare repo's shared hooks dir by setup_git_hooks, so it runs
+# for commits in all worktrees. Override a single commit with `git commit --no-verify`.
+
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo DETACHED)
+top=$(git rev-parse --show-toplevel 2>/dev/null)
+
+block() {
+    printf '\n🚫  \033[1;31mPROTECTED: %s\033[0m\n' "$1" >&2
+    shift
+    for line in "$@"; do printf '   %s\n' "$line" >&2; done
+    printf '   Override once with: \033[1mgit commit --no-verify\033[0m\n\n' >&2
+    exit 1
+}
+
+# 1. Never work on main/master directly — create a feature branch + worktree.
+if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+    block "no commits on '$branch'" \
+        "Work in a feature worktree instead:" \
+        "    wt add -b <branch> $branch     # new worktree off $branch" \
+        "then commit there. PRs only into $branch."
+fi
+
+# 2. Never develop in a stow-source main worktree (~/.../worktree/<repo>/main),
+#    even on a feature branch — it would move the symlink source's HEAD.
+case "$top" in
+    */worktree/*/main)
+        block "this is the main (stow-source) worktree" \
+            "$top" \
+            "It must stay on 'main'. Do this branch's work in its own worktree:" \
+            "    wt add $branch" \
+            "Restore this one with:  git switch main"
+        ;;
+esac
+
+exit 0
