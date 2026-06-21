@@ -2,3 +2,8 @@
 .config/nvim
 .config/github-copilot/apps.json
 .config/github-copilot/versions.json
+
+# Local compiled bn artifacts. The bn binary is built into the bn-repo
+# submodule's target/ and reached via the tracked .bin/bn shim; bn-mcp is a
+# locally-built MCP server. Neither belongs in the dotfiles tree.
+.bin/bn-mcp
