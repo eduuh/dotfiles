@@ -7,13 +7,16 @@ source "$SCRIPT_DIR/.bin/setup/common.sh"
 # --- flags ---
 #   --force          re-run every step
 #   --profile <tier> override the profile from the prep marker (core|dev|desktop)
+#   --work           also install work-machine tools (agency, etc.)
 #   reset            clear recorded step state and exit
 SETUP_PROFILE_OVERRIDE=""
+SETUP_WORK=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --force)     SETUP_FORCE=true; shift ;;
         --profile)   SETUP_PROFILE_OVERRIDE="$2"; shift 2 ;;
         --profile=*) SETUP_PROFILE_OVERRIDE="${1#*=}"; shift ;;
+        --work)      SETUP_WORK=true; shift ;;
         reset)       reset_steps; exit 0 ;;
         *)           shift ;;
     esac
@@ -141,6 +144,11 @@ main() {
         step talosctl     dev  all   install_talosctl
         step git-hooks    core all   setup_git_hooks
         step shell-zsh    core all   change_shell_to_zsh
+    fi
+
+    # Work-machine tools (agency, etc.) — only when --work is passed.
+    if [[ "$SETUP_WORK" == "true" ]]; then
+        step work-tools core all install_work_tools
     fi
 
     # Clean up sudo keepalive
