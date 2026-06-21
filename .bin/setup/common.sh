@@ -709,9 +709,12 @@ install_rust() {
 }
 
 build_bn() {
-    # Compile the Rust bn from the bn-repo submodule. The committed .bin/bn shim
-    # prefers this binary and falls back to the bash bn when it's absent, so a
-    # failed/skipped build degrades gracefully rather than breaking bn.
+    # Install the Rust bn from the bn-repo submodule by delegating to its own
+    # installer. install.sh builds bn + bn-mcp, copies them to ~/.bin, and registers
+    # the bn-mcp stdio server globally for Claude Code + Copilot (idempotent — safe to
+    # re-run, --force re-runs this step). --core skips bn's tmux layer (dotfiles owns
+    # tmux); BN_BUILD_FROM_SOURCE=1 builds the pinned submodule rather than pulling a
+    # GitHub release, so the binaries match the commit this repo points at.
     if [[ $CODESPACES == "true" ]]; then
         echo "Codespace: skipping Rust bn build (bn falls back to the bash implementation)."
         return 0
@@ -722,9 +725,9 @@ build_bn() {
         command -v cargo &> /dev/null || { echo "cargo unavailable; bn uses the bash fallback."; return 0; }
     fi
 
-    echo "Building Rust bn…"
-    if ! cargo build --release --manifest-path "$_COMMON_DIR/../bn-repo/Cargo.toml" -p bn-cli; then
-        track_failure "bn" "Failed to build Rust bn"
+    echo "Installing Rust bn (+ bn-mcp, + global MCP registration)…"
+    if ! BN_BUILD_FROM_SOURCE=1 bash "$_COMMON_DIR/../bn-repo/install.sh" --core; then
+        track_failure "bn" "Failed to install Rust bn"
     fi
 }
 
