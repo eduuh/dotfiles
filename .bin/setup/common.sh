@@ -181,7 +181,7 @@ detect_distro() {
 if [[ -f "$_COMMON_DIR/regular-repos.zsh" ]]; then
     source "$_COMMON_DIR/regular-repos.zsh"
 else
-    REGULAR_CLONE_REPOS=(dotfiles nvim personal-notes eduuh notes bn)
+    REGULAR_CLONE_REPOS=(dotfiles personal-notes eduuh notes bn)  # nvim is bare+worktree (see regular-repos.zsh)
 fi
 
 # Repos that should live on the Windows filesystem when on WSL
@@ -274,12 +274,6 @@ _clone_single_repo() {
         if [ "$CLONE_DIR" != "$SYMLINK_DIR" ] && [ ! -e "$SYMLINK_DIR" ]; then
             ln -s "$CLONE_DIR" "$SYMLINK_DIR" && echo "[$REPO_NAME] Symlinked $SYMLINK_DIR → $CLONE_DIR"
         fi
-
-        # Special handling for Neovim config
-        if [[ "$REPO_NAME" == "nvim" ]]; then
-            mkdir -p ~/.config
-            ln -sf "$CLONE_DIR" ~/.config/nvim
-        fi
     else
         local BARE_PATH=~/projects/bare/"${REPO_NAME}.git"
         local WT_BASE=~/projects/worktree/"$REPO_NAME"
@@ -303,6 +297,29 @@ _clone_single_repo() {
             echo "[$REPO_NAME] Cloning (bare) via wt..."
             "$_COMMON_DIR/../wt" clone "$REPO" || track_failure "$REPO_NAME" "wt clone failed for $REPO"
         fi
+    fi
+
+    # nvim is a bare+worktree repo: point ~/.config/nvim at its main worktree and
+    # run the repo's own installer for ecosystem deps (tree-sitter, vectorcode, …).
+    [[ "$REPO_NAME" == "nvim" ]] && _setup_nvim_config
+}
+
+# Link ~/.config/nvim → the nvim main worktree and install its ecosystem deps.
+# Safe to call repeatedly; no-ops if the worktree isn't present yet.
+_setup_nvim_config() {
+    local wt_main=~/projects/worktree/nvim/main
+    if [ ! -d "$wt_main" ]; then
+        echo "[nvim] main worktree not found at $wt_main — skipping config link."
+        return 0
+    fi
+    mkdir -p ~/.config
+    ln -sfn "$wt_main" ~/.config/nvim
+    echo "[nvim] Linked ~/.config/nvim → $wt_main"
+    # Install ecosystem deps once. tree-sitter is a good proxy: if it's already on
+    # PATH, the installer has run before, so skip the slow re-download.
+    if [ -x "$wt_main/install.sh" ] && ! command -v tree-sitter >/dev/null 2>&1; then
+        echo "[nvim] Running install.sh (tree-sitter, vectorcode, mcp-hub)…"
+        "$wt_main/install.sh" || track_failure "nvim-deps" "nvim install.sh failed"
     fi
 }
 
@@ -540,9 +557,17 @@ install_neovim() {
     fi
 
     tar -xzf "/tmp/${tarball}" -C /tmp
-    cp "/tmp/nvim-linux-${arch}/bin/nvim" "$install_dir/nvim"
+    # Install the FULL tree (binary + lib/parsers + share/nvim/runtime) under
+    # ~/.local so nvim finds its matching runtime relative to the binary. Copying
+    # only bin/nvim leaves it to fall back to a mismatched system runtime, which
+    # breaks real configs (e.g. "module 'vim.uri' not found").
+    local src="/tmp/nvim-linux-${arch}"
+    mkdir -p "$install_dir" "$HOME/.local/lib" "$HOME/.local/share"
+    cp -af "$src/bin/nvim" "$install_dir/nvim"
+    cp -af "$src/lib/."   "$HOME/.local/lib/"
+    cp -af "$src/share/." "$HOME/.local/share/"
     chmod +x "$install_dir/nvim"
-    rm -rf "/tmp/${tarball}" "/tmp/nvim-linux-${arch}"
+    rm -rf "/tmp/${tarball}" "$src"
 
     echo "Neovim $("$install_dir/nvim" --version | head -1) installed to $install_dir"
 }
@@ -861,8 +886,9 @@ setup_git_hooks() {
         fi
     done
 
-    # Regular clones (dotfiles, nvim, personal-notes)
-    for project in dotfiles nvim personal-notes; do
+    # Regular clones (dotfiles, personal-notes). nvim is bare+worktree — its hook
+    # is installed by the ~/projects/bare/*.git loop above.
+    for project in dotfiles personal-notes; do
         local git_dir=~/projects/"$project"/.git
         if [ -d "$git_dir" ]; then
             local hook_dir="$git_dir/hooks"

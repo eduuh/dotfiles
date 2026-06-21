@@ -11,8 +11,26 @@ set -e
 if [[ -f "${0:A:h}/setup/regular-repos.zsh" ]]; then
     source "${0:A:h}/setup/regular-repos.zsh"
 else
-    REGULAR_CLONE_REPOS=(dotfiles nvim)
+    REGULAR_CLONE_REPOS=(dotfiles)  # nvim is bare+worktree (see regular-repos.zsh)
 fi
+
+# Project layout. Defaults to ~/projects (fast ext4). $WT_ROOT lets a wrapper
+# (e.g. wtw) point this same worktree logic at a different root — such as the
+# Windows filesystem — without duplicating any of the logic below.
+PROJECT_ROOT="${WT_ROOT:-$HOME/projects}"
+BARE_DIR="$PROJECT_ROOT/bare"
+WORKTREE_DIR="$PROJECT_ROOT/worktree"
+
+# Absolute path to this script. Captured at top level because inside a function
+# $0 is the function name, not the script (so re-invoking self must use this).
+WT_SELF="${0:A}"
+
+# Colors (previously inherited from the retired tmux-lib.sh)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 usage() {
     cat << EOF
@@ -20,6 +38,8 @@ Usage: wt <command> [args]
 
 Commands:
   clone <url>              Clone repo (bare by default, some repos as regular)
+  clone-all                Clone every repo in the manifest (\$WT_MANIFEST or
+                           ~/.config/wt/repos) into a new, non-blocking tmux window
   add [branch]             Add worktree (interactive if no branch specified)
   list                     List all worktrees for current repo
   remove [worktree]        Remove worktree (interactive if not specified)
@@ -536,9 +556,80 @@ HELP
     cleanup_one "$worktree" "$force"
 }
 
+# Seed a bare repo from an existing local bare (for private/work repos that can't
+# auth non-interactively). Copies objects locally, then repoints origin at the real
+# URL and adds the default-branch worktree. Mirrors cmd_clone's bare layout.
+_seed_from_local() {
+    local name="$1" url="$2"
+    local src="$HOME/projects/bare/${name}.git"
+    local bare="$BARE_DIR/${name}.git"
+    [[ -d "$src" ]] || return 1
+    [[ -d "$bare" ]] && return 0
+    mkdir -p "$BARE_DIR" "$WORKTREE_DIR"
+    git clone --bare "$src" "$bare" || return 1
+    git --git-dir="$bare" remote set-url origin "$url"
+    git --git-dir="$bare" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+    local defb
+    defb=$(git --git-dir="$bare" symbolic-ref --short HEAD 2>/dev/null || echo main)
+    mkdir -p "$WORKTREE_DIR/$name"
+    git --git-dir="$bare" worktree add "$WORKTREE_DIR/$name/$defb" "$defb"
+}
+
+# Clone every repo listed in a manifest into $PROJECT_ROOT. Idempotent (skips repos
+# already present) and resilient: a private repo that fails to auth falls back to
+# seeding from ~/projects/bare/<name>.git when that exists.
+_run_clone_all() {
+    local manifest="$1"
+    local url name cloned=0 skipped=0 failed=0
+    while IFS= read -r url || [[ -n "$url" ]]; do
+        url="${url%%#*}"             # strip trailing comment
+        url="${url//[[:space:]]/}"   # strip all whitespace
+        [[ -z "$url" ]] && continue
+        name=$(basename "$url" .git)
+        if [[ -d "$BARE_DIR/${name}.git" || -d "$PROJECT_ROOT/$name" ]]; then
+            echo -e "${YELLOW}[$name] already present — skip${NC}"
+            skipped=$((skipped + 1)); continue
+        fi
+        echo -e "${BLUE}[$name] cloning → $PROJECT_ROOT${NC}"
+        if WT_ROOT="$PROJECT_ROOT" "$WT_SELF" clone "$url"; then
+            cloned=$((cloned + 1))
+        elif _seed_from_local "$name" "$url"; then
+            echo -e "${GREEN}[$name] seeded from local ~/projects/bare/${name}.git${NC}"
+            cloned=$((cloned + 1))
+        else
+            echo -e "${RED}[$name] failed (no auth, no local bare to seed)${NC}"
+            failed=$((failed + 1))
+        fi
+    done < "$manifest"
+    echo -e "${GREEN}Done: cloned $cloned, skipped $skipped, failed $failed${NC}"
+}
+
+# Batch-clone from a manifest. Runs in a fresh tmux window so a slow clone (e.g.
+# over the Windows 9p mount) never blocks the caller/install; falls back to inline
+# when not inside tmux.
+cmd_clone_all() {
+    local here=0
+    [[ "$1" == "--here" ]] && here=1
+    local manifest="${WT_MANIFEST:-${XDG_CONFIG_HOME:-$HOME/.config}/wt/repos}"
+    if [[ ! -f "$manifest" ]]; then
+        echo -e "${RED}No clone manifest: $manifest${NC}"
+        echo "Add one git URL per line (comments with #), then re-run."
+        exit 1
+    fi
+    if [[ -n "$TMUX" && $here -eq 0 ]]; then
+        local label="clone:$(basename "$PROJECT_ROOT")"
+        local runner="WT_ROOT=${(q)PROJECT_ROOT} WT_MANIFEST=${(q)manifest} ${(q)WT_SELF} clone-all --here"
+        tmux new-window -n "$label" "$runner; echo; echo '── clone-all done — press enter to close ──'; read"
+        echo -e "${GREEN}Cloning in new tmux window: ${label} (non-blocking)${NC}"
+        return 0
+    fi
+    _run_clone_all "$manifest"
+}
+
 # Main
 case "${1:-}" in
     clone)  shift; cmd_clone "$@" ;;
+    clone-all) shift; cmd_clone_all "$@" ;;
     add)    shift; cmd_add "$@" ;;
     list|ls) cmd_list ;;
     remove|rm) shift; cmd_remove "$@" ;;

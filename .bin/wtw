@@ -1,0 +1,38 @@
+#!/usr/bin/env zsh
+# wtw - wt, but rooted on the Windows filesystem.
+#
+# Same bare+worktree workflow as `wt`, pointed at a Windows "code" directory so
+# Windows-native tools can read/build the files while WSL stays the SOLE git
+# driver. Everything is delegated to `wt`; this only resolves the root.
+#
+# The root is machine-local on purpose: the public dotfiles must not carry a
+# corporate username/path (mirrors the ~/.config/bn/ convention).
+set -e
+
+config="${XDG_CONFIG_HOME:-$HOME/.config}/wt/win-root"
+
+if [[ -f "$config" ]]; then
+    WT_ROOT="$(<"$config")"
+elif command -v wslpath >/dev/null 2>&1; then
+    # Fallback: derive <WindowsHome>/code from %USERPROFILE%.
+    win_home="$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r')"
+    [[ -n "$win_home" ]] && WT_ROOT="$(wslpath "$win_home")/code"
+fi
+
+WT_ROOT="${WT_ROOT%/}"   # strip trailing slash / newline
+
+if [[ -z "$WT_ROOT" ]]; then
+    echo "wtw: no Windows repos root configured." >&2
+    echo "     Write the WSL path (e.g. /mnt/c/Users/<you>/code) to:" >&2
+    echo "     $config" >&2
+    exit 1
+fi
+
+export WT_ROOT
+
+# Windows-side clone manifest (machine-local; keeps work repo URLs out of the
+# public dotfiles). Used by `wtw clone-all`.
+win_manifest="${XDG_CONFIG_HOME:-$HOME/.config}/wt/win-repos"
+[[ -f "$win_manifest" ]] && export WT_MANIFEST="$win_manifest"
+
+exec "${0:A:h}/wt" "$@"
