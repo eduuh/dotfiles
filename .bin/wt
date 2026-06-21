@@ -11,7 +11,7 @@ set -e
 if [[ -f "${0:A:h}/setup/regular-repos.zsh" ]]; then
     source "${0:A:h}/setup/regular-repos.zsh"
 else
-    REGULAR_CLONE_REPOS=(dotfiles)  # nvim is bare+worktree (see regular-repos.zsh)
+    REGULAR_CLONE_REPOS=(personal-notes eduuh notes bn)  # nvim + dotfiles are bare+worktree (see regular-repos.zsh)
 fi
 
 # Project layout. Defaults to ~/projects (fast ext4). $WT_ROOT lets a wrapper

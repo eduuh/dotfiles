@@ -37,13 +37,16 @@ default_profile() {
 }
 
 main() {
-  local target profile="" arg_profile=""
+  local target profile="" arg_profile="" run_setup=true
 
   # --- parse args ---
+  #   --profile <tier>  override the profile (core|dev|desktop)
+  #   --prep-only       stop after prep; don't chain into setup.sh
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --profile)   arg_profile="$2"; shift 2 ;;
       --profile=*) arg_profile="${1#*=}"; shift ;;
+      --prep-only) run_setup=false; shift ;;
       *)           shift ;;
     esac
   done
@@ -81,13 +84,18 @@ main() {
 
   print_failure_summary
 
+  if [[ "$run_setup" != "true" ]]; then
+    echo ""
+    echo "Prep complete (--prep-only). Run the unattended install when ready:"
+    echo "    cd $SCRIPT_DIR && ./setup.sh"
+    return 0
+  fi
+
   echo ""
-  echo "Prep complete. The interactive part is done — the rest is unattended:"
+  echo "Prep complete — the interactive part is done. Handing off to the"
+  echo "unattended install (setup.sh); walk away, it won't prompt."
   echo ""
-  echo "    cd $SCRIPT_DIR && ./setup.sh"
-  echo ""
-  echo "(Once setup.sh becomes the Phase 2 runner it will read $READY_MARKER"
-  echo " for target+profile and skip these prompts. For now run it as-is.)"
+  exec zsh "$SCRIPT_DIR/setup.sh" --profile "$profile"
 }
 
 main "$@"

@@ -198,7 +198,7 @@ detect_distro() {
 if [[ -f "$_COMMON_DIR/regular-repos.zsh" ]]; then
     source "$_COMMON_DIR/regular-repos.zsh"
 else
-    REGULAR_CLONE_REPOS=(dotfiles personal-notes eduuh notes bn)  # nvim is bare+worktree (see regular-repos.zsh)
+    REGULAR_CLONE_REPOS=(personal-notes eduuh notes bn)  # nvim + dotfiles are bare+worktree (see regular-repos.zsh)
 fi
 
 # Repos that should live on the Windows filesystem when on WSL
@@ -882,7 +882,11 @@ install_nvm() {
 }
 
 setup_symlinks() {
-    local dotfiles_dir=~/projects/dotfiles
+    # dotfiles is a bare+worktree repo: stow always from the main worktree so the
+    # $HOME symlinks stay stable no matter which worktree you're editing in. Fall
+    # back to a flat ~/projects/dotfiles for entrypoints that still clone flat.
+    local dotfiles_dir=~/projects/worktree/dotfiles/main
+    [ -d "$dotfiles_dir" ] || dotfiles_dir=~/projects/dotfiles
 
     echo "Stowing dotfiles from $dotfiles_dir..."
     cd "$dotfiles_dir"
@@ -909,7 +913,8 @@ setup_personal_notes_stow() {
 
 setup_git_hooks() {
     echo "Setting up git hooks for all projects..."
-    local hook_source="$HOME/projects/dotfiles/.bin/git-hooks/pre-push"
+    local hook_source="$HOME/projects/worktree/dotfiles/main/.bin/git-hooks/pre-push"
+    [ -f "$hook_source" ] || hook_source="$HOME/projects/dotfiles/.bin/git-hooks/pre-push"
 
     if [ ! -f "$hook_source" ]; then
         track_failure "git-hooks" "Pre-push hook not found at $hook_source"
@@ -926,9 +931,9 @@ setup_git_hooks() {
         fi
     done
 
-    # Regular clones (dotfiles, personal-notes). nvim is bare+worktree — its hook
-    # is installed by the ~/projects/bare/*.git loop above.
-    for project in dotfiles personal-notes; do
+    # Regular clones (personal-notes). nvim and dotfiles are bare+worktree — their
+    # hooks are installed by the ~/projects/bare/*.git loop above.
+    for project in personal-notes; do
         local git_dir=~/projects/"$project"/.git
         if [ -d "$git_dir" ]; then
             local hook_dir="$git_dir/hooks"

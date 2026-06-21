@@ -2,7 +2,7 @@
 
 Prefix: **`C-Space`** (Ctrl+Space)
 
-The workflow: one **session per repo**, one **window per worktree**. Sessions are named after the bare repo (e.g. `tracker`, `kube-homelab`); windows are named after the branch (e.g. `feat-auth`). Plain clones like `dotfiles` get a single `main` window.
+The workflow: one **session per repo**, one **window per worktree**. Sessions are named after the bare repo (e.g. `tracker`, `kube-homelab`); windows are named after the branch (e.g. `feat-auth`). Plain (non-bare) clones get a single `main` window; bare repos like `dotfiles` open a window per worktree.
 
 ## Sessions
 
@@ -20,7 +20,7 @@ The workflow: one **session per repo**, one **window per worktree**. Sessions ar
 | `o` | **Go to or create worktree.** fzf list of existing worktrees. Select one → opens as window. Type a new name + Enter → creates worktree from latest `main`, opens as window. |
 | `X` | Remove current window's worktree + kill the window. Refuses `main`/`master`. Prompts for `--force` if dirty. |
 
-In a non-bare session (e.g. `dotfiles`), `o` just opens/selects a `main` window at the repo path.
+In a non-bare session, `o` just opens/selects a `main` window at the repo path.
 
 ## Windows
 
