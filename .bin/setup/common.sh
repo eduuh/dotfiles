@@ -399,6 +399,7 @@ clone_repos() {
             "git@github.com:eduuh-private/personal-notes.git"
             "git@github.com:eduuh/eduuh.git"
             "git@github.com:eduuh/bn.git"
+            "git@github.com:eduuh/atlas.git"
         )
 
         if [ "$is_wsl" = true ] && [ "$(hostname)" = "edwin" ]; then
