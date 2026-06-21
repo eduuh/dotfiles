@@ -24,7 +24,6 @@ alias l='ls -CF'
 alias yolo='claude --dangerously-skip-permissions'
 alias po="$HOME/.bin/pkg-open.sh"
 alias nvimd='nvim -c "DiffviewOpen origin/main"'
-alias bn="$HOME/.bin/bn"
 
 # Load NVM
 export NVM_DIR="$HOME/.nvm"
