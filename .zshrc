@@ -93,8 +93,8 @@ r() { "$HOME/.bin/bn" add research "$*" }
 c() { "$HOME/.bin/bn" add collab "$*" }
 a() { "$HOME/.bin/bn" add ask "$*" }
 
-# bn tab completion
-[ -f "$HOME/.bin/bn-completion.zsh" ] && source "$HOME/.bin/bn-completion.zsh"
+# bn tab completion — generated from the binary, so it never drifts from the real flags
+command -v bn >/dev/null && source <(bn completion zsh)
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
