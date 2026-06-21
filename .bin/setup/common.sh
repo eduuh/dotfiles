@@ -448,7 +448,10 @@ _run_work_setup_from_personal_notes() {
 }
 
 ensure_tmux_version() {
-    local min_version="3.2"
+    # 3.5 is the floor: popup borders/titles (3.4) and robust OSC52 set-clipboard
+    # (3.3) are relied on by tmux.conf. 3.2a (Ubuntu's apt candidate) is too old,
+    # so this triggers the from-source build below.
+    local min_version="3.5"
 
     # macOS via Homebrew always has recent tmux, skip
     if [[ "$(uname)" == "Darwin" ]]; then
