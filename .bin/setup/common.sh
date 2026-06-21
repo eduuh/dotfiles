@@ -464,6 +464,19 @@ _run_work_setup_from_personal_notes() {
     echo "Work repo setup finished."
 }
 
+# Work-machine tool installs (agency, etc.). Runs only via `setup.sh --work`.
+# Delegates to a script in the private personal-notes repo so internal MS
+# endpoints stay out of public dotfiles. No-op if the script is absent.
+install_work_tools() {
+    local work_tools="${WORK_TOOLS_SCRIPT:-$HOME/projects/personal-notes/scripts/setup-work-tools.sh}"
+    if [[ ! -f "$work_tools" ]]; then
+        echo "· no work-tools script at $work_tools — skipping"
+        return 0
+    fi
+    echo "Sourcing work tools script: $work_tools"
+    source "$work_tools"
+}
+
 ensure_tmux_version() {
     # 3.5 is the floor: popup borders/titles (3.4) and robust OSC52 set-clipboard
     # (3.3) are relied on by tmux.conf. 3.2a (Ubuntu's apt candidate) is too old,
