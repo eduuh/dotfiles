@@ -373,7 +373,7 @@ _setup_one_branch_notes_repo() {
 # $HOME/.config/bn/work-repos (allowlist, gitignored).
 setup_branch_notes_symlink() {
     _is_wsl || return 0
-    _setup_one_branch_notes_repo "branch-notes"
+    _setup_one_branch_notes_repo "branch-notes" "git@github.com:eduuh/branch-notes.git"
 }
 
 clone_repos() {
