@@ -126,6 +126,23 @@ install_package() {
     return 0
 }
 
+# --- App installers --------------------------------------------------------
+# Some tools ship their own install.sh (the bn submodule does). Those installers
+# drop binaries + symlinks into a bin dir; point them at an UNMANAGED dir that's
+# already on PATH so they never overwrite stow-tracked files in ~/.bin (itself a
+# symlink into this repo). ~/.local/bin is first on PATH (.zshenv/.zshrc).
+APP_BIN_DIR="${APP_BIN_DIR:-$HOME/.local/bin}"
+
+# run_app_installer <installer> [args...] — run an app's own install.sh with its
+# binaries directed at $APP_BIN_DIR. The app-specific target env (e.g. BN_BIN_DIR)
+# is the caller's job; this guarantees the dir exists and runs the script.
+run_app_installer() {
+    local installer="$1"; shift
+    [[ -f "$installer" ]] || { echo "run_app_installer: not found: $installer" >&2; return 1; }
+    mkdir -p "$APP_BIN_DIR"
+    bash "$installer" "$@"
+}
+
 # Print all failures at the end
 print_failure_summary() {
     if [[ ${#SETUP_FAILURES[@]} -eq 0 ]]; then
@@ -709,12 +726,13 @@ install_rust() {
 }
 
 build_bn() {
-    # Install the Rust bn from the bn-repo submodule by delegating to its own
-    # installer. install.sh builds bn + bn-mcp, copies them to ~/.bin, and registers
-    # the bn-mcp stdio server globally for Claude Code + Copilot (idempotent — safe to
-    # re-run, --force re-runs this step). --core skips bn's tmux layer (dotfiles owns
-    # tmux); BN_BUILD_FROM_SOURCE=1 builds the pinned submodule rather than pulling a
-    # GitHub release, so the binaries match the commit this repo points at.
+    # Install the Rust bn from the bn-repo submodule via its own install.sh. It
+    # builds bn + bn-mcp into $APP_BIN_DIR and registers the bn-mcp stdio server
+    # for Claude Code + Copilot (idempotent — --force re-runs this step). --core
+    # skips bn's tmux layer (dotfiles owns tmux); BN_BUILD_FROM_SOURCE=1 builds the
+    # pinned submodule rather than pulling a release, so binaries match this commit.
+    # BN_BIN_DIR keeps the install off ~/.bin (a tracked symlink) — the ~/.bin/bn
+    # shim is shadowed by the real binary earlier on PATH.
     if [[ $CODESPACES == "true" ]]; then
         echo "Codespace: skipping Rust bn build (bn falls back to the bash implementation)."
         return 0
@@ -725,8 +743,11 @@ build_bn() {
         command -v cargo &> /dev/null || { echo "cargo unavailable; bn uses the bash fallback."; return 0; }
     fi
 
-    echo "Installing Rust bn (+ bn-mcp, + global MCP registration)…"
-    if ! BN_BUILD_FROM_SOURCE=1 bash "$_COMMON_DIR/../bn-repo/install.sh" --core; then
+    echo "Installing Rust bn (+ bn-mcp, + global MCP registration) → $APP_BIN_DIR…"
+    if ! (
+        export BN_BIN_DIR="$APP_BIN_DIR" BN_BUILD_FROM_SOURCE=1
+        run_app_installer "$_COMMON_DIR/../bn-repo/install.sh" --core
+    ); then
         track_failure "bn" "Failed to install Rust bn"
     fi
 }
