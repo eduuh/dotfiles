@@ -742,8 +742,10 @@ build_bn() {
     # Install the Rust bn from the bn-repo submodule via its own install.sh. It
     # builds bn + bn-mcp into $APP_BIN_DIR and registers the bn-mcp stdio server
     # for Claude Code + Copilot (idempotent — --force re-runs this step). --core
-    # skips bn's tmux layer (dotfiles owns tmux); BN_BUILD_FROM_SOURCE=1 builds the
-    # pinned submodule rather than pulling a release, so binaries match this commit.
+    # skips bn's tmux layer (dotfiles owns tmux). install.sh pulls the prebuilt release
+    # (via authenticated `gh`), so every machine gets the same binary without compiling;
+    # it builds the pinned submodule only as a fallback when no release/gh is available.
+    # Cut a new bn release (tag vX.Y.Z) to advance the deployed binary.
     # BN_BIN_DIR keeps the install off ~/.bin (a tracked symlink) — the ~/.bin/bn
     # shim is shadowed by the real binary earlier on PATH.
     if [[ $CODESPACES == "true" ]]; then
@@ -758,7 +760,7 @@ build_bn() {
 
     echo "Installing Rust bn (+ bn-mcp, + global MCP registration) → $APP_BIN_DIR…"
     if ! (
-        export BN_BIN_DIR="$APP_BIN_DIR" BN_BUILD_FROM_SOURCE=1
+        export BN_BIN_DIR="$APP_BIN_DIR"
         run_app_installer "$_COMMON_DIR/../bn-repo/install.sh" --core
     ); then
         track_failure "bn" "Failed to install Rust bn"
