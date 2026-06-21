@@ -1,9 +1,16 @@
 #!/usr/bin/env sh
-# bn dispatcher. Prefer the compiled Rust binary; fall back to the bash bn.
-# The Rust binary is built from the bn-repo submodule by setup (cargo build).
-# Where Rust isn't built (e.g. Codespaces, which skip the toolchain) the bash
-# bn takes over, so `bn` always resolves to a working implementation.
+# bn dispatcher for the dotfiles-tracked ~/.bin (a symlinked dir that can't hold the
+# real, machine-specific binary). Resolve the first Rust bn that exists, else the bash
+# fallback. Order matters — the bash bn lacks newer commands (e.g. `tmux-agent`, used by
+# the Claude Stop hooks), so a real binary MUST win whenever one is present:
+#   1. ~/.local/bin/bn          — where bn-repo/install.sh deploys (download or build).
+#                                 This is the normal path: install prefers a prebuilt
+#                                 release and never touches the submodule's target/.
+#   2. bn-repo/target/release/bn — a local dev `cargo build` in the submodule.
+#   3. bn-bash                  — the bash implementation (Codespaces / no Rust toolchain).
+# Both 1 and 2 are real binary copies (never symlinks back here), so no recursion.
 d=$(dirname "$0")
-rs="$d/bn-repo/target/release/bn"
-[ -x "$rs" ] && exec "$rs" "$@"
+for rs in "$HOME/.local/bin/bn" "$d/bn-repo/target/release/bn"; do
+  [ -x "$rs" ] && exec "$rs" "$@"
+done
 exec "$d/bn-bash" "$@"
