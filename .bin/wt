@@ -417,6 +417,18 @@ pr_state() {
     echo "${state:-NONE}"
 }
 
+# Echo the tmux window ids whose pane cwd sits inside <path>, one per line. Empty when not
+# inside tmux or tmux is absent. Capture this BEFORE removing the worktree — panes keep a
+# stale cwd string after the directory is gone, so a later lookup would miss them.
+tmux_windows_for() {
+    local path="$1"
+    command -v tmux >/dev/null 2>&1 || return 0
+    [[ -n "${TMUX:-}" ]] || return 0
+    tmux list-panes -a -F '#{window_id} #{pane_current_path}' 2>/dev/null \
+        | awk -v p="$path" '$2 == p || index($2, p"/") == 1 { print $1 }' \
+        | sort -u
+}
+
 # Clean a single worktree. Args: <worktree_path> <force:true|false>
 cleanup_one() {
     local worktree="$1" force="$2"
@@ -457,6 +469,13 @@ cleanup_one() {
 
     [[ "$(pwd)" == "$worktree"* ]] && cwd_inside=true
 
+    # Complete + close the branch note while the worktree still resolves: marks open todos
+    # done, logs an achievement (Goal + PR), sets status closed. Then capture the tmux
+    # window(s) for this worktree so we can close them once it's gone.
+    ( cd "$worktree" && "$HOME/.bin/bn" close ) 2>/dev/null || true
+    local tmux_wins
+    tmux_wins=$(tmux_windows_for "$worktree")
+
     local force_flag=""
     $force && force_flag="--force"
     if ! git --git-dir="$bare" worktree remove $force_flag "$worktree"; then
@@ -470,10 +489,30 @@ cleanup_one() {
     repo_dir=$(dirname "$worktree")
     [[ "$repo_dir" == "$WORKTREE_DIR"/* ]] && rmdir "$repo_dir" 2>/dev/null || true
 
+    # Safety net for any other orphaned notes (this worktree's note is already closed above).
     "$HOME/.bin/bn" prune 2>/dev/null || true
 
     echo -e "${GREEN}Cleaned $branch${NC}"
-    $cwd_inside && echo -e "${YELLOW}Note: your shell is now in a removed directory — cd elsewhere${NC}"
+
+    # Close the worktree's tmux window(s). Kill the current window LAST (it ends this shell),
+    # so the rest of the cleanup runs first. Other matched windows are killed immediately.
+    local cur_win="" current_matched=false
+    [[ -n "${TMUX:-}" ]] && cur_win=$(tmux display-message -p '#{window_id}' 2>/dev/null)
+    if [[ -n "$tmux_wins" ]]; then
+        while read -r win; do
+            [[ -z "$win" ]] && continue
+            if [[ -n "$cur_win" && "$win" == "$cur_win" ]]; then
+                current_matched=true
+            else
+                tmux kill-window -t "$win" 2>/dev/null || true
+            fi
+        done <<< "$tmux_wins"
+    fi
+    if $current_matched; then
+        tmux kill-window -t "$cur_win" 2>/dev/null || true
+    elif $cwd_inside; then
+        echo -e "${YELLOW}Note: your shell is now in a removed directory — cd elsewhere${NC}"
+    fi
     return 0
 }
 
@@ -521,8 +560,9 @@ cmd_cleanup() {
                 cat <<HELP
 wt cleanup [--all] [--force] [worktree]
 
-Verifies the PR for a worktree's branch is merged on GitHub, then removes the
-worktree and deletes its local branch. Closes orphan branch notes via 'bn prune'.
+Verifies the PR for a worktree's branch is merged on GitHub, then: completes and
+closes the branch note ('bn close' — finishes open todos, logs an achievement),
+removes the worktree, deletes its local branch, and closes its tmux window.
 
   --all     Sweep every worktree under all bare repos and clean merged ones.
   --force   Clean even if no PR exists or the PR is not yet merged.
