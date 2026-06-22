@@ -483,6 +483,11 @@ cleanup_one() {
         return 1
     fi
 
+    # If we were inside the worktree, this process's CWD is now a deleted directory — git,
+    # rmdir, and bn would all fail to read it. Step out to a stable dir before the rest of the
+    # cleanup (this affects only this subprocess, not the caller's shell).
+    $cwd_inside && { cd "$WORKTREE_DIR" 2>/dev/null || cd "$HOME" || cd /; }
+
     git --git-dir="$bare" branch -D "$branch" 2>/dev/null || true
 
     local repo_dir
