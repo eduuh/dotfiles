@@ -1,3 +1,0 @@
-[submodule ".bin/bn-repo"]
-	path = .bin/bn-repo
-	url = git@github.com:eduuh/bn.git
