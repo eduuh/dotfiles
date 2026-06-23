@@ -8,3 +8,9 @@
 # file — they don't belong in the dotfiles tree.
 .bin/bn
 .bin/bn-mcp
+
+# bn cron systemd units. The source of truth is the bn repo (jobs/systemd/);
+# `jobs/systemd/install.sh` copies them here. Installed artifacts, not tracked.
+.config/systemd/user/bn-*.service
+.config/systemd/user/bn-*.timer
+.config/systemd/user/timers.target.wants/bn-*.timer
