@@ -126,11 +126,12 @@ install_package() {
     return 0
 }
 
-# --- App installers --------------------------------------------------------
-# Some tools ship their own install.sh (the bn submodule does). Those installers
-# drop binaries + symlinks into a bin dir; point them at an UNMANAGED dir that's
-# already on PATH so they never overwrite stow-tracked files in ~/.bin (itself a
-# symlink into this repo). ~/.local/bin is first on PATH (.zshenv/.zshrc).
+# --- App / setup-repo installers -------------------------------------------
+# Some setup repos ship their own install.sh that provisions their tools + config
+# (bn does). Those installers drop binaries + symlinks into a bin dir; point them
+# at an UNMANAGED dir that's already on PATH so they never overwrite stow-tracked
+# files in ~/.bin (itself a symlink into this repo). ~/.local/bin is first on PATH
+# (.zshenv/.zshrc).
 APP_BIN_DIR="${APP_BIN_DIR:-$HOME/.local/bin}"
 
 # run_app_installer <installer> [args...] — run an app's own install.sh with its
@@ -141,6 +142,33 @@ run_app_installer() {
     [[ -f "$installer" ]] || { echo "run_app_installer: not found: $installer" >&2; return 1; }
     mkdir -p "$APP_BIN_DIR"
     bash "$installer" "$@"
+}
+
+# setup_repo <git-url> [install-args...] — bootstrap an external "setup repo" that
+# owns its own install.sh. Instead of vendoring such a repo as a submodule, we clone
+# it into the standard worktree layout (~/projects/worktree/<name>/main, the same one
+# clone_repos keeps updated) and run its installer. Add a new one by calling this from
+# a step in setup.sh. Idempotent: re-clones only when the worktree is missing, and the
+# installer itself is expected to be re-runnable.
+setup_repo() {
+    local url="$1"; shift
+    local name="${${url##*/}%.git}"
+    local wt_main="$HOME/projects/worktree/$name/main"
+
+    if [[ ! -d "$wt_main" ]]; then
+        echo "[$name] cloning setup repo ($url)…"
+        if ! "$_COMMON_DIR/../wt" clone "$url"; then
+            track_failure "$name" "setup-repo clone failed: $url"; return 1
+        fi
+    fi
+    if [[ ! -f "$wt_main/install.sh" ]]; then
+        track_failure "$name" "no install.sh in $wt_main"; return 1
+    fi
+
+    echo "[$name] running install.sh $*…"
+    if ! run_app_installer "$wt_main/install.sh" "$@"; then
+        track_failure "$name" "install.sh failed"; return 1
+    fi
 }
 
 # Print all failures at the end
@@ -738,32 +766,20 @@ install_rust() {
     fi
 }
 
-build_bn() {
-    # Install the Rust bn from the bn-repo submodule via its own install.sh. It
-    # builds bn + bn-mcp into $APP_BIN_DIR and registers the bn-mcp stdio server
-    # for Claude Code + Copilot (idempotent — --force re-runs this step). --core
-    # skips bn's tmux layer (dotfiles owns tmux). install.sh pulls the prebuilt release
-    # (via authenticated `gh`), so every machine gets the same binary without compiling;
-    # it builds the pinned submodule only as a fallback when no release/gh is available.
-    # Cut a new bn release (tag vX.Y.Z) to advance the deployed binary.
-    # BN_BIN_DIR keeps the install off ~/.bin (a tracked symlink) — the ~/.bin/bn
-    # shim is shadowed by the real binary earlier on PATH.
-    if [[ $CODESPACES == "true" ]]; then
-        echo "Codespace: skipping Rust bn build (bn falls back to the bash implementation)."
-        return 0
-    fi
-
-    if ! command -v cargo &> /dev/null; then
-        install_rust
-        command -v cargo &> /dev/null || { echo "cargo unavailable; bn uses the bash fallback."; return 0; }
-    fi
-
-    echo "Installing Rust bn (+ bn-mcp, + global MCP registration) → $APP_BIN_DIR…"
-    if ! (
-        export BN_BIN_DIR="$APP_BIN_DIR"
-        run_app_installer "$_COMMON_DIR/../bn-repo/install.sh" --core
-    ); then
-        track_failure "bn" "Failed to install Rust bn"
+setup_bn() {
+    # bn ships the branch-notes CLI + bn-mcp server and (full install) owns the tmux
+    # config: ~/.tmux.conf → workflow/tmux.conf plus ~/.config/bn/{repo,bn}. It used to
+    # be a submodule built by dotfiles; now it's an external setup repo — clone it and
+    # run its own install.sh (see setup_repo). install.sh registers bn-mcp for Claude
+    # Code + Copilot and pulls the prebuilt release via authenticated `gh`, building from
+    # source (rust step runs first) only as a fallback. Cut a new bn release (tag vX.Y.Z)
+    # to advance the deployed binary. BN_BIN_DIR keeps the install off ~/.bin (stow-
+    # managed) → ~/.local/bin, first on PATH. Codespaces get --core (no tmux layer).
+    export BN_BIN_DIR="$APP_BIN_DIR"
+    if [[ "$CODESPACES" == "true" ]]; then
+        setup_repo "https://github.com/eduuh/bn.git" --core
+    else
+        setup_repo "git@github.com:eduuh/bn.git"
     fi
 }
 

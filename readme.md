@@ -72,11 +72,11 @@ On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
 ## Key Tools
 
-- **`tat`** — Tmux session picker (lives in the `bn` workflow submodule)
+- **`tat`** — Tmux session picker (provided by the [`bn`](https://github.com/eduuh/bn) repo, installed via its `install.sh`)
 - **`wt`** — Git worktree manager for bare repos (`wt clone`, `wt add`, `wt list`, `wt remove`)
-- **`bn`** — Branch notes manager for per-branch task tracking
+- **`bn`** — Branch notes manager for per-branch task tracking; also owns the tmux config (an external setup repo, no longer a submodule)
 - **`ssh-export`** — Copy SSH key setup script to clipboard for bootstrapping new environments
-- **Tmux** (`Ctrl+Space` prefix) — [keybinding reference](docs/tmux.md)
+- **Tmux** (`Ctrl+Space` prefix) — keybinding reference now lives in the bn repo: [`workflow/docs/tmux.md`](https://github.com/eduuh/bn/blob/main/workflow/docs/tmux.md)
 
 ## Codespaces
 

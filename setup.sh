@@ -46,12 +46,6 @@ if [[ "$TARGET" != "codespace" && "${EUID:-$(id -u)}" != "0" ]]; then
     SUDO_PID=$!
 fi
 
-# Populate dotfiles submodules (bn; the tmux workflow scripts live inside it). Bootstrap skipped them
-# pre-auth; prep has since established GitHub auth.
-_init_submodules() {
-    git -C "$SCRIPT_DIR" submodule update --init --recursive
-}
-
 # Project cloning is the slowest part of setup (a large work repo can take hours), and
 # nothing else depends on it — so never wait on it. Open the clone as a tmux WINDOW and let
 # setup.sh finish: it runs in the session setup.sh was launched from, or — when setup.sh
@@ -127,9 +121,8 @@ main() {
 
     # step <name> <min-profile> <targets> <cmd…> — profile/target filtered,
     # then idempotent + resumable. Records on success; failed steps resume.
-    step submodules         core all   _init_submodules
     step rust               core wsl,linux,mac,termux install_rust
-    step bn                 core all   build_bn
+    step bn                 core all   setup_bn
     step "platform-$distro" core all   run_platform_setup "$distro"
 
     # tmux is installed by the platform step above; fire the clone into a detached session
