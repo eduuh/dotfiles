@@ -111,3 +111,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Starship
 eval "$(starship init zsh)"
+
+# Colima docker socket
+export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
+alias bnr="node /Users/edd/projects/worktree/atlas/bn-remote/tools/bn/src/index.ts"

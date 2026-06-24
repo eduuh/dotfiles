@@ -32,7 +32,7 @@ Commands:
                            Default target: current worktree.
 
 Examples:
-  wt clone git@github.com:user/test.git    # Creates ~/projects/bare/test.git
+  wt clone git@github.com:user/test.git    # Creates ~/projects/bare/test.git + testing-worktree
   wt add main                              # Creates ~/projects/worktree/test/main
   wt add user/feature-x                    # Creates ~/projects/worktree/test/user-feature-x
   wt add -b new-feature main               # Create new branch from main
@@ -154,12 +154,12 @@ cmd_clone() {
         git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
         git fetch origin
 
-        # Auto-create default branch worktree
+        # Auto-create a testing-worktree pointing to the default branch
         local default_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
-        local wt_path="$WORKTREE_DIR/${repo_name}/${default_branch}"
+        local wt_path="$WORKTREE_DIR/${repo_name}/testing-worktree"
         mkdir -p "$WORKTREE_DIR/${repo_name}"
 
-        echo -e "${BLUE}Creating worktree for $default_branch...${NC}"
+        echo -e "${BLUE}Creating testing-worktree (tracking $default_branch)...${NC}"
         git worktree add "$wt_path" "$default_branch"
 
         echo -e "${GREEN}Cloned to $bare_path${NC}"

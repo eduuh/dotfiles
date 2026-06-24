@@ -51,10 +51,13 @@ is_bare_repo() {
     [[ -d "$BARE_DIR/${1}.git" ]]
 }
 
-# Resolve the main worktree path for a bare repo
+# Resolve the best available worktree path for a bare repo (main → testing-worktree → bare dir)
 bare_repo_main_path() {
     local main_wt="$WORKTREE_DIR/$1/main"
-    [[ -d "$main_wt" ]] && echo "$main_wt" || echo "$BARE_DIR/${1}.git"
+    local testing_wt="$WORKTREE_DIR/$1/testing-worktree"
+    [[ -d "$main_wt" ]] && echo "$main_wt" && return
+    [[ -d "$testing_wt" ]] && echo "$testing_wt" && return
+    echo "$BARE_DIR/${1}.git"
 }
 
 # Detect project type by marker files
@@ -137,14 +140,8 @@ ensure_worktree() {
     return 0
 }
 
-# Ensure the main worktree exists for a bare repo. No-op for non-bare repos.
-# Usage: ensure_main_worktree <repo>
-ensure_main_worktree() {
-    local repo="$1"
-    [[ -z "$repo" ]] && return 1
-    is_bare_repo "$repo" || return 0
-    ensure_worktree "$repo" "main"
-}
+# No-op kept for compatibility; callers no longer need to pre-create main.
+ensure_main_worktree() { return 0; }
 
 # Resolve repo name and branch from a directory path
 # Sets: NOTE_REPO, NOTE_BRANCH (slashes sanitized to dashes)

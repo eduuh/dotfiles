@@ -9,7 +9,6 @@ session_name="$1"
 project_path="${2:-$(resolve_project_path "$session_name")}"
 
 if is_bare_repo "$session_name"; then
-    ensure_worktree "$session_name" "main" >/dev/null 2>&1 || true
     start_path=$(bare_repo_main_path "$session_name")
 else
     start_path="$project_path"
