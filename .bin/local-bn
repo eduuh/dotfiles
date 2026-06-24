@@ -1,0 +1,100 @@
+#!/usr/bin/env zsh
+# local-bn — wrapper around zsh bn that delegates script operations to remote bnr
+# This allows scripts to be stored in Atlas while keeping local bn as the primary interface.
+#
+# Usage:
+#   local-bn [cmd]  — forwards to zsh bn (~/.bin/bn), but intercepts script operations
+#
+# Delegated to bnr (Atlas):
+#   local-bn build [name]   — fetch + run script from main node
+#   local-bn script list    — list scripts from main node
+#   local-bn script new     — create new script and upload to Atlas
+#
+# Everything else:
+#   local-bn --cat, local-bn add todo ..., etc. — forwarded to ~/.bin/bn (local storage)
+
+set -euo pipefail
+
+# Path to zsh bn
+ZSH_BN="${HOME}/.bin/bn"
+BNR_CMD="node ${HOME}/projects/worktree/atlas/bn-remote/tools/bn/src/index.ts"
+
+# Helper: check if bnr is available and configured
+_bnr_available() {
+    if [[ ! -f ~/.config/bn/config.json ]]; then
+        return 1
+    fi
+    local base_url=$(jq -r '.baseUrl // .atlasUrl // empty' ~/.config/bn/config.json 2>/dev/null)
+    [[ -n "$base_url" ]] && return 0
+    return 1
+}
+
+# Helper: fetch script from Atlas main node and cache it
+_fetch_script_from_bnr() {
+    local repo="$1" script_name="$2"
+    local cache_dir="${HOME}/.cache/bn-scripts/${repo}"
+
+    mkdir -p "$cache_dir"
+
+    # TODO: Use `bnr files main download $script_name` (when implemented)
+    # For now, this is a placeholder
+    if [[ -f "$cache_dir/$script_name" ]]; then
+        echo "$cache_dir/$script_name"
+        return 0
+    fi
+
+    echo "❌ Script '$script_name' not found in Atlas or local cache" >&2
+    return 1
+}
+
+# Helper: resolve repo name from current working directory
+_resolve_repo() {
+    local gitdir="$(git rev-parse --git-dir 2>/dev/null || echo '.git')"
+    if [[ -f "$gitdir/config" ]]; then
+        local url=$(git config --file "$gitdir/config" remote.origin.url 2>/dev/null || echo "")
+        [[ -n "$url" ]] && basename "$url" .git
+    fi
+}
+
+# ─── Main Dispatch ───
+
+cmd="${1:-cat}"
+shift || true
+
+case "$cmd" in
+    build|b)
+        # local-bn build [name] — run script from main node (try bnr first)
+        if _bnr_available; then
+            # Try to run via bnr (Atlas)
+            if $BNR_CMD files main run "${1:-build}" 2>/dev/null; then
+                exit 0
+            fi
+        fi
+        # Fall back to zsh bn (local)
+        "$ZSH_BN" build "$@"
+        ;;
+
+    script|sc)
+        # local-bn script [subcmd] — manage scripts (delegate to bnr if available)
+        subcmd="${1:-list}"
+        shift || true
+
+        if _bnr_available && [[ "$subcmd" =~ ^(list|new|edit|upload)$ ]]; then
+            # Delegate to bnr
+            $BNR_CMD files main "$subcmd" "$@"
+        else
+            # Fall back to zsh bn (local)
+            "$ZSH_BN" script "$subcmd" "$@"
+        fi
+        ;;
+
+    files|f)
+        # local-bn files [name|new|edit] — manage investigation files (local only for now)
+        "$ZSH_BN" files "$@"
+        ;;
+
+    *)
+        # Everything else → forward to zsh bn
+        "$ZSH_BN" "$cmd" "$@"
+        ;;
+esac
