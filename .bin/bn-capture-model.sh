@@ -14,10 +14,10 @@
 input=$(cat)
 command -v jq >/dev/null 2>&1 || exit 0
 
-# bn state dir: BN_STATE_DIR → XDG_STATE_HOME/bn → ~/.local/state/bn (mirror state_dir()).
+# bn state dir: BN_STATE_DIR wins; else ask bn (resolves <personal_root>/<machine>/state).
 if [ -n "${BN_STATE_DIR:-}" ]; then state="$BN_STATE_DIR"
-elif [ -n "${XDG_STATE_HOME:-}" ]; then state="$XDG_STATE_HOME/bn"
-else state="$HOME/.local/state/bn"; fi
+else state=$(bn --state-dir 2>/dev/null); fi
+[ -n "$state" ] || exit 0
 
 write_model() { # <basename> <model>
     [ -n "$2" ] || return 0
