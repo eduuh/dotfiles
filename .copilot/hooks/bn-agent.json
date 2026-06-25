@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "hooks": {
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "$HOME/.config/bn/bn tmux-agent working",
+        "timeoutSec": 5
+      }
+    ],
+    "permissionRequest": [
+      {
+        "type": "command",
+        "bash": "$HOME/.config/bn/bn tmux-agent waiting",
+        "timeoutSec": 5
+      }
+    ],
+    "notification": [
+      {
+        "type": "command",
+        "bash": "$HOME/.config/bn/bn tmux-agent waiting",
+        "timeoutSec": 5
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "$HOME/.config/bn/bn tmux-agent done",
+        "timeoutSec": 5
+      }
+    ]
+  }
+}
