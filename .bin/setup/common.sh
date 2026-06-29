@@ -582,21 +582,8 @@ ensure_tmux_version() {
     echo "tmux $(tmux -V) installed successfully."
 }
 
-install_tmux_plugins() {
-    local target_dir="$HOME/.tmux/plugins/tpm"
-
-    if [ -d "$target_dir" ]; then
-        echo "TPM is already installed at $target_dir."
-        return 0
-    fi
-
-    echo "Cloning TPM repository..."
-    if git clone https://github.com/tmux-plugins/tpm "$target_dir"; then
-        echo "TPM has been successfully installed at $target_dir."
-    else
-        track_failure "tmux" "Failed to clone TPM repository"
-    fi
-}
+# TPM removed: bn vendors its tmux plugins (tmux-resurrect + tmux-continuum) in-repo and
+# sources them directly from its tmux.conf, so there is no plugin manager to bootstrap.
 
 install_neovim() {
     echo "Installing Neovim from GitHub releases..."

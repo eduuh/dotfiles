@@ -48,7 +48,6 @@ setup_termux() {
     update_system
     install_common_packages
     install_termux_specific_packages
-    install_tmux_plugins
     change_shell_to_zsh
     setup_symlinks
 }

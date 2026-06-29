@@ -1,5 +1,5 @@
-# Basic Path Setup
-export PATH="$HOME/.bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+# Basic Path Setup — ~/.bn/bin (bn's self-contained home) first, then legacy ~/.bin
+export PATH="$HOME/.bn/bin:$HOME/.bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
 # Homebrew Setup
 if [ -f "/opt/homebrew/bin/brew" ]; then
