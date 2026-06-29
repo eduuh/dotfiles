@@ -8,6 +8,14 @@
 # file — they don't belong in the dotfiles tree.
 .bin/bn
 .bin/bn-mcp
+# bn install.sh also symlinks these into .bin (pointing into the bn-repo checkout).
+# Machine-local install artifacts like the two above — not tracked.
+.bin/bn-bash
+.bin/bn-repo
+.bin/agent
+.bin/tat
+.bin/tatw
+.bin/wt-clone
 
 # bn cron systemd units. The source of truth is the bn repo (jobs/systemd/);
 # `jobs/systemd/install.sh` copies them here. Installed artifacts, not tracked.
