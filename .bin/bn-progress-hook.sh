@@ -18,8 +18,8 @@ FILES=0
 BASH=0
 if [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]]; then
     TOOLS=$(jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use") | .name // empty' "$TRANSCRIPT" 2>/dev/null)
-    FILES=$(echo "$TOOLS" | grep -cE '^(Edit|Write|NotebookEdit)$' || echo 0)
-    BASH=$(echo "$TOOLS"  | grep -c '^Bash$' || echo 0)
+    FILES=$(echo "$TOOLS" | grep -cE '^(Edit|Write|NotebookEdit)$' || true)
+    BASH=$(echo "$TOOLS"  | grep -c '^Bash$' || true)
 fi
 
 parts=()
