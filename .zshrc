@@ -21,7 +21,9 @@ alias grep='grep --color=auto'
 alias ll='ls -alF'
 alias la='ls -A'
 alias l='ls -CF'
-alias yolo='claude --dangerously-skip-permissions'
+yolo() { bn note >/dev/null 2>&1; command claude --dangerously-skip-permissions "$@"; }
+claude() { bn note >/dev/null 2>&1; command claude "$@"; }
+copilot() { bn note >/dev/null 2>&1; git rev-parse --is-inside-work-tree >/dev/null 2>&1 && bn mcp init copilot >/dev/null 2>&1; command copilot --yolo "$@"; }
 alias po="$HOME/.bin/pkg-open.sh"
 alias nvimd='nvim -c "DiffviewOpen origin/main"'
 
