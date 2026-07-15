@@ -26,6 +26,16 @@ claude() { bn note >/dev/null 2>&1; command claude "$@"; }
 copilot() { bn note >/dev/null 2>&1; git rev-parse --is-inside-work-tree >/dev/null 2>&1 && bn mcp init copilot >/dev/null 2>&1; command copilot --yolo "$@"; }
 alias po="$HOME/.bin/pkg-open.sh"
 alias nvimd='nvim -c "DiffviewOpen origin/main"'
+# Bare `tmux` (no args) always attaches to the persistent 'planning' session
+# instead of tmux's default of creating a fresh numbered session.
+tmux() {
+  if [ $# -eq 0 ]; then
+    command tmux attach -t planning 2>/dev/null || \
+      command tmux new-session -s planning -c "$HOME/projects/personal-notes"
+  else
+    command tmux "$@"
+  fi
+}
 
 # Load NVM
 export NVM_DIR="$HOME/.nvm"
