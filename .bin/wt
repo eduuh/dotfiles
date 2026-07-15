@@ -3,4 +3,50 @@
 # The worktree manager moved into bn. This preserves the `wt …` entrypoint and the zsh
 # wt()/wtw() wrappers untouched: `wt go` prints a path for the wrapper to cd into, and
 # `wtw` sets WT_ROOT then execs this shim — `bn wt` honors WT_ROOT.
-exec bn wt "$@"
+#
+# During machine bootstrap `bn` may not exist yet, but setup still needs `wt clone` to
+# create bare repos + their default-branch worktrees. Keep a tiny bootstrap fallback for
+# that one subcommand; everything else stays delegated to bn once it's installed.
+
+set -e
+
+if command -v bn >/dev/null 2>&1; then
+    exec bn wt "$@"
+fi
+
+cmd="${1:-}"
+if [[ "$cmd" != "clone" ]]; then
+    echo "wt: bn is not installed yet; only 'wt clone <repo>' is available during bootstrap." >&2
+    exit 127
+fi
+shift
+
+repo="${1:-}"
+if [[ -z "$repo" ]]; then
+    echo "wt clone: missing repository URL" >&2
+    exit 1
+fi
+
+name="${${repo:t}%.git}"
+root="${WT_ROOT:-$HOME/projects}"
+bare_dir="$root/bare/${name}.git"
+worktree_root="$root/worktree/$name"
+
+mkdir -p "$root/bare" "$root/worktree"
+
+if [[ ! -d "$bare_dir" ]]; then
+    echo "[wt bootstrap] bare clone $repo → $bare_dir"
+    git clone --bare "$repo" "$bare_dir"
+fi
+
+git --git-dir="$bare_dir" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+git --git-dir="$bare_dir" fetch origin
+
+default_branch="$(git --git-dir="$bare_dir" symbolic-ref --short HEAD 2>/dev/null || echo main)"
+target="$worktree_root/$default_branch"
+mkdir -p "$worktree_root"
+
+if [[ ! -d "$target" ]]; then
+    echo "[wt bootstrap] worktree add $target ($default_branch)"
+    git --git-dir="$bare_dir" worktree add "$target" "$default_branch"
+fi

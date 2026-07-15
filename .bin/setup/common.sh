@@ -584,6 +584,9 @@ ensure_tmux_version() {
 
 # TPM removed: bn vendors its tmux plugins (tmux-resurrect + tmux-continuum) in-repo and
 # sources them directly from its tmux.conf, so there is no plugin manager to bootstrap.
+install_tmux_plugins() {
+    echo "tmux plugins are bundled with bn — nothing to install."
+}
 
 install_neovim() {
     echo "Installing Neovim from GitHub releases..."
