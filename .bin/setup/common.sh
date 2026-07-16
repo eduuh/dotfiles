@@ -278,6 +278,19 @@ _regular_clone_target() {
     fi
 }
 
+# Run a repo's own ./install.sh if it has one — the generic hook that lets any
+# cloned repo (bn, nvim, or a future addition) bootstrap its own tools/build step
+# without dotfiles needing repo-specific logic. Idempotent by convention: every
+# install.sh here is written to be safe to re-run (incremental cargo builds,
+# skip-if-present checks, etc.), so this always runs after a clone/update rather
+# than trying to detect "already installed".
+_run_repo_install_script() {
+    local repo_path="$1" repo_name="$2"
+    [ -x "$repo_path/install.sh" ] || return 0
+    echo "[$repo_name] Running install.sh..."
+    ( cd "$repo_path" && ./install.sh ) || track_failure "$repo_name" "install.sh failed"
+}
+
 _clone_single_repo() {
     local REPO="$1"
     local REPO_NAME=$(basename "$REPO" .git)
@@ -319,9 +332,11 @@ _clone_single_repo() {
         if [ "$CLONE_DIR" != "$SYMLINK_DIR" ] && [ ! -e "$SYMLINK_DIR" ]; then
             ln -s "$CLONE_DIR" "$SYMLINK_DIR" && echo "[$REPO_NAME] Symlinked $SYMLINK_DIR → $CLONE_DIR"
         fi
+        _run_repo_install_script "$CLONE_DIR" "$REPO_NAME"
     else
         local BARE_PATH=~/projects/bare/"${REPO_NAME}.git"
         local WT_BASE=~/projects/worktree/"$REPO_NAME"
+        local ACTIVE_WORKTREE=""
 
         if [ -d "$BARE_PATH" ]; then
             echo "[$REPO_NAME] Updating (bare)..."
@@ -333,6 +348,7 @@ _clone_single_repo() {
             if [ -d "$CURRENT_WORKTREE" ]; then
                 cd "$CURRENT_WORKTREE"
                 git pull origin "$DEFAULT_BRANCH" || echo "[$REPO_NAME] Failed to pull."
+                ACTIVE_WORKTREE="$CURRENT_WORKTREE"
             fi
             cd ~
         else
@@ -341,16 +357,24 @@ _clone_single_repo() {
             # the same regular-repos.zsh classification, so it agrees this is bare.
             echo "[$REPO_NAME] Cloning (bare) via wt..."
             "$_COMMON_DIR/../wt" clone "$REPO" || track_failure "$REPO_NAME" "wt clone failed for $REPO"
+            # wt clone always checks out the default branch into its own dir under
+            # $WT_BASE; there's exactly one at this point, so just glob for it.
+            ACTIVE_WORKTREE=$(find "$WT_BASE" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)
+        fi
+
+        # nvim is a bare+worktree repo: point ~/.config/nvim at its main worktree
+        # *before* running its install.sh, since some ecosystem installers assume
+        # the config dir is already in place.
+        if [ -n "$ACTIVE_WORKTREE" ]; then
+            [[ "$REPO_NAME" == "nvim" ]] && _setup_nvim_config
+            _run_repo_install_script "$ACTIVE_WORKTREE" "$REPO_NAME"
         fi
     fi
-
-    # nvim is a bare+worktree repo: point ~/.config/nvim at its main worktree and
-    # run the repo's own installer for ecosystem deps (tree-sitter, vectorcode, …).
-    [[ "$REPO_NAME" == "nvim" ]] && _setup_nvim_config
 }
 
-# Link ~/.config/nvim → the nvim main worktree and install its ecosystem deps.
-# Safe to call repeatedly; no-ops if the worktree isn't present yet.
+# Link ~/.config/nvim → the nvim main worktree. Safe to call repeatedly; no-ops if
+# the worktree isn't present yet. Ecosystem deps (tree-sitter, vectorcode, mcp-hub)
+# are installed by nvim's own install.sh, run generically by _run_repo_install_script.
 _setup_nvim_config() {
     local wt_main=~/projects/worktree/nvim/main
     if [ ! -d "$wt_main" ]; then
@@ -360,12 +384,6 @@ _setup_nvim_config() {
     mkdir -p ~/.config
     ln -sfn "$wt_main" ~/.config/nvim
     echo "[nvim] Linked ~/.config/nvim → $wt_main"
-    # Install ecosystem deps once. tree-sitter is a good proxy: if it's already on
-    # PATH, the installer has run before, so skip the slow re-download.
-    if [ -x "$wt_main/install.sh" ] && ! command -v tree-sitter >/dev/null 2>&1; then
-        echo "[nvim] Running install.sh (tree-sitter, vectorcode, mcp-hub)…"
-        "$wt_main/install.sh" || track_failure "nvim-deps" "nvim install.sh failed"
-    fi
 }
 
 # Provision one branch-notes-style repo on Windows + symlink under ~/projects/.
@@ -475,6 +493,23 @@ clone_repos() {
 
     setup_branch_notes_symlink
     _run_work_setup_from_personal_notes
+    _run_personal_setup_from_personal_notes
+}
+
+# After personal repos are cloned, source a personal-only-repo setup script from
+# personal-notes if it exists. Mirrors _run_work_setup_from_personal_notes but for
+# repos that must NEVER land on a work machine (e.g. mt5-data-api, trading
+# journals): the script defines its own repo list, calls _clone_single_repo /
+# bn wt clone for each, so those repo names+URLs stay private instead of in this
+# public dotfiles repo. No-op if personal-notes isn't cloned or the script is absent.
+_run_personal_setup_from_personal_notes() {
+    local personal_script="${PERSONAL_SETUP_SCRIPT:-$HOME/projects/personal-notes/scripts/setup-personal-repos.sh}"
+    if [[ ! -f "$personal_script" ]]; then
+        return 0
+    fi
+    echo "Sourcing personal setup script: $personal_script"
+    source "$personal_script"
+    echo "Personal repo setup finished."
 }
 
 # After personal repos are cloned, source a work-repo setup script from
