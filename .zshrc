@@ -36,6 +36,10 @@ tmux() {
     command tmux "$@"
   fi
 }
+alias n8n-up='(cd ~/projects/n8n && make up)'
+alias n8n-down='(cd ~/projects/n8n && make down)'
+alias n8n-logs='(cd ~/projects/n8n && make logs)'
+alias n8n-update='(cd ~/projects/n8n && make update)'
 
 # Load NVM
 export NVM_DIR="$HOME/.nvm"
