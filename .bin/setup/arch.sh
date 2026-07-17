@@ -96,13 +96,10 @@ install_arch_specific_packages() {
 }
 
 setup_arch() {
-    install_yay
     install_nvm
-    install_common_packages_arch
     ensure_tmux_version
     install_neovim
     install_fzf
-    install_arch_specific_packages
 
     install_lazygit
     install_claude_code

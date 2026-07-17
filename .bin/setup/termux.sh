@@ -45,9 +45,6 @@ install_termux_specific_packages() {
 }
 
 setup_termux() {
-    update_system
-    install_common_packages
-    install_termux_specific_packages
     change_shell_to_zsh
     setup_symlinks
 }

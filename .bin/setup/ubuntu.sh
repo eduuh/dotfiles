@@ -146,12 +146,9 @@ install_docker() {
 }
 
 setup_ubuntu() {
-    update_system
-    install_common_packages
     ensure_tmux_version
     install_neovim
     install_fzf
-    install_ubuntu_specific_packages
 
     if [[ $CODESPACES != "true" ]]; then
         install_nvm
@@ -164,8 +161,6 @@ setup_ubuntu() {
 }
 
 setup_codespace() {
-    update_system
-    install_common_packages
     ensure_tmux_version
     install_fzf
     install_claude_code

@@ -38,7 +38,9 @@ Python setup (venv + pynvim/requests, and on Ubuntu the `python3.10` /
 SETUP_PYTHON=1 ./setup.sh
 ```
 
-Auto-detects platform (macOS, Ubuntu, Arch, Fedora, Codespaces) and installs packages, configs, and symlinks via [GNU Stow](https://www.gnu.org/software/stow/). On atomic/rpm-ostree Fedora variants (Silverblue, Kinoite, COSMIC Atomic) host packages are layered with `rpm-ostree --apply-live` instead of `dnf`.
+Auto-detects the platform (macOS, Ubuntu, Arch, Fedora, Codespaces) and runs the same `setup.sh` everywhere — only the package backend differs. Fedora uses `dnf`, or on atomic variants (validated on COSMIC Atomic) layers packages with `rpm-ostree`. Changes apply live via `--apply-live` when possible; anything that can't be applied live is layered into the next deployment and finalized on reboot (setup prints a reminder). Configs and symlinks are stowed via [GNU Stow](https://www.gnu.org/software/stow/).
+
+Re-runs are safe. `setup.sh` is resumable — completed tool-install steps are cached (`~/.local/state/dotfiles/done`) and skipped, while package installation always re-runs, so adding a package to the list and re-running `./setup.sh` installs it without redoing everything. Use `SETUP_FORCE=true ./setup.sh` to re-run every step from scratch.
 
 After setup, optionally run:
 

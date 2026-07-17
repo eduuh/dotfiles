@@ -42,6 +42,9 @@ install_dependencies() {
     arch)
       install_for_arch
       ;;
+    fedora)
+      install_for_fedora
+      ;;
     darwin)
       install_for_macos
       ;;
@@ -99,6 +102,30 @@ install_for_arch() {
     sudo pacman -S --noconfirm "${packages_to_install[@]}"
   else
     print_status "All dependencies already installed"
+  fi
+}
+
+install_for_fedora() {
+  print_status "Installing dependencies for Fedora..."
+
+  local packages_to_install=()
+  command -v gh  &>/dev/null || packages_to_install+=(gh)
+  command -v zsh &>/dev/null || packages_to_install+=(zsh)
+  command -v ssh &>/dev/null || packages_to_install+=(openssh-clients)
+
+  if [ ${#packages_to_install[@]} -eq 0 ]; then
+    print_status "All dependencies already installed"
+    return 0
+  fi
+
+  print_status "Installing: ${packages_to_install[*]}"
+  # Atomic (rpm-ostree) vs traditional (dnf). --apply-live lands the CLI on the
+  # running system with no reboot; fall back to plain layering if live-apply fails.
+  if [ -f /run/ostree-booted ]; then
+    sudo rpm-ostree install --idempotent --allow-inactive --apply-live -y "${packages_to_install[@]}" \
+      || sudo rpm-ostree install --idempotent --allow-inactive -y "${packages_to_install[@]}"
+  else
+    sudo dnf install -y "${packages_to_install[@]}"
   fi
 }
 
