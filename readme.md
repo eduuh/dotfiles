@@ -38,7 +38,7 @@ Python setup (venv + pynvim/requests, and on Ubuntu the `python3.10` /
 SETUP_PYTHON=1 ./setup.sh
 ```
 
-Auto-detects platform (macOS, Ubuntu, Arch, Codespaces) and installs packages, configs, and symlinks via [GNU Stow](https://www.gnu.org/software/stow/).
+Auto-detects platform (macOS, Ubuntu, Arch, Fedora, Codespaces) and installs packages, configs, and symlinks via [GNU Stow](https://www.gnu.org/software/stow/). On atomic/rpm-ostree Fedora variants (Silverblue, Kinoite, COSMIC Atomic) host packages are layered with `rpm-ostree --apply-live` instead of `dnf`.
 
 After setup, optionally run:
 
