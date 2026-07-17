@@ -92,19 +92,33 @@ _projects_launch() {
     fi
 }
 
-# OS-specific package/config setup for $1 (one resumable step).
+# Platform PACKAGE installation for $1 — ALWAYS run (idempotent) so re-running
+# setup reconciles newly added packages without SETUP_FORCE. Tool installs live
+# in run_platform_setup below and stay resumable/cached.
+install_platform_packages() {
+    local distro="$1"
+    case "$distro" in
+        ubuntu|debian) source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; update_system; install_common_packages; install_ubuntu_specific_packages ;;
+        arch)          source "$SCRIPT_DIR/.bin/setup/arch.sh";   install_yay; install_common_packages_arch; install_arch_specific_packages ;;
+        fedora)        source "$SCRIPT_DIR/.bin/setup/fedora.sh"; install_fedora_packages ;;
+        codespace)     source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; update_system; install_common_packages ;;
+        darwin)        source "$SCRIPT_DIR/.bin/setup/mac.sh";    install_homebrew; install_brew_bundle ;;
+        termux)        source "$SCRIPT_DIR/.bin/setup/termux.sh"; update_system; install_common_packages; install_termux_specific_packages ;;
+        *) return 2 ;;
+    esac
+}
+
+# OS-specific TOOL/config setup for $1 (one resumable step). Packages are handled
+# separately by install_platform_packages (always-run) before this.
 run_platform_setup() {
     local distro="$1"
     case "$distro" in
         ubuntu|debian) source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; setup_ubuntu ;;
         arch)          source "$SCRIPT_DIR/.bin/setup/arch.sh";   setup_arch ;;
-        fedora|rhel|centos|rocky|almalinux)
-                       source "$SCRIPT_DIR/.bin/setup/fedora.sh"; setup_fedora ;;
+        fedora)        source "$SCRIPT_DIR/.bin/setup/fedora.sh"; setup_fedora ;;
         codespace)     source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; setup_codespace ;;
         darwin)
             source "$SCRIPT_DIR/.bin/setup/mac.sh"
-            install_homebrew
-            install_brew_bundle
             setup_kanata_service
             setup_mac
             ;;
@@ -117,7 +131,7 @@ main() {
     local distro=$(detect_distro)
 
     case "$distro" in
-        ubuntu|debian|arch|fedora|rhel|centos|rocky|almalinux|codespace|darwin|termux) ;;
+        ubuntu|debian|arch|fedora|codespace|darwin|termux) ;;
         *) track_failure "distro" "Unsupported distribution: $distro"; print_failure_summary; exit 1 ;;
     esac
 
@@ -125,6 +139,7 @@ main() {
     # then idempotent + resumable. Records on success; failed steps resume.
     step rust               core wsl,linux,mac,termux install_rust
     step bn                 core all   setup_bn
+    step_always "packages-$distro" core all install_platform_packages "$distro"
     step "platform-$distro" core all   run_platform_setup "$distro"
 
     # tmux is installed by the platform step above; fire the clone into a detached session
@@ -148,6 +163,11 @@ main() {
 
     # Clean up sudo keepalive
     [[ -n "$SUDO_PID" ]] && kill "$SUDO_PID" 2>/dev/null
+
+    if [[ "${FEDORA_REBOOT_NEEDED:-0}" == "1" ]]; then
+        echo "⚠ Fedora atomic: some packages were layered into the next deployment."
+        echo "  Reboot to finalize them:  systemctl reboot"
+    fi
 
     print_failure_summary
 }

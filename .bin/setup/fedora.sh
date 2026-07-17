@@ -24,10 +24,21 @@ fedora_pkg_install() {
 
     if _fedora_is_atomic; then
         echo "Layering packages via rpm-ostree (atomic Fedora): ${pkgs[*]}"
-        if ! sudo rpm-ostree install --idempotent --allow-inactive --apply-live -y "${pkgs[@]}"; then
-            track_failure "rpm-ostree" "Failed to layer packages: ${pkgs[*]}"
-            return 1
+        if sudo rpm-ostree install --idempotent --allow-inactive --apply-live -y "${pkgs[@]}"; then
+            return 0
         fi
+        # --apply-live can fail even when the packages layer cleanly into the
+        # NEXT deployment (live-apply has known limitations). Retry as a plain
+        # layering op; if that succeeds the packages are staged and a reboot
+        # finalizes them — so we treat it as success and flag a reboot.
+        echo "live-apply failed; retrying as plain layering (a reboot will finalize)…"
+        if sudo rpm-ostree install --idempotent --allow-inactive -y "${pkgs[@]}"; then
+            FEDORA_REBOOT_NEEDED=1
+            echo "⚠ packages layered into the next deployment — reboot to finalize."
+            return 0
+        fi
+        track_failure "rpm-ostree" "Failed to layer packages: ${pkgs[*]}"
+        return 1
     else
         echo "Installing packages via dnf: ${pkgs[*]}"
         if ! sudo dnf install -y "${pkgs[@]}"; then
@@ -54,7 +65,6 @@ install_fedora_packages() {
 }
 
 setup_fedora() {
-    install_fedora_packages
     ensure_tmux_version      # Fedora repo tmux (>=3.5) satisfies the floor; no source build
     install_neovim
     install_fzf

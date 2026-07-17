@@ -113,6 +113,29 @@ step() {
     run_step "$name" "$@"
 }
 
+# step_always <name> <min_profile> <targets> <cmd> [args...]
+# Like step(), but ALWAYS runs — never recorded in the done-file. Use for work
+# that must reconcile on every run (e.g. package installs, so re-running setup
+# picks up newly added packages without needing SETUP_FORCE). The command MUST
+# be idempotent. Failures are tracked but don't abort the run.
+step_always() {
+    local name="$1" min_profile="$2" targets="$3"; shift 3
+    if ! _profile_includes "$min_profile"; then
+        echo "· [$name] skipped (profile ${PROFILE:-?} < $min_profile)"
+        return 0
+    fi
+    if ! _target_matches "$targets"; then
+        echo "· [$name] skipped (target ${TARGET:-?} not in $targets)"
+        return 0
+    fi
+    echo "▶ [$name] (always) ..."
+    if "$@"; then
+        return 0
+    fi
+    track_failure "$name" "step '$name' failed"
+    return 1
+}
+
 # Install a package with error tracking (generic wrapper)
 install_package() {
     local pkg="$1"
@@ -434,9 +457,60 @@ _setup_one_branch_notes_repo() {
 # Provision the personal branch-notes repo (work notes are cloned from the
 # `notes` remote by clone-work.sh). bn picks the right one per repo via
 # $HOME/.config/bn/work-repos (allowlist, gitignored).
+#
+# WSL keeps the data on the Windows side (symlinked into ~/projects); native
+# Linux/macOS clone it straight into ~/projects/branch-notes.
 setup_branch_notes_symlink() {
-    _is_wsl || return 0
-    _setup_one_branch_notes_repo "branch-notes" "git@github.com:eduuh/branch-notes.git"
+    if _is_wsl; then
+        _setup_one_branch_notes_repo "branch-notes" "git@github.com:eduuh/branch-notes.git"
+    else
+        _setup_branch_notes_native "branch-notes" "git@github.com:eduuh/branch-notes.git"
+    fi
+}
+
+# Native (non-WSL) branch-notes provisioning: clone the repo into ~/projects/<name>.
+# bn may have already created that dir (it writes per-host note folders there before
+# this runs); if so, adopt it in place — git init + remote + fetch — so the local
+# notes become tracked/pushable rather than failing on a non-empty clone target.
+_setup_branch_notes_native() {
+    local name="$1" remote="$2"
+    local target="$HOME/projects/$name"
+
+    if [ -d "$target/.git" ]; then
+        echo "[$name] Already a git repo at $target."
+        return 0
+    fi
+
+    mkdir -p "$HOME/projects"
+
+    if [ ! -e "$target" ]; then
+        echo "[$name] Cloning from $remote → $target..."
+        git clone "$remote" "$target" || { track_failure "$name" "Failed to clone $remote"; return 1; }
+        git -C "$target" config core.filemode false
+        return 0
+    fi
+
+    # Target exists but isn't a git repo (e.g. bn created it). Adopt it: init,
+    # wire the remote, and fetch/checkout the default branch without discarding
+    # the local files already there.
+    echo "[$name] $target exists but is not a git repo — adopting it (git init + remote)..."
+    git -C "$target" init -b main >/dev/null || { track_failure "$name" "Failed to git init $target"; return 1; }
+    git -C "$target" config core.filemode false
+    if ! git -C "$target" remote get-url origin >/dev/null 2>&1; then
+        git -C "$target" remote add origin "$remote"
+    fi
+    if ! git -C "$target" fetch origin >/dev/null 2>&1; then
+        track_failure "$name" "Failed to fetch $remote into adopted $target"
+        return 1
+    fi
+    local def
+    def=$(git -C "$target" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
+    def="${def:-main}"
+    # Point local branch at origin's tip; local note files stay as working-tree
+    # changes to review/commit, nothing is overwritten or deleted.
+    git -C "$target" checkout -B "$def" --track "origin/$def" 2>/dev/null \
+        || git -C "$target" branch --set-upstream-to="origin/$def" "$def" 2>/dev/null || true
+    echo "[$name] Adopted $target (remote origin → $remote, branch $def)."
 }
 
 clone_repos() {
@@ -869,6 +943,13 @@ install_talosctl() {
     # Skip on WSL - talosctl should be installed on Windows host
     if grep -qi microsoft /proc/version 2>/dev/null; then
         echo "Skipping talosctl on WSL (install on Windows host instead)."
+        return 0
+    fi
+
+    # Skip on Fedora — not part of the Fedora toolset, and the upstream installer
+    # (talos.dev/install) lacks a working checksum path there.
+    if [[ "$(detect_distro)" == "fedora" ]]; then
+        echo "Skipping talosctl on Fedora."
         return 0
     fi
 
