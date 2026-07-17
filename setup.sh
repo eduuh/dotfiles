@@ -98,6 +98,8 @@ run_platform_setup() {
     case "$distro" in
         ubuntu|debian) source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; setup_ubuntu ;;
         arch)          source "$SCRIPT_DIR/.bin/setup/arch.sh";   setup_arch ;;
+        fedora|rhel|centos|rocky|almalinux)
+                       source "$SCRIPT_DIR/.bin/setup/fedora.sh"; setup_fedora ;;
         codespace)     source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; setup_codespace ;;
         darwin)
             source "$SCRIPT_DIR/.bin/setup/mac.sh"
@@ -115,7 +117,7 @@ main() {
     local distro=$(detect_distro)
 
     case "$distro" in
-        ubuntu|debian|arch|codespace|darwin|termux) ;;
+        ubuntu|debian|arch|fedora|rhel|centos|rocky|almalinux|codespace|darwin|termux) ;;
         *) track_failure "distro" "Unsupported distribution: $distro"; print_failure_summary; exit 1 ;;
     esac
 

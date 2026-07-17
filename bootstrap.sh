@@ -28,7 +28,9 @@ err() { printf '\033[1;31m[bootstrap]\033[0m %s\n' "$*" >&2; }
 
 # Resolve the package manager just well enough to install git/zsh/curl.
 detect_pm() {
-  if command -v apt-get >/dev/null 2>&1; then echo apt
+  if [ -f /run/ostree-booted ] && command -v rpm-ostree >/dev/null 2>&1; then echo rpm-ostree
+  elif command -v apt-get >/dev/null 2>&1; then echo apt
+  elif command -v dnf     >/dev/null 2>&1; then echo dnf
   elif command -v pacman  >/dev/null 2>&1; then echo pacman
   elif command -v brew    >/dev/null 2>&1; then echo brew
   elif [ "$(uname)" = "Darwin" ]; then echo mac
@@ -41,11 +43,13 @@ ensure_pkg() {
   command -v "$1" >/dev/null 2>&1 && return 0
   log "installing $2…"
   case "$(detect_pm)" in
-    apt)    sudo apt-get update -y && sudo apt-get install -y "$2" ;;
-    pacman) sudo pacman -S --noconfirm "$2" ;;
-    brew)   brew install "$2" ;;
-    mac)    err "Xcode Command Line Tools needed for '$1'. Run: xcode-select --install"; exit 1 ;;
-    *)      err "No supported package manager found to install '$2'."; exit 1 ;;
+    apt)        sudo apt-get update -y && sudo apt-get install -y "$2" ;;
+    dnf)        sudo dnf install -y "$2" ;;
+    rpm-ostree) sudo rpm-ostree install --idempotent --allow-inactive --apply-live -y "$2" ;;
+    pacman)     sudo pacman -S --noconfirm "$2" ;;
+    brew)       brew install "$2" ;;
+    mac)        err "Xcode Command Line Tools needed for '$1'. Run: xcode-select --install"; exit 1 ;;
+    *)          err "No supported package manager found to install '$2'."; exit 1 ;;
   esac
 }
 

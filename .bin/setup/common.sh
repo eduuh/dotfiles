@@ -572,6 +572,20 @@ ensure_tmux_version() {
             track_failure "tmux" "Failed to install tmux build dependencies"
             return 1
         }
+    elif command -v rpm-ostree &> /dev/null || command -v dnf &> /dev/null; then
+        # Fedora / rpm-ostree: layer on atomic, dnf on traditional.
+        local _tmux_deps=(libevent-devel ncurses-devel gcc make bison pkgconf-pkg-config)
+        if [[ -f /run/ostree-booted ]]; then
+            sudo rpm-ostree install --idempotent --allow-inactive --apply-live -y "${_tmux_deps[@]}" || {
+                track_failure "tmux" "Failed to install tmux build dependencies"
+                return 1
+            }
+        else
+            sudo dnf install -y "${_tmux_deps[@]}" || {
+                track_failure "tmux" "Failed to install tmux build dependencies"
+                return 1
+            }
+        fi
     else
         sudo apt-get install -y libevent-dev ncurses-dev build-essential bison pkg-config || {
             track_failure "tmux" "Failed to install tmux build dependencies"
