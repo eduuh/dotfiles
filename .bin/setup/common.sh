@@ -879,6 +879,100 @@ install_rust() {
     fi
 }
 
+# sccache: compiler cache for Rust. The .zshrc/.bashrc build-cache block wires
+# RUSTC_WRAPPER=sccache when the binary exists, so installing it here (prebuilt
+# from GitHub → ~/.local/bin) is what actually turns the cache on for a fresh
+# machine. Big win on clean/CI-path rebuilds (~8x); cross-worktree hits are
+# limited because sccache's Rust key includes dependency paths.
+install_sccache() {
+    local ver="${SCCACHE_VERSION:-v0.16.0}"
+    local install_dir="$APP_BIN_DIR"
+    mkdir -p "$install_dir"
+
+    if [[ -x "$install_dir/sccache" ]] && "$install_dir/sccache" --version 2>/dev/null | grep -q "${ver#v}"; then
+        echo "sccache ${ver} already installed."
+        return 0
+    fi
+
+    local os arch triple
+    os="$(uname -s)"; arch="$(uname -m)"
+    case "$os:$arch" in
+        Linux:x86_64)          triple="x86_64-unknown-linux-musl" ;;
+        Linux:aarch64|Linux:arm64) triple="aarch64-unknown-linux-musl" ;;
+        Darwin:x86_64)         triple="x86_64-apple-darwin" ;;
+        Darwin:arm64|Darwin:aarch64) triple="aarch64-apple-darwin" ;;
+        *) track_failure "sccache" "Unsupported platform $os/$arch"; return 0 ;;
+    esac
+
+    local name="sccache-${ver}-${triple}"
+    local url="https://github.com/mozilla/sccache/releases/download/${ver}/${name}.tar.gz"
+    local tmpdir; tmpdir="$(mktemp -d)"
+
+    if curl -fsSL "$url" -o "$tmpdir/sccache.tar.gz" && \
+       tar -xzf "$tmpdir/sccache.tar.gz" -C "$tmpdir" && \
+       install -m755 "$tmpdir/$name/sccache" "$install_dir/sccache"; then
+        echo "$("$install_dir/sccache" --version) installed to $install_dir"
+    else
+        track_failure "sccache" "Failed to download/install sccache"
+    fi
+    rm -rf "$tmpdir"
+}
+
+# mold: fast drop-in linker. The build-cache rc block adds `-fuse-ld=mold` when
+# the binary exists. gcc's -fuse-ld=mold needs an `ld.mold` alias on PATH, so we
+# install BOTH `mold` and `ld.mold`. Linux-only (macOS has no free mold). After
+# installing we functionally probe a trivial link; if it fails on this box we
+# remove mold so the rc guard leaves the toolchain's default linker in place.
+install_mold() {
+    [[ "$(uname -s)" == "Linux" ]] || { echo "mold is Linux-only; skipping."; return 0; }
+    local ver="${MOLD_VERSION:-2.41.0}"
+    local install_dir="$APP_BIN_DIR"
+    mkdir -p "$install_dir"
+
+    if [[ -x "$install_dir/mold" && -x "$install_dir/ld.mold" ]] && \
+       "$install_dir/mold" --version 2>/dev/null | grep -q "mold ${ver}"; then
+        echo "mold ${ver} already installed."
+        return 0
+    fi
+
+    local arch march
+    arch="$(uname -m)"
+    case "$arch" in
+        x86_64)        march="x86_64-linux" ;;
+        aarch64|arm64) march="aarch64-linux" ;;
+        *) track_failure "mold" "Unsupported arch $arch"; return 0 ;;
+    esac
+
+    local name="mold-${ver}-${march}"
+    local url="https://github.com/rui314/mold/releases/download/v${ver}/${name}.tar.gz"
+    local tmpdir; tmpdir="$(mktemp -d)"
+
+    if ! { curl -fsSL "$url" -o "$tmpdir/mold.tar.gz" && \
+           tar -xzf "$tmpdir/mold.tar.gz" -C "$tmpdir" && \
+           install -m755 "$tmpdir/$name/bin/mold" "$install_dir/mold" && \
+           install -m755 "$tmpdir/$name/bin/mold" "$install_dir/ld.mold"; }; then
+        track_failure "mold" "Failed to download/install mold"
+        rm -rf "$tmpdir"; return 0
+    fi
+    rm -rf "$tmpdir"
+
+    # Functional probe: only keep mold if it actually links on this toolchain.
+    if command -v rustc &> /dev/null; then
+        local probe; probe="$(mktemp -d)"
+        echo 'fn main(){}' > "$probe/m.rs"
+        if PATH="$install_dir:$PATH" RUSTFLAGS="-C link-arg=-fuse-ld=mold" \
+             rustc "$probe/m.rs" -o "$probe/m" &> /dev/null; then
+            echo "mold ${ver} installed to $install_dir (link probe OK)."
+        else
+            rm -f "$install_dir/mold" "$install_dir/ld.mold"
+            echo "mold link probe failed on this toolchain; removed (default linker kept)."
+        fi
+        rm -rf "$probe"
+    else
+        echo "mold ${ver} installed to $install_dir (rustc absent; skipped link probe)."
+    fi
+}
+
 setup_bn() {
     # bn ships the branch-notes CLI + bn-mcp server and (full install) owns the tmux
     # config: ~/.tmux.conf → workflow/tmux.conf plus ~/.config/bn/{repo,bn}. It used to
