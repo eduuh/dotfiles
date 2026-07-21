@@ -138,6 +138,8 @@ main() {
     # step <name> <min-profile> <targets> <cmd…> — profile/target filtered,
     # then idempotent + resumable. Records on success; failed steps resume.
     step rust               core wsl,linux,mac,termux install_rust
+    step sccache            core wsl,linux,mac install_sccache
+    step mold               core wsl,linux     install_mold
     step bn                 core all   setup_bn
     step_always "packages-$distro" core all install_platform_packages "$distro"
     step "platform-$distro" core all   run_platform_setup "$distro"
