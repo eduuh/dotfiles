@@ -115,16 +115,39 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
+. "$HOME/.cargo/env"
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 # pnpm
-export PNPM_HOME="/home/edd/.local/share/pnpm"
+export PNPM_HOME="/home/eduuh/.local/share/pnpm"
 case ":$PATH:" in
-  *":$PNPM_HOME:"*) ;;
-  *) export PATH="$PNPM_HOME:$PATH" ;;
+  *":$PNPM_HOME/bin:"*) ;;
+  *) export PATH="$PNPM_HOME/bin:$PATH" ;;
 esac
 # pnpm end
-. "$HOME/.cargo/env"
+
+# fleet resource caps (added by copilot: tame per-lane build footprint)
+export CARGO_BUILD_JOBS=4
+export MAKEFLAGS="-j4"
+
+# Rust build cache (added by copilot: cut rebuild time).
+# mold: much faster linker on every build/link (helps all worktrees + the
+# edit->test loop). sccache: caches dependency compilation, so clean rebuilds
+# and target-wipe/CI-path rebuilds are ~8x faster (cross-worktree hits are
+# limited: sccache's Rust key includes dep paths, so a fresh worktree misses).
+# Guarded so these only activate where the tools are installed (portable no-op).
+if command -v sccache >/dev/null 2>&1; then
+  export RUSTC_WRAPPER=sccache
+  export SCCACHE_CACHE_SIZE=20G     # deps are large; default 10G evicts too often
+  # NB: leave CARGO_INCREMENTAL at default. cargo builds registry deps
+  # non-incrementally (so sccache caches them on clean/CI-path rebuilds),
+  # while your workspace crates keep fast incremental edits (sccache passes
+  # those through uncached). Forcing =0 would cache your crates too but slow
+  # the everyday edit->test loop, so we don't.
+fi
+if command -v mold >/dev/null 2>&1; then
+  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-fuse-ld=mold"
+fi

@@ -124,3 +124,26 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Starship
 eval "$(starship init zsh)"
+
+# fleet resource caps (added by copilot: tame per-lane build footprint)
+export CARGO_BUILD_JOBS=4
+export MAKEFLAGS="-j4"
+
+# Rust build cache (added by copilot: cut rebuild time).
+# mold: much faster linker on every build/link (helps all worktrees + the
+# edit->test loop). sccache: caches dependency compilation, so clean rebuilds
+# and target-wipe/CI-path rebuilds are ~8x faster (cross-worktree hits are
+# limited: sccache's Rust key includes dep paths, so a fresh worktree misses).
+# Guarded so these only activate where the tools are installed (portable no-op).
+if command -v sccache >/dev/null 2>&1; then
+  export RUSTC_WRAPPER=sccache
+  export SCCACHE_CACHE_SIZE=20G     # deps are large; default 10G evicts too often
+  # NB: leave CARGO_INCREMENTAL at default. cargo builds registry deps
+  # non-incrementally (so sccache caches them on clean/CI-path rebuilds),
+  # while your workspace crates keep fast incremental edits (sccache passes
+  # those through uncached). Forcing =0 would cache your crates too but slow
+  # the everyday edit->test loop, so we don't.
+fi
+if command -v mold >/dev/null 2>&1; then
+  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-fuse-ld=mold"
+fi
