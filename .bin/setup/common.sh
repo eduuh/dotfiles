@@ -1122,8 +1122,37 @@ setup_symlinks() {
 
     echo "Stowing dotfiles from $dotfiles_dir..."
     cd "$dotfiles_dir"
+
+    # --adopt pulls whatever currently sits at a $HOME target into the repo
+    # whenever that target isn't already a stow symlink. That's the desired
+    # behavior for genuinely new dotfiles, but if a third-party installer
+    # (pnpm, nvm, etc.) clobbered an ALREADY-TRACKED file — e.g. replaced
+    # .zshrc with just its own snippet — adopt would silently bake that
+    # damage into the repo. Snapshot the pre-existing dirty state so we only
+    # revert diffs THIS stow run introduces, not unrelated pending edits.
+    local in_git=0 pre_dirty=""
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        in_git=1
+        pre_dirty=$(git diff --name-only)
+    fi
+
     if ! stow --adopt -t "$HOME" .; then
         track_failure "symlinks" "Failed to create symlinks with stow"
+        return 0
+    fi
+
+    if [ "$in_git" = 1 ]; then
+        local post_dirty clobbered
+        post_dirty=$(git diff --name-only)
+        clobbered=$(comm -13 <(echo "$pre_dirty" | sort -u) <(echo "$post_dirty" | sort -u))
+        if [ -n "$clobbered" ]; then
+            echo "⚠ stow --adopt pulled local drift into tracked dotfiles — reverting:"
+            echo "$clobbered" | sed 's/^/    /'
+            while IFS= read -r f; do
+                [ -n "$f" ] && git checkout -- "$f"
+            done <<< "$clobbered"
+            track_failure "symlinks" "stow --adopt clobbered tracked file(s), reverted: $(echo "$clobbered" | tr '\n' ' ')"
+        fi
     fi
 }
 
