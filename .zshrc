@@ -15,6 +15,21 @@ elif [ -f "/usr/local/bin/brew" ]; then
     export PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
 fi
 
+# Completion system. Must be initialized before anything that calls `compdef`
+# (the `bn completion zsh` script below ends in one), otherwise every new shell
+# prints "command not found: compdef". Runs after brew shellenv so Homebrew's
+# site-functions are already on fpath.
+if (( ! $+functions[compdef] )); then
+  autoload -Uz compinit
+  # Rebuild the dump at most once a day; -C skips the slow security audit and
+  # the recompile when the cache is fresh.
+  if [[ -n ${ZDOTDIR:-$HOME}/.zcompdump(Nmh-24) ]]; then
+    compinit -C
+  else
+    compinit
+  fi
+fi
+
 # Aliases
 alias ls='ls --color=auto'
 alias grep='grep --color=auto'
