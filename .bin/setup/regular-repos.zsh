@@ -16,4 +16,11 @@ REGULAR_CLONE_REPOS=(
     personal-notes
     eduuh
     notes
+    # Windows applications: built and run from the Windows side, so they are
+    # cloned flat and — via WINDOWS_CLONE_REPOS — onto the Windows filesystem.
+    # They must be listed HERE too: only a regular clone consults the Windows
+    # routing, so a repo in WINDOWS_CLONE_REPOS alone still lands bare+worktree
+    # inside WSL, where Windows tooling can't reach it.
+    win-dot
+    keyflow
 )

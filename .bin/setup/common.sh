@@ -273,8 +273,10 @@ else
 fi
 
 # Repos that should live on the Windows filesystem when on WSL
-# (cloned to $WINDOWS_PROJECTS_DIR/<name>, symlinked at ~/projects/<name>)
-WINDOWS_CLONE_REPOS=(personal-notes notes)
+# (cloned to $WINDOWS_PROJECTS_DIR/<name>, symlinked at ~/projects/<name>).
+# win-dot and keyflow are Windows applications — they are built and run from the
+# Windows side, so a clone inside the WSL filesystem would be unusable there.
+WINDOWS_CLONE_REPOS=(personal-notes notes win-dot keyflow)
 
 _is_regular_repo() {
     local name="$1"
@@ -619,6 +621,16 @@ clone_repos() {
             "git@github.com:eduuh/bn.git"
             "git@github.com:eduuh/atlas.git"
         )
+
+        # Windows-side applications. WSL only — they are meaningless on a native
+        # Linux or mac box — but NOT behind --personal: this is the Windows half
+        # of the machine's own config, wanted on a work machine too.
+        if _is_wsl; then
+            REPOSITORIES+=(
+                "https://github.com/eduuh/win-dot.git"
+                "https://github.com/eduuh/keyflow.git"
+            )
+        fi
 
         # Personal PROJECT repos that are themselves public — nothing to hide, so
         # the names stay here. A work machine still shouldn't pull them, so they
