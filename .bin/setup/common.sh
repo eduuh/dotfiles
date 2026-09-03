@@ -479,17 +479,28 @@ _setup_one_branch_notes_repo() {
     ln -s "$target" "$link" && echo "[$name] Symlinked $link → $target"
 }
 
-# Provision the personal branch-notes repo (work notes are cloned from the
-# `notes` remote by clone-work.sh). bn picks the right one per repo via
-# $HOME/.config/bn/work-repos (allowlist, gitignored).
+# Provision a branch-notes repo, picking the right layout for the platform: WSL
+# keeps the data on the Windows side (symlinked into ~/projects) so Windows-side
+# editors can reach it, native Linux/macOS clones straight into ~/projects/<name>.
 #
-# WSL keeps the data on the Windows side (symlinked into ~/projects); native
-# Linux/macOS clone it straight into ~/projects/branch-notes.
-setup_branch_notes_symlink() {
+# The NAME AND REMOTE ARE THE CALLER'S to supply, and both callers are private
+# setup scripts in personal-notes: setup-personal-repos.sh provisions the personal
+# notes repo under --personal, setup-work-repos.sh the work one under --work. So a
+# work machine never clones personal notes and vice versa, and neither private
+# repo's name sits in this public repo. bn routes writes to the right one per repo
+# via $HOME/.config/bn/work-repos (allowlist, gitignored).
+#
+# Usage: setup_branch_notes_repo <name> <remote_url>
+setup_branch_notes_repo() {
+    local name="$1" remote="$2"
+    if [[ -z "$name" ]]; then
+        track_failure "branch-notes" "setup_branch_notes_repo needs a repo name"
+        return 1
+    fi
     if _is_wsl; then
-        _setup_one_branch_notes_repo "branch-notes" "git@github.com:eduuh/branch-notes.git"
+        _setup_one_branch_notes_repo "$name" "$remote"
     else
-        _setup_branch_notes_native "branch-notes" "git@github.com:eduuh/branch-notes.git"
+        _setup_branch_notes_native "$name" "$remote"
     fi
 }
 
@@ -661,7 +672,12 @@ clone_repos() {
     wait
     echo "All repository clones finished."
 
-    setup_branch_notes_symlink
+    # Branch-notes repos are NOT provisioned here. They are private and they are
+    # per-side: the private hooks below call setup_branch_notes_repo themselves, so
+    # --personal gets the personal notes repo and --work the work one. Doing it
+    # unconditionally here meant a work machine tried to clone personal notes on
+    # every run — and failed, because a work SSH key cannot read that repo.
+    #
     # Work repos are opt-in (--work) and always come AFTER personal-notes, which
     # holds the script that lists them. ensure_personal_notes has already run —
     # synchronously, from setup.sh or from setup-projects.sh — before we get here.
