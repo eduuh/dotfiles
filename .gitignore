@@ -8,6 +8,7 @@
 # file — they don't belong in the dotfiles tree.
 .bin/bn
 .bin/bn-mcp
+.bin/bn-web
 # bn install.sh also symlinks these into .bin (pointing into the bn-repo checkout).
 # Machine-local install artifacts like the two above — not tracked.
 .bin/bn-bash
@@ -22,3 +23,12 @@
 .config/systemd/user/bn-*.service
 .config/systemd/user/bn-*.timer
 .config/systemd/user/timers.target.wants/bn-*.timer
+
+# Copilot CLI runtime state. ~/.copilot holds tracked hooks AND a live session
+# store; these are the machine-local half and must never be committed (session
+# transcripts, command history). setup_symlinks pre-creates ~/.copilot as a real
+# directory so stow can't fold it into a symlink pointing at this repo — these
+# entries are the safety net for machines where that already happened.
+.copilot/*
+!.copilot/hooks/
+!.copilot/hooks/**

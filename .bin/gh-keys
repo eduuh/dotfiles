@@ -216,6 +216,30 @@ EOF
   fi
 }
 
+print_warning() {
+  local COLOR="\033[1;33m" # Yellow
+  local RESET="\033[0m"
+  echo "${COLOR}==>${RESET} $1"
+}
+
+# A GitHub SSH key can belong to exactly ONE account — GitHub rejects a key that
+# another account already holds. `gh ssh-key add` silently uploads to whichever
+# account happens to be gh-ACTIVE, so on a multi-account machine the key can end
+# up bound to the wrong identity: that is how a key stamped with the personal
+# email ended up on the work account here, after which every private personal
+# repo failed to clone with a misleading "Repository not found".
+#
+# So: never upload silently. Resolve the account first, say which one, and let it
+# be chosen explicitly.
+#
+#   GH_KEY_ACCOUNT=<login> ./gh-keys   # upload to this account, not just the active one
+GH_KEY_ACCOUNT="${GH_KEY_ACCOUNT:-}"
+
+# Logins gh is currently authenticated as, one per line.
+_gh_accounts() {
+  gh auth status 2>/dev/null | sed -n 's/.*Logged in to github.com account \([^ ]*\).*/\1/p'
+}
+
 setup_github() {
   print_status "Setting up GitHub authentication..."
 
@@ -229,9 +253,32 @@ setup_github() {
     print_status "Already authenticated with GitHub"
   fi
 
+  local active_account restore_account="" accounts
+  active_account=$(gh api user -q .login 2>/dev/null)
+  accounts=$(_gh_accounts)
+
+  if [ -n "$GH_KEY_ACCOUNT" ] && [ "$GH_KEY_ACCOUNT" != "$active_account" ]; then
+    print_status "Switching gh to '$GH_KEY_ACCOUNT' for the key upload…"
+    if gh auth switch --user "$GH_KEY_ACCOUNT" 2>/dev/null; then
+      restore_account="$active_account"
+      active_account="$GH_KEY_ACCOUNT"
+    else
+      print_warning "Could not switch to '$GH_KEY_ACCOUNT' — is it logged in? (gh auth status)"
+    fi
+  fi
+
+  # Say out loud which identity is about to own this key.
+  print_status "SSH key will be registered to GitHub account: ${active_account:-<unknown>}"
+  if [ "$(echo "$accounts" | wc -l)" -gt 1 ] && [ -z "$GH_KEY_ACCOUNT" ]; then
+    print_warning "gh has more than one account logged in:"
+    echo "$accounts" | sed 's/^/      /'
+    print_warning "The key goes to the ACTIVE one ('$active_account'). A key can only belong"
+    print_warning "to one account — re-run as: GH_KEY_ACCOUNT=<login> $0"
+  fi
+
   # Add SSH key to GitHub account
   print_status "Adding SSH key to GitHub account..."
-  
+
   # Capture output and exit code
   set +e # Disable exit on error temporarily
   gh ssh-key add ~/.ssh/id_ed25519.pub --title "$(hostname) $(date +'%Y-%m-%d')" > /tmp/gh_key_output 2>&1
@@ -246,7 +293,9 @@ setup_github() {
           print_status "Retrying SSH key addition..."
           gh ssh-key add ~/.ssh/id_ed25519.pub --title "$(hostname) $(date +'%Y-%m-%d')"
       elif grep -q "key is already in use" /tmp/gh_key_output; then
-          print_status "SSH key is already added to GitHub."
+          print_warning "This key already belongs to a GitHub account — possibly not '$active_account'."
+          print_warning "Verify with:  ssh -T git@github.com   (it greets you as the owning account)"
+          print_warning "To move it, delete the key from that account, then re-run with GH_KEY_ACCOUNT."
       else
           print_status "Failed to add SSH key."
       fi
@@ -254,6 +303,23 @@ setup_github() {
       print_status "SSH key added successfully."
   fi
   rm -f /tmp/gh_key_output
+
+  [ -n "$restore_account" ] && gh auth switch --user "$restore_account" >/dev/null 2>&1
+
+  # Report the identity SSH actually authenticates as. This is the check that
+  # would have caught the wrong-account binding immediately.
+  local ssh_identity
+  ssh_identity=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T git@github.com 2>&1 \
+                   | sed -n 's/^Hi \([^!]*\)!.*/\1/p')
+  if [ -n "$ssh_identity" ]; then
+    print_success "SSH to github.com authenticates as: $ssh_identity"
+    if [ -n "$active_account" ] && [ "$ssh_identity" != "$active_account" ]; then
+      print_warning "That is NOT '$active_account'. Private repos owned by '$active_account'"
+      print_warning "will fail over SSH with 'Repository not found'."
+    fi
+  else
+    print_warning "Could not confirm the SSH identity with github.com."
+  fi
 }
 
 # Main script execution
