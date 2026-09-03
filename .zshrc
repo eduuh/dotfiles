@@ -56,9 +56,34 @@ alias n8n-down='(cd ~/projects/n8n && make down)'
 alias n8n-logs='(cd ~/projects/n8n && make logs)'
 alias n8n-update='(cd ~/projects/n8n && make update)'
 
-# Load NVM
+# NVM — deliberately NOT sourced here. `nvm.sh` was 99.97% of interactive startup
+# (zprof: nvm_process_parameters → nvm_auto → nvm, 7283ms of 7285ms), because it
+# re-resolves and re-applies a node version on every single shell.
+#
+# Instead: put the default version's bin on PATH directly — one file read — so
+# node/npm/npx/yarn are instantly available, and defer the nvm FUNCTION itself
+# until something actually calls it.
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+if [ -r "$NVM_DIR/alias/default" ]; then
+  _nvm_default=$(<"$NVM_DIR/alias/default")
+  # The alias may hold a bare version (22.18.0) or a v-prefixed one.
+  for _nvm_try in "$_nvm_default" "v$_nvm_default"; do
+    if [ -d "$NVM_DIR/versions/node/$_nvm_try/bin" ]; then
+      export PATH="$NVM_DIR/versions/node/$_nvm_try/bin:$PATH"
+      break
+    fi
+  done
+  unset _nvm_default _nvm_try
+fi
+
+# Real nvm only when invoked. Replaces itself on first call, so the cost is paid
+# once per shell that genuinely needs version switching — and never otherwise.
+nvm() {
+  unfunction nvm
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+  nvm "$@"
+}
 
 # Load Cargo
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
@@ -66,8 +91,10 @@ export NVM_DIR="$HOME/.nvm"
 # Load FZF
 [ -f "$HOME/.fzf.zsh" ] && source "$HOME/.fzf.zsh"
 
-# Load Lazy Load
-[ -f "$HOME/projects/dotfiles/.zsh_lazy_load" ] && source "$HOME/projects/dotfiles/.zsh_lazy_load"
+# Load Lazy Load. Path was ~/projects/dotfiles, which stopped existing when this
+# repo moved to the bare+worktree layout — so this silently never loaded. ~/ is
+# the stow target, which is correct regardless of where the repo lives.
+[ -f "$HOME/.zsh_lazy_load" ] && source "$HOME/.zsh_lazy_load"
 
 [ -f "$HOME/.zsh/ws.zsh" ] && source "$HOME/.zsh/ws.zsh"
 
@@ -126,9 +153,6 @@ a() { "$HOME/.bin/bn" add ask "$*" }
 # bn tab completion — generated from the binary, so it never drifts from the real flags
 command -v bn >/dev/null && source <(bn completion zsh)
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 export KUBECONFIG=/Users/edd/projects/kube/kubeconfig.local
 
