@@ -34,6 +34,10 @@ install_ubuntu_specific_packages() {
     local ubuntu_packages=(
         manpages-dev man-db manpages-posix-dev
         libsecret-1-dev gnome-keyring default-jre libgbm-dev
+        # Clipboard bridge. nvim sets clipboard=unnamedplus, which silently drops
+        # every yank unless a provider exists; under WSLg wl-copy/wl-paste sync
+        # both ways with the Windows clipboard. xclip is the X11 fallback.
+        wl-clipboard xclip
     )
 
     for pkg in "${ubuntu_packages[@]}"; do

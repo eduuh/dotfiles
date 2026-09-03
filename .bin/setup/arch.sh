@@ -81,6 +81,7 @@ install_arch_specific_packages() {
 
     local arch_packages=(
         man-db man-pages libsecret acpi d2 bat lua curl kanata 1password
+        wl-clipboard xclip   # clipboard provider for nvim's unnamedplus
     )
 
     for pkg in "${arch_packages[@]}"; do

@@ -59,6 +59,7 @@ install_fedora_packages() {
         libevent-devel ncurses-devel
         man-db man-pages
         libsecret curl fd-find bat
+        wl-clipboard xclip   # clipboard provider for nvim's unnamedplus
     )
     # One transaction: cheap on dnf, essential on rpm-ostree.
     fedora_pkg_install "${common_software[@]}" "${fedora_extras[@]}"
