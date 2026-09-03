@@ -329,11 +329,32 @@ _regular_clone_target() {
 # install.sh here is written to be safe to re-run (incremental cargo builds,
 # skip-if-present checks, etc.), so this always runs after a clone/update rather
 # than trying to detect "already installed".
+# Conventional names for a repo's own dependency installer, tried in order. This
+# used to look for install.sh ONLY, so nvim — which ships install-deps.sh — was
+# cloned without ever installing its dependencies, silently. Nothing failed; the
+# hook just no-opped, and the comment in _setup_nvim_config below confidently
+# claimed the opposite.
+#
+# Run non-interactively: clone_repos calls this from a background job with no tty,
+# so an installer that needs sudo will fail fast rather than hang waiting for a
+# password nobody can type. Re-run it by hand on a fresh machine if that happens.
+_REPO_INSTALL_SCRIPTS=(install.sh install-deps.sh)
+
 _run_repo_install_script() {
-    local repo_path="$1" repo_name="$2"
-    [ -x "$repo_path/install.sh" ] || return 0
-    echo "[$repo_name] Running install.sh..."
-    ( cd "$repo_path" && ./install.sh ) || track_failure "$repo_name" "install.sh failed"
+    local repo_path="$1" repo_name="$2" script
+    for script in "${_REPO_INSTALL_SCRIPTS[@]}"; do
+        [ -f "$repo_path/$script" ] || continue
+        echo "[$repo_name] Running $script..."
+        if [ -x "$repo_path/$script" ]; then
+            ( cd "$repo_path" && "./$script" ) || track_failure "$repo_name" "$script failed"
+        else
+            # Tracked without the exec bit (common on the Windows filesystem, where
+            # core.filemode is false) — still runnable.
+            ( cd "$repo_path" && sh "./$script" ) || track_failure "$repo_name" "$script failed"
+        fi
+        return 0   # first match wins; a repo has one installer
+    done
+    return 0
 }
 
 _clone_single_repo() {
@@ -411,7 +432,7 @@ _clone_single_repo() {
         fi
 
         # nvim is a bare+worktree repo: point ~/.config/nvim at its main worktree
-        # *before* running its install.sh, since some ecosystem installers assume
+        # *before* running its installer, since some ecosystem installers assume
         # the config dir is already in place.
         if [ -n "$ACTIVE_WORKTREE" ]; then
             [[ "$REPO_NAME" == "nvim" ]] && _setup_nvim_config
@@ -422,7 +443,8 @@ _clone_single_repo() {
 
 # Link ~/.config/nvim → the nvim main worktree. Safe to call repeatedly; no-ops if
 # the worktree isn't present yet. Ecosystem deps (tree-sitter, vectorcode, mcp-hub)
-# are installed by nvim's own install.sh, run generically by _run_repo_install_script.
+# are installed by nvim's own install-deps.sh, run generically by
+# _run_repo_install_script right after the clone.
 _setup_nvim_config() {
     local wt_main=~/projects/worktree/nvim/main
     if [ ! -d "$wt_main" ]; then
