@@ -15,10 +15,15 @@ elif [ -f "/usr/local/bin/brew" ]; then
     export PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
 fi
 
-# Completion system. Must be initialized before anything that calls `compdef`
-# (the `bn completion zsh` script below ends in one), otherwise every new shell
-# prints "command not found: compdef". Runs after brew shellenv so Homebrew's
-# site-functions are already on fpath.
+# Generated completions live here and are AUTOLOADED — zsh reads a `_name` file
+# only when that command is first completed. This has to join fpath before
+# compinit, which is what builds the autoload index.
+_ZSH_COMPDIR="${XDG_CACHE_HOME:-$HOME/.cache}/zsh-completions"
+fpath=("$_ZSH_COMPDIR" $fpath)
+
+# Completion system. Must be initialized before anything that calls `compdef`,
+# otherwise every new shell prints "command not found: compdef". Runs after brew
+# shellenv so Homebrew's site-functions are already on fpath.
 if (( ! $+functions[compdef] )); then
   autoload -Uz compinit
   # Rebuild the dump at most once a day; -C skips the slow security audit and
@@ -29,6 +34,33 @@ if (( ! $+functions[compdef] )); then
     compinit
   fi
 fi
+
+# Write a completion script into the autoload dir instead of sourcing it. zsh then
+# loads it lazily, on first use, rather than parsing it in every shell.
+_zsh_completion_file() {       # _zsh_completion_file <name> <binary> <command...>
+  local name=$1 bin=$2; shift 2
+  local src dst="$_ZSH_COMPDIR/_$name"
+  src=$(command -v "$bin" 2>/dev/null) || return 0
+  [[ -n "$src" ]] || return 0
+  if [[ ! -s "$dst" || "$src" -nt "$dst" ]]; then
+    mkdir -p "$_ZSH_COMPDIR"
+    "$@" > "$dst.tmp" 2>/dev/null && mv -f "$dst.tmp" "$dst" || rm -f "$dst.tmp"
+  fi
+}
+
+# Cache the output of an expensive init command, regenerated only when the
+# producing binary is newer — so an upgrade is picked up automatically.
+_zsh_cached_init() {           # _zsh_cached_init <name> <binary> <command...>
+  local name=$1 bin=$2; shift 2
+  local src cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh-init/$name.zsh"
+  src=$(command -v "$bin" 2>/dev/null) || return 0
+  [[ -n "$src" ]] || return 0
+  if [[ ! -s "$cache" || "$src" -nt "$cache" ]]; then
+    mkdir -p "${cache:h}"
+    "$@" > "$cache.tmp" 2>/dev/null && mv -f "$cache.tmp" "$cache" || { rm -f "$cache.tmp"; return 0; }
+  fi
+  source "$cache"
+}
 
 # Aliases
 alias ls='ls --color=auto'
@@ -56,9 +88,23 @@ alias n8n-down='(cd ~/projects/n8n && make down)'
 alias n8n-logs='(cd ~/projects/n8n && make logs)'
 alias n8n-update='(cd ~/projects/n8n && make update)'
 
-# Load NVM
+# NVM — deliberately NOT sourced here. `nvm.sh` was 99.97% of interactive startup
+# (zprof: nvm_process_parameters → nvm_auto → nvm, 7283ms of 7285ms), because it
+# re-resolves and re-applies a node version on every single shell.
+#
+# node itself is already on PATH from .zshenv, which runs for every zsh including
+# non-interactive ones. All that is left to arrange here is the nvm FUNCTION, for
+# the shells that actually switch versions.
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Real nvm only when invoked. Replaces itself on first call, so the cost is paid
+# once per shell that genuinely needs version switching — and never otherwise.
+nvm() {
+  unfunction nvm
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+  nvm "$@"
+}
 
 # Load Cargo
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
@@ -66,8 +112,10 @@ export NVM_DIR="$HOME/.nvm"
 # Load FZF
 [ -f "$HOME/.fzf.zsh" ] && source "$HOME/.fzf.zsh"
 
-# Load Lazy Load
-[ -f "$HOME/projects/dotfiles/.zsh_lazy_load" ] && source "$HOME/projects/dotfiles/.zsh_lazy_load"
+# Load Lazy Load. Path was ~/projects/dotfiles, which stopped existing when this
+# repo moved to the bare+worktree layout — so this silently never loaded. ~/ is
+# the stow target, which is correct regardless of where the repo lives.
+[ -f "$HOME/.zsh_lazy_load" ] && source "$HOME/.zsh_lazy_load"
 
 [ -f "$HOME/.zsh/ws.zsh" ] && source "$HOME/.zsh/ws.zsh"
 
@@ -92,7 +140,7 @@ if [ -n "$TMUX" ]; then
 fi
 
 # Zoxide (smart cd)
-command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
+_zsh_cached_init zoxide zoxide zoxide init zsh
 
 # Worktree manager wrapper (wt go needs to cd in current shell)
 wt() {
@@ -123,22 +171,24 @@ r() { "$HOME/.bin/bn" add research "$*" }
 c() { "$HOME/.bin/bn" add collab "$*" }
 a() { "$HOME/.bin/bn" add ask "$*" }
 
-# bn tab completion — generated from the binary, so it never drifts from the real flags
-command -v bn >/dev/null && source <(bn completion zsh)
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+# bn tab completion. NOT sourced: the generated script is 655KB and takes ~479ms
+# to PARSE, so caching it to a file saved nothing — the cost was never the binary
+# spawn. It begins with `#compdef bn`, which is exactly what zsh autoloads from
+# $fpath, so writing it as _bn there defers the whole 479ms until the first time
+# you actually tab-complete bn. Regenerated only when the binary is newer.
+_zsh_completion_file bn bn bn completion zsh
+
 
 export KUBECONFIG=/Users/edd/projects/kube/kubeconfig.local
 
 [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
 export PATH="$HOME/.local/bin:$PATH"
 
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+# fzf is already sourced above (line ~81); sourcing it twice cost ~64ms for nothing.
 
 # Starship
-eval "$(starship init zsh)"
+_zsh_cached_init starship starship starship init zsh
 
 # fleet resource caps (added by copilot: tame per-lane build footprint)
 export CARGO_BUILD_JOBS=4
