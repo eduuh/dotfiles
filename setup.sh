@@ -7,16 +7,19 @@ source "$SCRIPT_DIR/.bin/setup/common.sh"
 # --- flags ---
 #   --force          re-run every step
 #   --profile <tier> override the profile from the prep marker (core|dev|desktop)
-#   --work           also install work-machine tools (agency, etc.)
+#   --work           also install work-machine tools + clone work repos
+#   --personal       also clone the personal-only repos (listed in personal-notes)
 #   reset            clear recorded step state and exit
 SETUP_PROFILE_OVERRIDE=""
 SETUP_WORK=false
+SETUP_PERSONAL=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --force)     SETUP_FORCE=true; shift ;;
         --profile)   SETUP_PROFILE_OVERRIDE="$2"; shift 2 ;;
         --profile=*) SETUP_PROFILE_OVERRIDE="${1#*=}"; shift ;;
         --work)      SETUP_WORK=true; shift ;;
+        --personal)  SETUP_PERSONAL=true; shift ;;
         reset)       reset_steps; exit 0 ;;
         *)           shift ;;
     esac
@@ -56,16 +59,25 @@ _PROJECTS_WINDOW="bn-clone"
 _PLANNING_SESSION="planning"
 
 _projects_launch() {
-    if [[ "$SETUP_FORCE" != "true" ]] && _step_is_done projects; then
-        echo "✓ [projects] already done — skipping"
+    # The marker is per-SHAPE, not just per-step: plain, --personal and --work runs
+    # clone different sets. Recording one flat `projects` meant a machine set up
+    # without a flag would skip the clone forever, so adding --work later installed
+    # the work TOOLS but never cloned the work REPOS. See _projects_step_name.
+    local step_name
+    step_name=$(_projects_step_name)
+    if [[ "$SETUP_FORCE" != "true" ]] && _step_is_done "$step_name"; then
+        echo "✓ [$step_name] already done — skipping"
         return 0
     fi
     local runner="$SCRIPT_DIR/setup-projects.sh"
+    local -a runner_cmd=("$runner")
+    [[ "$SETUP_WORK" == "true" ]] && runner_cmd+=(--work)
+    [[ "$SETUP_PERSONAL" == "true" ]] && runner_cmd+=(--personal)
 
     # No tmux at all: detach with nohup so the clone survives setup.sh exiting.
     if ! command -v tmux >/dev/null 2>&1; then
         mkdir -p "$(dirname "$_PROJECTS_LOG")"
-        nohup "$runner" > "$_PROJECTS_LOG" 2>&1 < /dev/null &
+        nohup "${runner_cmd[@]}" > "$_PROJECTS_LOG" 2>&1 < /dev/null &
         echo "→ [projects] cloning in background (no tmux; log: $_PROJECTS_LOG) — setup won't wait."
         return 0
     fi
@@ -85,7 +97,7 @@ _projects_launch() {
         return 0
     fi
 
-    tmux new-window -d -t "$target" -n "$_PROJECTS_WINDOW" "$runner"
+    tmux new-window -d -t "$target" -n "$_PROJECTS_WINDOW" "${(j: :)${(q)runner_cmd}}"
     echo "→ [projects] cloning in tmux window '$_PROJECTS_WINDOW' (session '$target') — setup won't wait."
     if [[ -z "$TMUX" ]]; then
         echo "             watch it:  tmux attach -t $target"
@@ -144,6 +156,19 @@ main() {
     step_always "packages-$distro" core all install_platform_packages "$distro"
     step "platform-$distro" core all   run_platform_setup "$distro"
 
+    # personal-notes always, and synchronously: the detached project clone below is
+    # skipped once its marker is recorded, and the work/personal repo setup scripts it
+    # runs live inside personal-notes — so this must land first, on every run.
+    step_always personal-notes core all ensure_personal_notes
+
+    # Work-machine tools — only with --work, and only AFTER
+    # personal-notes, since the installer script lives inside it. step_always, not
+    # step: a run that happened before personal-notes existed must not record itself
+    # as done and then skip forever.
+    if [[ "$SETUP_WORK" == "true" ]]; then
+        step_always work-tools core all install_work_tools
+    fi
+
     # tmux is installed by the platform step above; fire the clone into a detached session
     # now so it runs alongside the remaining tool steps and keeps going after setup exits.
     _projects_launch
@@ -156,11 +181,6 @@ main() {
         step talosctl     dev  all   install_talosctl
         step git-hooks    core all   setup_git_hooks
         step shell-zsh    core all   change_shell_to_zsh
-    fi
-
-    # Work-machine tools (agency, etc.) — only when --work is passed.
-    if [[ "$SETUP_WORK" == "true" ]]; then
-        step work-tools core all install_work_tools
     fi
 
     # Clean up sudo keepalive

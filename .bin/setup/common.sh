@@ -11,6 +11,9 @@ _COMMON_DIR="${${(%):-%x}:A:h}"
 : "${CODESPACES:=}"
 : "${TERMUX_VERSION:=}"
 : "${WINDOWS_PROJECTS_DIR:=}"
+: "${SETUP_FAILURES_FILE:=}"
+: "${SETUP_WORK:=false}"
+: "${SETUP_PERSONAL:=false}"
 
 # Failure tracking - collect errors instead of exiting
 typeset -ga SETUP_FAILURES=()
@@ -19,7 +22,24 @@ track_failure() {
     local component="$1"
     local message="$2"
     SETUP_FAILURES+=("[$component] $message")
+    # A background job gets its own COPY of the array, so failures inside the
+    # parallel clones never reached the parent and setup happily reported
+    # "no failures". When a collector file is set, append there too; whoever set
+    # it drains the file back into the array after `wait`. Short O_APPEND writes
+    # from concurrent jobs don't interleave.
+    if [[ -n "${SETUP_FAILURES_FILE:-}" ]]; then
+        print -r -- "[$component] $message" >> "$SETUP_FAILURES_FILE"
+    fi
     echo "WARNING: $message (continuing...)"
+}
+
+# Drain a collector file written by background jobs into SETUP_FAILURES.
+_drain_failures() {
+    local file="$1" line
+    [[ -s "$file" ]] || return 0
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && SETUP_FAILURES+=("$line")
+    done < "$file"
 }
 
 # Run a command and track failure if it fails
@@ -335,7 +355,7 @@ _clone_single_repo() {
                 fi
                 cd ~
             else
-                echo "[$REPO_NAME] Directory exists but is not a git repo. Skipping."
+                track_failure "$REPO_NAME" "$CLONE_DIR exists but is not a git repo — skipped"
             fi
         else
             if _is_windows_repo "$REPO_NAME"; then
@@ -344,7 +364,10 @@ _clone_single_repo() {
                 mkdir -p "$win_dir" || { echo "[$REPO_NAME] Failed to create $win_dir."; return 1; }
             fi
             echo "[$REPO_NAME] Cloning (regular) → $CLONE_DIR..."
-            git clone --recurse-submodules "$REPO" "$CLONE_DIR" || { echo "[$REPO_NAME] Failed to clone."; return 1; }
+            if ! git clone --recurse-submodules "$REPO" "$CLONE_DIR"; then
+                track_failure "$REPO_NAME" "Failed to clone $REPO into $CLONE_DIR"
+                return 1
+            fi
             # Disable filemode tracking on /mnt/c (NTFS) to avoid spurious 'mode changed' diffs
             if _is_windows_repo "$REPO_NAME"; then
                 git -C "$CLONE_DIR" config core.filemode false
@@ -513,50 +536,111 @@ _setup_branch_notes_native() {
     echo "[$name] Adopted $target (remote origin → $remote, branch $def)."
 }
 
+# personal-notes is the private repo the rest of the setup hangs off: the stow
+# tree (setup_personal_notes_stow), the work/personal repo setup scripts, the
+# work-tools installer, and the tmux planning session all read from it. So it is
+# cloned on EVERY setup run rather than only inside clone_repos — that step runs
+# detached and is skipped once its `projects` marker is recorded, which would
+# leave a machine that missed it once permanently without personal-notes.
+#
+# HTTPS, not SSH, and authenticated through `gh`: the only SSH key on a work
+# machine belongs to the work GitHub account, which cannot see this repo, so an
+# SSH clone dies with "Repository not found". gh already holds the eduuh token.
+PERSONAL_NOTES_REMOTE="${PERSONAL_NOTES_REMOTE:-https://github.com/eduuh/personal-notes.git}"
+
+# Clone (or update) personal-notes and re-stow it. Idempotent — safe for step_always.
+#
+# The gh credential helper is forced on via GIT_CONFIG_* rather than relying on
+# ~/.gitconfig, so this works before the dotfiles are stowed and can't be hijacked
+# by whatever credential manager the host has configured.
+ensure_personal_notes() {
+    mkdir -p ~/projects
+
+    # A file:// remote (tests) needs no auth; anything on github.com does.
+    if [[ "$PERSONAL_NOTES_REMOTE" == https://github.com/* ]]; then
+        if ! command -v gh >/dev/null 2>&1; then
+            track_failure "personal-notes" "gh not installed — cannot authenticate $PERSONAL_NOTES_REMOTE"
+            return 1
+        fi
+        if ! gh auth status >/dev/null 2>&1; then
+            track_failure "personal-notes" "gh is not logged in — run: gh auth login (as eduuh), then re-run setup"
+            return 1
+        fi
+        local -x GIT_CONFIG_COUNT=1
+        local -x GIT_CONFIG_KEY_0="credential.https://github.com.helper"
+        local -x GIT_CONFIG_VALUE_0="!$(command -v gh) auth git-credential"
+        local -x GIT_TERMINAL_PROMPT=0
+    fi
+
+    if ! _clone_single_repo "$PERSONAL_NOTES_REMOTE"; then
+        track_failure "personal-notes" "Failed to clone/update $PERSONAL_NOTES_REMOTE"
+        return 1
+    fi
+    setup_personal_notes_stow
+}
+
+# A clone run has a SHAPE: plain, --personal, --work, or both. Each clones a
+# different set, so they cannot share one "projects" marker — a machine set up
+# plain would then skip the clone forever and never pick up the repos a flag adds.
+_projects_step_name() {
+    local name=projects
+    [[ "$SETUP_PERSONAL" == "true" ]] && name="$name-personal"
+    [[ "$SETUP_WORK" == "true" ]] && name="$name-work"
+    echo "$name"
+}
+
+# A completed run also satisfies every smaller shape it contains.
+_projects_mark_done() {
+    _step_mark_done projects
+    [[ "$SETUP_PERSONAL" == "true" ]] && _step_mark_done projects-personal
+    [[ "$SETUP_WORK" == "true" ]] && _step_mark_done projects-work
+    [[ "$SETUP_PERSONAL" == "true" && "$SETUP_WORK" == "true" ]] && _step_mark_done projects-personal-work
+    return 0
+}
+
+# Clone the long-tail project repos. personal-notes is deliberately NOT in this
+# list: ensure_personal_notes clones it up front and synchronously, because the
+# work/personal setup scripts below live inside it.
 clone_repos() {
     cd ~
     mkdir -p ~/projects ~/projects/bare ~/projects/worktree
-
-    # Detect if running on WSL
-    local is_wsl=false
-    if grep -qi microsoft /proc/version 2>/dev/null; then
-        is_wsl=true
-    fi
 
     local REPOSITORIES=()
     if [ "$CODESPACES" = "true" ]; then
         REPOSITORIES=(
             "https://github.com/eduuh/dotfiles.git"
-            "git@github.com:eduuh-private/personal-notes.git"
         )
     else
+        # Toolchain — what every machine needs to be usable, work or personal.
         REPOSITORIES=(
             "git@github.com:eduuh/dotfiles.git"
             "git@github.com:eduuh/nvim.git"
-            "git@github.com:eduuh-private/personal-notes.git"
             "git@github.com:eduuh/eduuh.git"
             "git@github.com:eduuh/bn.git"
             "git@github.com:eduuh/atlas.git"
         )
 
-        if [ "$is_wsl" = true ] && [ "$(hostname)" = "edwin" ]; then
+        # Personal PROJECT repos that are themselves public — nothing to hide, so
+        # the names stay here. A work machine still shouldn't pull them, so they
+        # sit behind --personal like the private ones. Repos that are actually
+        # PRIVATE live in personal-notes' scripts/setup-personal-repos.sh instead,
+        # so their names and URLs never appear in a public repo.
+        if [[ "$SETUP_PERSONAL" == "true" ]]; then
             REPOSITORIES+=(
-                "git@github.com:eduuh/kube-homelab.git"
                 "git@github.com:eduuh/bits-and-atoms.git"
-            )
-        elif [ "$is_wsl" = false ]; then
-            REPOSITORIES+=(
-                "git@github.com:eduuh/kube-homelab.git"
-                "git@github.com:eduuh/blog-2026.git"
                 "git@github.com:eduuh/growatt_exporter.git"
-                "git@github.com:eduuh-private/byte_s.git"
-                "git@github.com:eduuh-private/bash.git"
-                "git@github.com:eduuh-private/eduuh-blog-template.git"
-                "git@github.com:eduuh-private/life.git"
-                "git@github.com:eduuh/bits-and-atoms.git"
             )
         fi
     fi
+
+    # Collect failures from every background job for the WHOLE function, the sourced
+    # work/personal hooks included — they run their own parallel `_clone_single_repo`
+    # loops, so closing the window right after the loop below lost theirs: a run in
+    # which six repos failed to clone reported only the two that happened to fail in
+    # this loop, and the summary called the rest a success.
+    local failures_file
+    failures_file=$(mktemp "${TMPDIR:-/tmp}/dotfiles-clone-failures.XXXXXX")
+    SETUP_FAILURES_FILE="$failures_file"
 
     echo "Cloning ${#REPOSITORIES[@]} repositories in parallel..."
     for REPO in "${REPOSITORIES[@]}"; do
@@ -566,16 +650,33 @@ clone_repos() {
     echo "All repository clones finished."
 
     setup_branch_notes_symlink
-    _run_work_setup_from_personal_notes
-    _run_personal_setup_from_personal_notes
+    # Work repos are opt-in (--work) and always come AFTER personal-notes, which
+    # holds the script that lists them. ensure_personal_notes has already run —
+    # synchronously, from setup.sh or from setup-projects.sh — before we get here.
+    if [[ "${SETUP_WORK:-false}" == "true" ]]; then
+        _run_work_setup_from_personal_notes
+    else
+        echo "· work repos skipped (no --work)"
+    fi
+    # Personal repos are opt-in too (--personal), for the same reason as work:
+    # a work machine should never pull them, and the list is private.
+    if [[ "$SETUP_PERSONAL" == "true" ]]; then
+        _run_personal_setup_from_personal_notes
+    else
+        echo "· personal repos skipped (no --personal)"
+    fi
+
+    SETUP_FAILURES_FILE=""
+    _drain_failures "$failures_file"
+    rm -f "$failures_file"
 }
 
 # After personal repos are cloned, source a personal-only-repo setup script from
 # personal-notes if it exists. Mirrors _run_work_setup_from_personal_notes but for
-# repos that must NEVER land on a work machine (e.g. mt5-data-api, trading
-# journals): the script defines its own repo list, calls _clone_single_repo /
-# bn wt clone for each, so those repo names+URLs stay private instead of in this
-# public dotfiles repo. No-op if personal-notes isn't cloned or the script is absent.
+# repos that must NEVER land on a work machine: the script defines its own repo
+# list and calls _clone_single_repo / bn wt clone for each, so those repo names
+# and URLs stay private instead of sitting in this public dotfiles repo. No-op if
+# personal-notes isn't cloned or the script is absent.
 _run_personal_setup_from_personal_notes() {
     local personal_script="${PERSONAL_SETUP_SCRIPT:-$HOME/projects/personal-notes/scripts/setup-personal-repos.sh}"
     if [[ ! -f "$personal_script" ]]; then
@@ -601,14 +702,17 @@ _run_work_setup_from_personal_notes() {
     echo "Work repo setup finished."
 }
 
-# Work-machine tool installs (agency, etc.). Runs only via `setup.sh --work`.
+# Work-machine tool installs. Runs only via `setup.sh --work`.
 # Delegates to a script in the private personal-notes repo so internal MS
 # endpoints stay out of public dotfiles. No-op if the script is absent.
 install_work_tools() {
     local work_tools="${WORK_TOOLS_SCRIPT:-$HOME/projects/personal-notes/scripts/setup-work-tools.sh}"
     if [[ ! -f "$work_tools" ]]; then
-        echo "· no work-tools script at $work_tools — skipping"
-        return 0
+        # Non-zero on purpose: --work was asked for and could not be honored.
+        # Silently returning 0 here would let `step` record work-tools as done and
+        # skip it forever, even once personal-notes finally lands.
+        track_failure "work-tools" "no work-tools script at $work_tools (is personal-notes cloned?)"
+        return 1
     fi
     echo "Sourcing work tools script: $work_tools"
     source "$work_tools"
@@ -1113,6 +1217,90 @@ install_nvm() {
     fi
 }
 
+# Directories that hold BOTH tracked config and runtime state written by the tool
+# that owns them. Stow "folds" a directory into a single symlink when the target
+# doesn't exist yet — so ~/.copilot became a link straight into the git repo and
+# Copilot wrote its session store, command history and sqlite WALs into version
+# control. Pre-creating them as real directories forces stow to link the tracked
+# children individually and leaves the runtime files in $HOME where they belong.
+STOW_NO_FOLD_DIRS=(.copilot)
+
+# Undo an existing fold: ~/<dir> is a symlink INTO the dotfiles repo, so every
+# runtime file the owning tool wrote landed in git. Replace the link with a real
+# directory and move the untracked files back out of the repo. Tracked files stay
+# put and get re-linked by the stow that follows.
+_unfold_stow_dir() {
+    local d="$1" link="$HOME/$1" target name f
+    [[ -L "$link" ]] || return 0
+    target=$(cd "$link" 2>/dev/null && pwd -P) || return 0
+    # Only touch links that point into a git repo — that's the fold we caused.
+    git -C "$target" rev-parse --git-dir >/dev/null 2>&1 || return 0
+
+    echo "→ un-folding ~/$d (symlink into $target)"
+    rm "$link" || { track_failure "stow-unfold" "could not remove $link"; return 1; }
+    mkdir -p "$link"
+
+    for f in "$target"/*(ND) "$target"/.*(ND); do
+        name="${f:t}"
+        [[ "$name" == "." || "$name" == ".." ]] && continue
+        # Tracked, or a directory containing tracked files → belongs to the repo.
+        [[ -n "$(git -C "$target" ls-files -- "$name" 2>/dev/null | head -1)" ]] && continue
+        mv "$f" "$link/$name" && echo "    moved $name out of the repo → ~/$d/$name"
+    done
+}
+
+# Pre-create the real directories so stow links their tracked children
+# individually instead of folding the whole directory into one symlink.
+_prevent_stow_folding() {
+    local d
+    for d in "${STOW_NO_FOLD_DIRS[@]}"; do
+        _unfold_stow_dir "$d"
+        mkdir -p "$HOME/$d"
+    done
+}
+
+# stow -t $HOME <package>, but conflict-tolerant.
+#
+# It used to run with --adopt, which does the OPPOSITE of what you want here:
+# on a conflict it moves the machine's existing file INTO the repo, overwriting
+# the tracked version. That silently reverted committed dotfiles (it ate the
+# sccache/mold block from .bashrc and gutted .zshenv's PATH export) and left the
+# damage staged for the next commit. The repo is the source of truth, so back the
+# local file up instead and let the tracked version win.
+_stow_with_backup() {
+    local stow_dir="$1" package="$2" label="$3"
+    cd "$stow_dir" || { track_failure "$label" "no such directory: $stow_dir"; return 1; }
+
+    local out
+    if out=$(stow -vt "$HOME" "$package" 2>&1); then
+        [[ -n "$out" ]] && print -r -- "$out"
+        return 0
+    fi
+    print -r -- "$out"
+
+    # "cannot stow <pkg file> over existing target <path> since …" → <path>, relative to $HOME
+    local -a conflicts
+    conflicts=(${(f)"$(print -r -- "$out" | sed -n 's/.*over existing target \(.*\) since.*/\1/p')"})
+    if (( ${#conflicts} == 0 )); then
+        track_failure "$label" "stow failed for $package (no recoverable conflicts)"
+        return 1
+    fi
+
+    local stamp c
+    stamp=$(date +%Y%m%d%H%M%S)
+    for c in $conflicts; do
+        [[ -e "$HOME/$c" && ! -L "$HOME/$c" ]] || continue
+        if mv "$HOME/$c" "$HOME/$c.bak-$stamp"; then
+            echo "  backed up ~/$c → ~/$c.bak-$stamp (the repo version wins)"
+        fi
+    done
+
+    if ! stow -vt "$HOME" "$package"; then
+        track_failure "$label" "stow failed for $package after backing up conflicts"
+        return 1
+    fi
+}
+
 setup_symlinks() {
     # dotfiles is a bare+worktree repo: stow always from the main worktree so the
     # $HOME symlinks stay stable no matter which worktree you're editing in. Fall
@@ -1121,26 +1309,25 @@ setup_symlinks() {
     [ -d "$dotfiles_dir" ] || dotfiles_dir=~/projects/dotfiles
 
     echo "Stowing dotfiles from $dotfiles_dir..."
-    cd "$dotfiles_dir"
-    if ! stow --adopt -t "$HOME" .; then
-        track_failure "symlinks" "Failed to create symlinks with stow"
-    fi
+    _prevent_stow_folding
+    _stow_with_backup "$dotfiles_dir" . "symlinks"
 }
 
+# stow is all-or-nothing: one target that already exists as a real file aborts the
+# entire tree. On a fresh machine that is routinely a stub some tool wrote before
+# setup ran (Claude Code drops a {"theme":"dark"} ~/.claude/settings.json). Back the
+# conflicting files up and retry once so the notes tree actually lands.
 setup_personal_notes_stow() {
     local stow_dir=~/projects/personal-notes/stow
 
     if [ ! -d "$stow_dir" ]; then
         echo "personal-notes stow directory not found at $stow_dir — skipping."
-        echo "Run setup-projects.sh first to clone personal-notes."
+        echo "ensure_personal_notes clones it; check the log above for a clone failure."
         return 0
     fi
 
     echo "Stowing personal-notes from $stow_dir..."
-    cd "$stow_dir"
-    if ! stow -vt "$HOME" home; then
-        track_failure "personal-notes-stow" "Failed to stow personal-notes"
-    fi
+    _stow_with_backup "$stow_dir" home "personal-notes-stow"
 }
 
 setup_git_hooks() {

@@ -1,0 +1,42 @@
+#!/bin/zsh
+# wslview — open a URL or file on the Windows side, from WSL.
+#
+# gh (and anything honouring $BROWSER or calling xdg-open) probes PATH for one of
+# xdg-open / x-www-browser / www-browser / wslview. A bare WSL install has none,
+# so `gh auth login` dies with:
+#
+#   ! Failed opening a web browser at https://github.com/login/device
+#     exec: "xdg-open,x-www-browser,www-browser,wslview": executable file not found
+#
+# The usual fix is the `wslu` package, which Ubuntu 26.04 (resolute) doesn't ship.
+# ~/.bin is on PATH from .zshenv, so dropping the name here is enough for gh to
+# find it. A real wslu install elsewhere on PATH takes precedence — see below.
+#
+# PowerShell's Start-Process, not `cmd /c start`: cmd treats & as a command
+# separator, so it truncates every URL with a query string (OAuth callbacks,
+# device-flow links) at the first parameter.
+
+set -u
+
+if (( $# == 0 )); then
+    print -u2 "usage: wslview <url|file>"
+    exit 1
+fi
+
+target="$1"
+
+# A local path has to cross over to a Windows path; a URL must be left alone.
+if [[ "$target" != *://* && -e "$target" ]]; then
+    target=$(wslpath -w "$target") || exit 1
+fi
+
+powershell="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+if [[ ! -x "$powershell" ]]; then
+    print -u2 "wslview: no Windows PowerShell at $powershell"
+    exit 1
+fi
+
+# -NoProfile keeps a slow or noisy Windows profile out of the way. Start-Process
+# hands the target to the Windows default handler and returns immediately.
+exec "$powershell" -NoProfile -NonInteractive \
+    -Command "Start-Process '${target//\'/\'\'}'"

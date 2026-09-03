@@ -1,11 +1,26 @@
-[credential "https://github.com"]
-	helper = 
-	helper = !/home/edd/.local/bin/gh auth git-credential
-[credential "https://gist.github.com"]
-	helper = 
-	helper = !/home/edd/.local/bin/gh auth git-credential
 [user]
 	name = eduuh
 	email = 31909722+eduuh@users.noreply.github.com
+
+# Credentials are routed PER HOST, never globally. GitHub goes through gh: it
+# already holds the token, works on every platform, and needs no SSH key juggling.
+#
+# The old ~/.gitconfig-wsl set a Windows credential helper for EVERYTHING, which
+# hijacked github.com from gh and pointed at a path that isn't installed on every
+# machine. Scoping by host is what lets several credential sources coexist.
+#
+# Bare `gh` rather than an absolute path: it differs per machine (/usr/bin/gh vs
+# ~/.local/bin/gh) and `gh auth setup-git` kept rewriting it, leaving the stowed
+# file permanently dirty.
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !gh auth git-credential
+
+# Machine- and work-specific config: other credential helpers, internal hosts,
+# per-machine paths. Kept out of this public repo — the file is stowed from the
+# private notes repo, and git silently ignores the include when it is absent.
 [include]
-	path = ~/.gitconfig-wsl
+	path = ~/.gitconfig-local
