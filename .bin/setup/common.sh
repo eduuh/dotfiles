@@ -1147,12 +1147,72 @@ setup_bn() {
 install_playwright() {
     if command -v playwright &> /dev/null; then
         echo "Playwright is already installed."
+    else
+        echo "Installing Playwright..."
+        if ! npm install -g playwright; then
+            track_failure "playwright" "Failed to install Playwright"
+            return 0
+        fi
+    fi
+
+    install_playwright_browsers
+    install_playwright_cli
+}
+
+# `playwright-cli` is the terminal driver for Playwright MCP commands, and the
+# hard prerequisite of the playwright-edge-dev / playwright-edge-production
+# skills (`~/.bn/config/repo/config/scripts/edge-cdp-wsl` exits 1 without it).
+# The bare `playwright-cli` npm package is the DEPRECATED pre-1.0 CLI — the
+# binary comes from `@playwright/cli`, which is what provides
+# `bin: { playwright-cli: ... }`. Installing the wrong one gets you a command of
+# the same name with a completely different interface.
+install_playwright_cli() {
+    if command -v playwright-cli &> /dev/null; then
+        echo "playwright-cli is already installed."
         return 0
     fi
 
-    echo "Installing Playwright..."
-    if ! npm install -g playwright; then
-        track_failure "playwright" "Failed to install Playwright"
+    echo "Installing playwright-cli (@playwright/cli)..."
+    if ! npm install -g @playwright/cli; then
+        track_failure "playwright-cli" "Failed to install @playwright/cli"
+    fi
+}
+
+# The npm package alone is not a usable dependency — the browsers are a separate
+# download, and that download is what actually fails. Playwright refuses to fetch
+# on a host OS it does not recognise:
+#     Playwright does not support chromium on ubuntu26.04-x64
+# The escape hatch is PLAYWRIGHT_HOST_PLATFORM_OVERRIDE, and its value MUST carry
+# the arch suffix — plain `ubuntu24.04` is still rejected, `ubuntu24.04-x64` is
+# accepted and pulls the fallback build. Verified on Ubuntu 26.04 / Playwright
+# 1.57 (2026-09-04).
+install_playwright_browsers() {
+    if [[ "$CODESPACES" == "true" ]]; then
+        echo "In a GitHub Codespace environment, skipping Playwright browsers."
+        return 0
+    fi
+
+    if ls "$HOME/.cache/ms-playwright"/chromium_headless_shell-* &> /dev/null; then
+        echo "Playwright browsers are already downloaded."
+        return 0
+    fi
+
+    echo "Downloading Playwright browsers..."
+    if playwright install chromium-headless-shell chromium; then
+        return 0
+    fi
+
+    # Only retry with an override where the fallback build is actually right:
+    # Linux on x86_64. Anywhere else, a wrong override would fetch a wrong binary.
+    if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+        track_failure "playwright-browsers" "Failed to download Playwright browsers"
+        return 0
+    fi
+
+    echo "Host OS not recognised by Playwright; retrying as ubuntu24.04-x64..."
+    if ! PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 \
+        playwright install chromium-headless-shell chromium; then
+        track_failure "playwright-browsers" "Failed to download Playwright browsers"
     fi
 }
 
