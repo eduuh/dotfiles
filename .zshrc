@@ -190,6 +190,21 @@ export PATH="$HOME/.local/bin:$PATH"
 # Starship
 _zsh_cached_init starship starship starship init zsh
 
+# OSC 133 shell-integration marks — where each prompt starts (133;A) and where a command's output
+# begins (133;C). tmux reads these to implement copy-mode's `previous-prompt` / `next-prompt`,
+# bound to `[` and `]` in the bn tmux config: "jump to the start of the last command's output",
+# which is the difference between finding something in a 100k-line agent transcript and
+# half-paging through it. tmux has nothing to seek to without the marks and those keys silently do
+# nothing; starship does not emit them on its own.
+#
+# Must come after the starship init above — starship installs its own precmd hooks, and these
+# append to the same arrays.
+autoload -Uz add-zsh-hook
+_osc133_precmd()  { print -n '\e]133;A\e\\' }
+_osc133_preexec() { print -n '\e]133;C\e\\' }
+add-zsh-hook precmd  _osc133_precmd
+add-zsh-hook preexec _osc133_preexec
+
 # fleet resource caps (added by copilot: tame per-lane build footprint)
 export CARGO_BUILD_JOBS=4
 export MAKEFLAGS="-j4"
