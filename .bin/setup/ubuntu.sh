@@ -150,7 +150,6 @@ install_docker() {
 }
 
 setup_ubuntu() {
-    ensure_tmux_version
     install_neovim
     install_fzf
 
@@ -165,7 +164,6 @@ setup_ubuntu() {
 }
 
 setup_codespace() {
-    ensure_tmux_version
     install_fzf
     install_claude_code
     setup_python

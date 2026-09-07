@@ -98,7 +98,6 @@ install_arch_specific_packages() {
 
 setup_arch() {
     install_nvm
-    ensure_tmux_version
     install_neovim
     install_fzf
 

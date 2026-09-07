@@ -9,7 +9,6 @@
 NVIM_VERSION=v0.12.3        # neovim — releases/download/<tag>/nvim-linux-<arch>.tar.gz
 FZF_VERSION=0.73.1          # fzf — no leading v (matches the release URL template)
 LAZYGIT_VERSION=0.62.2      # lazygit — no leading v
-TMUX_VERSION=3.5a           # tmux — built from source
 NVM_VERSION=v0.40.1         # nvm — install.sh tag
 PNPM_VERSION=11.8.0         # pnpm — honoured by the get.pnpm.io installer via $PNPM_VERSION
 RUST_TOOLCHAIN=1.96.0       # rust — rustup --default-toolchain
