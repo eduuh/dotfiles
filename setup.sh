@@ -169,7 +169,8 @@ main() {
         step_always work-tools core all install_work_tools
     fi
 
-    # tmux is installed by the platform step above; fire the clone into a detached session
+    # tmux comes from the platform packages above (bn's install.sh, in the bn step, builds a
+    # newer one when the distro's is below its floor); fire the clone into a detached session
     # now so it runs alongside the remaining tool steps and keeps going after setup exits.
     _projects_launch
 
