@@ -24,7 +24,11 @@ param(
     # Windows-form path to the win-dot clone, e.g. C:\Users\me\projects\win-dot.
     [Parameter(Mandatory)][string]$Repo,
     # Pass through to install.ps1; installs the Keyflow keyboard layout too.
-    [switch]$InstallKeyboard
+    [switch]$InstallKeyboard,
+    # Windows path to windows-askpass.cmd, which answers git's credential prompts
+    # from $env:DOTFILES_GH_TOKEN. Optional: without it the private submodule below
+    # simply fails to clone, and the rest of the run still stands.
+    [string]$AskPass
 )
 
 $ErrorActionPreference = 'Stop'
@@ -85,9 +89,32 @@ if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
 # --- 6. The `dot` command -------------------------------------------------
 # This checks the clone out over $HOME (--work-tree=$HOME --force), so it lands
 # .wslconfig, .gitconfig, the PowerShell profile and the Windows Terminal and
-# GlazeWM configs in the places those applications read them from.
+# GlazeWM configs in the places those applications read them from. It also inits
+# win-dot's submodules, one of which is private.
+#
+# Windows git's credential helper is GCM, which holds no github.com login here
+# and cannot prompt for one with no console attached - so git fell through to its
+# built-in terminal prompt, which needs /dev/tty and died with "No such device or
+# address", failing the submodule clone and with it the whole script.
+#
+# GIT_ASKPASS is the documented hook for that fallback. GIT_TERMINAL_PROMPT=0 stops
+# git reaching for a terminal at all if the askpass is missing, so the failure stays
+# a clean error instead of another /dev/tty crash.
+if ($AskPass -and (Test-Path $AskPass) -and $env:DOTFILES_GH_TOKEN) {
+    $env:GIT_ASKPASS = $AskPass
+    $env:GIT_TERMINAL_PROMPT = '0'
+} else {
+    Info 'no askpass/token - win-dot private submodules will be skipped'
+}
+
 Info 'running win-dot scripts/setup-git.ps1...'
-& "$Repo\scripts\setup-git.ps1"
+try {
+    & "$Repo\scripts\setup-git.ps1"
+}
+finally {
+    # Drop the borrowed credentials again so nothing after this runs with them.
+    Remove-Item Env:GIT_ASKPASS, Env:GIT_TERMINAL_PROMPT -ErrorAction SilentlyContinue
+}
 if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
     Write-Error "setup-git.ps1 exited $LASTEXITCODE"
     exit $LASTEXITCODE

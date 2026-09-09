@@ -523,6 +523,31 @@ _regular_clone_target() {
     fi
 }
 
+# Repos to clone SHALLOW, as name -> depth. A multi-GB monorepo whose deep history
+# nobody reads costs hours of transfer and tens of GB on disk; a bounded depth gets
+# a usable checkout in minutes. Empty here — the private repo lists append to it, the
+# same way they append to REGULAR_CLONE_REPOS / WINDOWS_CLONE_REPOS, so no work repo
+# name lands in public dotfiles.
+typeset -gA SHALLOW_CLONE_DEPTH
+
+# Clone flags for $1, empty for a normal full clone.
+#
+# --depth implies --single-branch, and that is LEFT IN PLACE deliberately. Adding
+# --no-single-branch looks like the friendlier choice — a shallow clone that can
+# still see every branch — but it asks the server to compute a depth-limited
+# boundary for every ref, and these are exactly the repos where that is ruinous:
+# Sydney has ~49,700 branches, and the clone hung with the pack still empty and no
+# bytes moving. Single-branch finished instead.
+#
+# The cost is that other branches are not fetched up front. Getting one afterwards
+# is a normal fetch:
+#     git fetch --depth 1000 origin <branch> && git checkout <branch>
+_clone_depth_args() {
+    local name="$1" depth="${SHALLOW_CLONE_DEPTH[$1]:-}"
+    [[ -z "$depth" ]] && return 0
+    echo "--depth $depth --shallow-submodules"
+}
+
 # Git settings a clone on the Windows filesystem needs. Applied on every run, not
 # only at clone time: the settings are what keep the clone *updatable*, and a clone
 # made before they existed would otherwise stay broken forever.
@@ -613,8 +638,14 @@ _clone_single_repo() {
                 win_dir=$(_windows_projects_dir) || { echo "[$REPO_NAME] Could not resolve Windows projects dir."; return 1; }
                 mkdir -p "$win_dir" || { echo "[$REPO_NAME] Failed to create $win_dir."; return 1; }
             fi
-            echo "[$REPO_NAME] Cloning (regular) → $CLONE_DIR..."
-            if ! git clone --recurse-submodules "$REPO" "$CLONE_DIR"; then
+            local -a depth_args
+            depth_args=(${=$(_clone_depth_args "$REPO_NAME")})
+            if (( ${#depth_args} )); then
+                echo "[$REPO_NAME] Cloning (regular, shallow ${depth_args[2]}) → $CLONE_DIR..."
+            else
+                echo "[$REPO_NAME] Cloning (regular) → $CLONE_DIR..."
+            fi
+            if ! git clone --recurse-submodules "${depth_args[@]}" "$REPO" "$CLONE_DIR"; then
                 track_failure "$REPO_NAME" "Failed to clone $REPO into $CLONE_DIR"
                 return 1
             fi
