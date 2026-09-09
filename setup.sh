@@ -154,6 +154,19 @@ main() {
     step mold               core wsl,linux     install_mold
     step bn                 core all   setup_bn
     step_always "packages-$distro" core all install_platform_packages "$distro"
+
+    # Stow is its own step, and it runs BEFORE platform setup. It used to be the last
+    # line of every setup_<distro>, so anything failing earlier in that step — a
+    # neovim/fzf/nvm/lazygit/playwright install, a python venv — took every $HOME
+    # symlink down with it, silently: the machine came up with no .zshrc, no .gitconfig
+    # and no .bin, and the only trace was a missing "platform-<distro>" done-marker.
+    #
+    # step_always for the same reason as packages: adding a file to the repo must be
+    # picked up by a re-run, and a recorded marker would skip the stow forever. Stow
+    # is idempotent and cheap, so re-running costs nothing. Needs `stow` itself, which
+    # the packages step above installs.
+    step_always symlinks    core all   setup_symlinks
+
     step "platform-$distro" core all   run_platform_setup "$distro"
 
     # personal-notes always, and synchronously: the detached project clone below is

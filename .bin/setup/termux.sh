@@ -46,5 +46,6 @@ install_termux_specific_packages() {
 
 setup_termux() {
     change_shell_to_zsh
-    setup_symlinks
+    # setup_symlinks is NOT called here any more: it is its own step_always in
+    # setup.sh, so a failure in this function can no longer cost every symlink.
 }

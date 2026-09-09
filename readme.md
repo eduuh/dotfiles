@@ -12,26 +12,50 @@
 
 ## Setup
 
-Fresh machine — one command bootstraps everything:
+**One command.** Fresh machine to finished install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/eduuh/dotfiles/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/eduuh/dotfiles/main/bootstrap.sh | bash -s -- --work
 ```
 
-It installs `git`/`zsh`, clones dotfiles into the bare + worktree layout
-(`~/projects/bare/dotfiles.git` + `~/projects/worktree/dotfiles/main`), then hands
-off to the attended `prep.sh` (sudo, GitHub auth) and the unattended `setup.sh`.
-Symlinks are always stowed from the `main` worktree, so you can `wt add
-feature/x` and edit dotfiles in multiple worktrees without disturbing them.
+Choosing the flag is the only decision you make. Everything after it is automatic.
 
-Already cloned? Run the phases directly from the main worktree:
+| Machine | Flag |
+|---|---|
+| Work laptop | `--work` |
+| Personal machine | `--personal` |
+| Both sides on one box | `--work --personal` |
+| Toolchain only | *(omit; run `\| bash` with no `-s --`)* |
+
+The flag is forwarded through all three phases, so there is nothing to re-run
+afterwards with a different flag:
+
+0. **bootstrap** — installs `git`/`zsh`, clones dotfiles into the bare + worktree
+   layout (`~/projects/bare/dotfiles.git` + `~/projects/worktree/dotfiles/main`)
+1. **prep** *(attended — the only part that talks to you)* — sudo, GitHub sign-in
+   + SSH key, profile
+2. **setup** *(unattended — walk away)* — packages, tools, stow, and every repo
+   clone, including the work/personal lists
+
+Symlinks are always stowed from the `main` worktree, so you can `wt add feature/x`
+and edit dotfiles in multiple worktrees without disturbing them.
+
+> **Sign in as the account that owns `personal-notes`.** Prep checks for it by name
+> and signs it in if it is missing, because being logged in as *some* account is not
+> enough — on a work machine gh is usually the work account, which cannot see a
+> single private personal repo. gh keeps both accounts, so the work one stays usable.
+
+Already cloned? Same flags, run the phases directly from the main worktree:
 
 ```bash
 cd ~/projects/worktree/dotfiles/main
-./prep.sh && ./setup.sh
+./prep.sh --work            # chains into setup.sh, forwarding the flag
 ```
 
-`setup.sh` flags:
+`prep.sh` takes `--profile`, `--work`, `--personal`, and `--prep-only` (stop instead
+of chaining into setup). Flags other than `--profile` are passed straight through.
+
+`setup.sh` flags — you only need these when re-running a phase by hand:
 
 | Flag | Effect |
 |------|--------|
@@ -52,11 +76,12 @@ Auto-detects the platform (macOS, Ubuntu, Arch, Fedora, Codespaces) and runs the
 
 Re-runs are safe. `setup.sh` is resumable — completed tool-install steps are cached (`~/.local/state/dotfiles/done`) and skipped, while package installation always re-runs, so adding a package to the list and re-running `./setup.sh` installs it without redoing everything. Use `./setup.sh --force` to re-run every step from scratch, or `./setup.sh reset` to clear the recorded state.
 
-After setup, optionally run:
+`setup.sh` already launches the project clone in the background, so there is nothing
+to run after it. These stay available for retrying a phase on its own:
 
 ```bash
-./setup-projects.sh   # Clone project repos (parallel); add --work / --personal
-./setup-rust.sh       # Install Rust toolchain
+./setup-projects.sh --work   # re-run just the repo clones (parallel); flags as above
+./setup-rust.sh              # install the Rust toolchain
 ```
 
 Repos that aren't in `REGULAR_CLONE_REPOS` (see
@@ -74,15 +99,25 @@ installer. So **every** `setup.sh` run clones or pulls it, up front and
 synchronously, before anything that reads from it. It is not part of the
 deferred background clone, which is skipped once its step is recorded.
 
-It is cloned over **HTTPS, authenticated through `gh`** — not SSH. On a work
-machine the only SSH key is usually the work GitHub account's, which cannot see
-the repo, so an SSH clone fails with a misleading `Repository not found`. `gh`
-already holds the right token:
+It is cloned over **HTTPS, authenticated through `gh`** — not SSH. On a work machine
+the only SSH key is usually the work GitHub account's, which cannot see the repo, so
+an SSH clone fails with a misleading `Repository not found`. The same applies to every
+private repo in `PRIVATE_EDUUH_REPOS` (`.bin/setup/common.sh`): each is rewritten to
+HTTPS and cloned with a credential helper pinned to the owning account via
+`gh auth token -u <account>`. Pinned, not switched — the work account stays gh-active
+and usable, and work repos are matched by **owner/name** so they are never rerouted.
+
+Prep signs that account in for you, so normally there is nothing to do. To do it by
+hand:
 
 ```bash
 gh auth login          # as the account that owns personal-notes
 ./setup.sh             # clones it, then stows ~/projects/personal-notes/stow/home
 ```
+
+If the account is missing, setup does not guess: it fails the step with the account
+it actually found and the command to fix it, rather than letting the clone die with
+`Repository not found`.
 
 If a file the stow tree owns already exists as a real file, it is moved aside to
 `<file>.bak-<timestamp>` and the stow is retried, instead of GNU Stow aborting
@@ -98,11 +133,14 @@ the per-machine rules for them live in `personal-notes`.
 Personal and work repos are both opt-in regardless of where they're listed — a
 work machine shouldn't pull your side projects even when their names are public:
 
+Pass them to the one-command install and they reach every phase. These forms are for
+re-running a phase by hand:
+
 ```bash
 ./setup.sh --work                # work tools + work repos
 ./setup.sh --personal            # personal-only repos
 ./setup.sh --work --personal     # both
-./setup-projects.sh --personal   # repos only (standalone; setup.sh forwards the flags)
+./setup-projects.sh --work       # repos only (standalone; setup.sh forwards the flags)
 ```
 
 Each flag enables private hooks in `personal-notes/scripts/`, every one a no-op

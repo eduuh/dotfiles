@@ -160,12 +160,14 @@ setup_ubuntu() {
     install_claude_code
     install_playwright
     setup_python
-    setup_symlinks
+    # setup_symlinks is NOT called here any more: it is its own step_always in
+    # setup.sh, so a failure in this function can no longer cost every symlink.
 }
 
 setup_codespace() {
     install_fzf
     install_claude_code
     setup_python
-    setup_symlinks
+    # setup_symlinks is NOT called here any more: it is its own step_always in
+    # setup.sh, so a failure in this function can no longer cost every symlink.
 }

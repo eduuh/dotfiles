@@ -5,7 +5,10 @@
 # profile selection — so the long install (Phase 2) can run fully unattended.
 # After prep writes its "ready" marker, you can walk away from setup.sh.
 #
-#   ./prep.sh [--profile core|dev|desktop]
+#   ./prep.sh [--profile core|dev|desktop] [--work] [--personal]
+#
+# --work / --personal are not used by prep itself; they are forwarded verbatim to
+# setup.sh so the whole install is ONE command from bootstrap.sh onward.
 #
 # Not `set -e`: this phase collects failures (like setup.sh) rather than aborting.
 set -uo pipefail
@@ -38,15 +41,21 @@ default_profile() {
 
 main() {
   local target profile="" arg_profile="" run_setup=true
+  # Flags prep does not act on itself but must hand to setup.sh. Without this they
+  # were parsed by nothing and dropped on the floor, so the one-command bootstrap
+  # could never provision a work machine — you had to re-run setup.sh --work by hand.
+  local -a setup_args=()
 
   # --- parse args ---
   #   --profile <tier>  override the profile (core|dev|desktop)
   #   --prep-only       stop after prep; don't chain into setup.sh
+  #   --work/--personal forwarded to setup.sh untouched
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --profile)   arg_profile="$2"; shift 2 ;;
       --profile=*) arg_profile="${1#*=}"; shift ;;
       --prep-only) run_setup=false; shift ;;
+      --work|--personal) setup_args+=("$1"); shift ;;
       *)           shift ;;
     esac
   done
@@ -69,7 +78,11 @@ main() {
     echo "→ Codespace detected — GitHub auth already provided, skipping gh-keys."
   elif [[ -x "$SCRIPT_DIR/.bin/gh-keys" ]]; then
     echo "→ Setting up GitHub CLI + SSH keys…"
-    "$SCRIPT_DIR/.bin/gh-keys" || track_failure "github" "gh-keys failed"
+    # GH_PERSONAL_ACCOUNT (from common.sh) owns personal-notes, which the rest of
+    # the install reads its repo lists and stow tree from — so gh-keys makes sure
+    # THAT account is signed in, not merely that some account is.
+    GH_REQUIRED_ACCOUNT="$GH_PERSONAL_ACCOUNT" \
+      "$SCRIPT_DIR/.bin/gh-keys" || track_failure "github" "gh-keys failed"
   else
     track_failure "github" "gh-keys not found at $SCRIPT_DIR/.bin/gh-keys"
   fi
@@ -87,7 +100,7 @@ main() {
   if [[ "$run_setup" != "true" ]]; then
     echo ""
     echo "Prep complete (--prep-only). Run the unattended install when ready:"
-    echo "    cd $SCRIPT_DIR && ./setup.sh"
+    echo "    cd $SCRIPT_DIR && ./setup.sh --profile $profile ${setup_args[*]}"
     return 0
   fi
 
@@ -95,7 +108,7 @@ main() {
   echo "Prep complete — the interactive part is done. Handing off to the"
   echo "unattended install (setup.sh); walk away, it won't prompt."
   echo ""
-  exec zsh "$SCRIPT_DIR/setup.sh" --profile "$profile"
+  exec zsh "$SCRIPT_DIR/setup.sh" --profile "$profile" "${setup_args[@]}"
 }
 
 main "$@"

@@ -117,7 +117,17 @@ nvm() {
 # the stow target, which is correct regardless of where the repo lives.
 [ -f "$HOME/.zsh_lazy_load" ] && source "$HOME/.zsh_lazy_load"
 
-[ -f "$HOME/.zsh/ws.zsh" ] && source "$HOME/.zsh/ws.zsh"
+# Private per-machine shell config, stowed as a DIRECTORY from personal-notes, so
+# anything dropped in ~/.zsh/ is picked up with no change here. Glob rather than
+# naming ws.zsh: work tool installers (agency) want a PATH line somewhere, and their
+# default is to append to a tracked rc file — this repo is public, so give them a
+# private drop point instead of letting them edit .bashrc/.zshrc in-tree.
+if [ -d "$HOME/.zsh" ]; then
+  for _zsh_part in "$HOME"/.zsh/*.zsh(N); do
+    source "$_zsh_part"
+  done
+  unset _zsh_part
+fi
 
 # pnpm
 case "$(uname -s)" in
