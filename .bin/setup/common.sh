@@ -677,10 +677,10 @@ _setup_branch_notes_native() {
 
 # personal-notes is the private repo the rest of the setup hangs off: the stow
 # tree (setup_personal_notes_stow), the work/personal repo setup scripts, the
-# work-tools installer, and the tmux planning session all read from it. So it is
-# cloned on EVERY setup run rather than only inside clone_repos — that step runs
-# detached and is skipped once its `projects` marker is recorded, which would
-# leave a machine that missed it once permanently without personal-notes.
+# work-tools installer all read from it. So it is cloned on EVERY setup run
+# rather than only inside clone_repos — that step runs detached and is skipped
+# once its `projects` marker is recorded, which would leave a machine that
+# missed it once permanently without personal-notes.
 #
 # HTTPS, not SSH, and authenticated through `gh`: the only SSH key on a work
 # machine belongs to the work GitHub account, which cannot see this repo, so an

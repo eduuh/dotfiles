@@ -50,13 +50,12 @@ if [[ "$TARGET" != "codespace" && "${EUID:-$(id -u)}" != "0" ]]; then
 fi
 
 # Project cloning is the slowest part of setup (a large work repo can take hours), and
-# nothing else depends on it — so never wait on it. Open the clone as a tmux WINDOW and let
-# setup.sh finish: it runs in the session setup.sh was launched from, or — when setup.sh
-# isn't inside tmux — in the persistent `planning` session (created if absent). The runner
-# (setup-projects.sh) records the `projects` step on completion, so a later run skips it.
+# nothing else depends on it — so never wait on it. Inside tmux the clone opens as a WINDOW
+# in the session setup.sh was launched from; outside tmux it detaches with nohup rather than
+# conjuring a session to hold it. The runner (setup-projects.sh) records the `projects` step
+# on completion, so a later run skips it.
 _PROJECTS_LOG="${SETUP_STATE_DIR:-$HOME/.local/state/dotfiles}/projects-clone.log"
 _PROJECTS_WINDOW="bn-clone"
-_PLANNING_SESSION="planning"
 
 _projects_launch() {
     # The marker is per-SHAPE, not just per-step: plain, --personal and --work runs
@@ -74,22 +73,19 @@ _projects_launch() {
     [[ "$SETUP_WORK" == "true" ]] && runner_cmd+=(--work)
     [[ "$SETUP_PERSONAL" == "true" ]] && runner_cmd+=(--personal)
 
-    # No tmux at all: detach with nohup so the clone survives setup.sh exiting.
-    if ! command -v tmux >/dev/null 2>&1; then
+    # No tmux, or setup.sh isn't running inside one: detach with nohup so the clone
+    # survives setup.sh exiting. A tmux WINDOW needs a session to live in, and the only
+    # session we could be sure of was one we created ourselves — so the fallback is a
+    # background process and a log, not a session nobody asked for.
+    if [[ -z "$TMUX" ]] || ! command -v tmux >/dev/null 2>&1; then
         mkdir -p "$(dirname "$_PROJECTS_LOG")"
         nohup "${runner_cmd[@]}" > "$_PROJECTS_LOG" 2>&1 < /dev/null &
-        echo "→ [projects] cloning in background (no tmux; log: $_PROJECTS_LOG) — setup won't wait."
+        echo "→ [projects] cloning in background (log: $_PROJECTS_LOG) — setup won't wait."
         return 0
     fi
 
-    # Target the session setup.sh runs in; otherwise the persistent planning session.
     local target
-    if [[ -n "$TMUX" ]]; then
-        target=$(tmux display-message -p '#S')
-    else
-        target="$_PLANNING_SESSION"
-        tmux has-session -t "$target" 2>/dev/null || tmux new-session -d -s "$target"
-    fi
+    target=$(tmux display-message -p '#S')
 
     # Don't open a second clone window if one is already running in that session.
     if tmux list-windows -t "$target" -F '#W' 2>/dev/null | grep -qx "$_PROJECTS_WINDOW"; then
@@ -99,9 +95,6 @@ _projects_launch() {
 
     tmux new-window -d -t "$target" -n "$_PROJECTS_WINDOW" "${(j: :)${(q)runner_cmd}}"
     echo "→ [projects] cloning in tmux window '$_PROJECTS_WINDOW' (session '$target') — setup won't wait."
-    if [[ -z "$TMUX" ]]; then
-        echo "             watch it:  tmux attach -t $target"
-    fi
 }
 
 # Platform PACKAGE installation for $1 — ALWAYS run (idempotent) so re-running
