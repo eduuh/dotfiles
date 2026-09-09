@@ -276,6 +276,11 @@ detect_distro() {
     fi
 }
 
+# Windows-side setup (WSL only). Sourced unconditionally — every function in it
+# guards on _is_wsl, so it costs nothing on Linux/mac and keeps the source list
+# from needing a platform test of its own.
+[[ -f "$_COMMON_DIR/windows.sh" ]] && source "$_COMMON_DIR/windows.sh"
+
 # Repos that get regular (non-bare) clones at ~/projects/reponame.
 # Single source of truth, shared with .bin/wt (see regular-repos.zsh).
 if [[ -f "$_COMMON_DIR/regular-repos.zsh" ]]; then
@@ -518,6 +523,47 @@ _regular_clone_target() {
     fi
 }
 
+# Repos to clone SHALLOW, as name -> depth. A multi-GB monorepo whose deep history
+# nobody reads costs hours of transfer and tens of GB on disk; a bounded depth gets
+# a usable checkout in minutes. Empty here — the private repo lists append to it, the
+# same way they append to REGULAR_CLONE_REPOS / WINDOWS_CLONE_REPOS, so no work repo
+# name lands in public dotfiles.
+typeset -gA SHALLOW_CLONE_DEPTH
+
+# Clone flags for $1, empty for a normal full clone.
+#
+# --depth implies --single-branch, and that is LEFT IN PLACE deliberately. Adding
+# --no-single-branch looks like the friendlier choice — a shallow clone that can
+# still see every branch — but it asks the server to compute a depth-limited
+# boundary for every ref, and these are exactly the repos where that is ruinous:
+# Sydney has ~49,700 branches, and the clone hung with the pack still empty and no
+# bytes moving. Single-branch finished instead.
+#
+# The cost is that other branches are not fetched up front. Getting one afterwards
+# is a normal fetch:
+#     git fetch --depth 1000 origin <branch> && git checkout <branch>
+_clone_depth_args() {
+    local name="$1" depth="${SHALLOW_CLONE_DEPTH[$1]:-}"
+    [[ -z "$depth" ]] && return 0
+    echo "--depth $depth --shallow-submodules"
+}
+
+# Git settings a clone on the Windows filesystem needs. Applied on every run, not
+# only at clone time: the settings are what keep the clone *updatable*, and a clone
+# made before they existed would otherwise stay broken forever.
+#
+#   core.filemode false — NTFS has no exec bit, so every file reads as "mode changed".
+#   core.autocrlf true  — Windows tooling (and Windows git, which defaults to true)
+#     rewrites the checkout with CRLF. Without this git calls every tracked file
+#     modified, and clone_repos' "Skipping: unsaved changes." guard then refuses to
+#     pull the repo ever again — which is how the win-dot clone sat 4 commits behind
+#     with a 28-file diff nobody had written.
+_apply_windows_clone_config() {
+    local dir="$1"
+    git -C "$dir" config core.filemode false
+    git -C "$dir" config core.autocrlf true
+}
+
 # Run a repo's own ./install.sh if it has one — the generic hook that lets any
 # cloned repo (bn, nvim, or a future addition) bootstrap its own tools/build step
 # without dotfiles needing repo-specific logic. Idempotent by convention: every
@@ -572,6 +618,9 @@ _clone_single_repo() {
         if [ -d "$CLONE_DIR" ] && [ ! -L "$CLONE_DIR" ]; then
             if [ -d "$CLONE_DIR/.git" ]; then
                 cd "$CLONE_DIR"
+                # Before the dirty check, not after: these settings are what decide
+                # whether the working tree *looks* dirty in the first place.
+                _is_windows_repo "$REPO_NAME" && _apply_windows_clone_config "$CLONE_DIR"
                 if ! git diff --quiet || ! git diff --cached --quiet; then
                     echo "[$REPO_NAME] Skipping: unsaved changes."
                 else
@@ -589,14 +638,19 @@ _clone_single_repo() {
                 win_dir=$(_windows_projects_dir) || { echo "[$REPO_NAME] Could not resolve Windows projects dir."; return 1; }
                 mkdir -p "$win_dir" || { echo "[$REPO_NAME] Failed to create $win_dir."; return 1; }
             fi
-            echo "[$REPO_NAME] Cloning (regular) → $CLONE_DIR..."
-            if ! git clone --recurse-submodules "$REPO" "$CLONE_DIR"; then
+            local -a depth_args
+            depth_args=(${=$(_clone_depth_args "$REPO_NAME")})
+            if (( ${#depth_args} )); then
+                echo "[$REPO_NAME] Cloning (regular, shallow ${depth_args[2]}) → $CLONE_DIR..."
+            else
+                echo "[$REPO_NAME] Cloning (regular) → $CLONE_DIR..."
+            fi
+            if ! git clone --recurse-submodules "${depth_args[@]}" "$REPO" "$CLONE_DIR"; then
                 track_failure "$REPO_NAME" "Failed to clone $REPO into $CLONE_DIR"
                 return 1
             fi
-            # Disable filemode tracking on /mnt/c (NTFS) to avoid spurious 'mode changed' diffs
             if _is_windows_repo "$REPO_NAME"; then
-                git -C "$CLONE_DIR" config core.filemode false
+                _apply_windows_clone_config "$CLONE_DIR"
             fi
         fi
 

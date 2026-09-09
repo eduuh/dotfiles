@@ -9,19 +9,25 @@ source "$SCRIPT_DIR/.bin/setup/common.sh"
 #   --profile <tier> override the profile from the prep marker (core|dev|desktop)
 #   --work           also install work-machine tools + clone work repos
 #   --personal       also clone the personal-only repos (listed in personal-notes)
+#   --windows-admin  (WSL) also run win-dot's elevated run.ps1 — prompts for UAC
+#   --windows-keyboard (WSL) also install the Keyflow keyboard layout on Windows
 #   reset            clear recorded step state and exit
 SETUP_PROFILE_OVERRIDE=""
 SETUP_WORK=false
 SETUP_PERSONAL=false
+SETUP_WINDOWS_ADMIN=false
+SETUP_WINDOWS_KEYBOARD=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --force)     SETUP_FORCE=true; shift ;;
-        --profile)   SETUP_PROFILE_OVERRIDE="$2"; shift 2 ;;
-        --profile=*) SETUP_PROFILE_OVERRIDE="${1#*=}"; shift ;;
-        --work)      SETUP_WORK=true; shift ;;
-        --personal)  SETUP_PERSONAL=true; shift ;;
-        reset)       reset_steps; exit 0 ;;
-        *)           shift ;;
+        --force)            SETUP_FORCE=true; shift ;;
+        --profile)          SETUP_PROFILE_OVERRIDE="$2"; shift 2 ;;
+        --profile=*)        SETUP_PROFILE_OVERRIDE="${1#*=}"; shift ;;
+        --work)             SETUP_WORK=true; shift ;;
+        --personal)         SETUP_PERSONAL=true; shift ;;
+        --windows-admin)    SETUP_WINDOWS_ADMIN=true; shift ;;
+        --windows-keyboard) SETUP_WINDOWS_KEYBOARD=true; shift ;;
+        reset)              reset_steps; exit 0 ;;
+        *)                  shift ;;
     esac
 done
 
@@ -185,6 +191,22 @@ main() {
     # newer one when the distro's is below its floor); fire the clone into a detached session
     # now so it runs alongside the remaining tool steps and keeps going after setup exits.
     _projects_launch
+
+    # The Windows half of a WSL machine: win-dot's own PowerShell installers, run
+    # against the clone that clone_repos routed onto the Windows filesystem.
+    #
+    # AFTER _projects_launch, which is what creates that clone — but that launch is
+    # detached, so on a genuinely fresh machine the clone may not exist yet and this
+    # step says so and skips rather than failing. The next setup run installs it.
+    # step_always for the same reason: a recorded marker from that first, clone-less
+    # run would skip the Windows install forever.
+    step_always windows-side core wsl setup_windows_side
+
+    # Opt-in, and last among the Windows steps: it raises a UAC dialog and asks its
+    # own question, so it must never sit in the middle of an unattended run.
+    if [[ "$SETUP_WINDOWS_ADMIN" == "true" ]]; then
+        step_always windows-admin core wsl setup_windows_admin
+    fi
 
     if [ "$distro" != "termux" ]; then
         step tmux-plugins core all   install_tmux_plugins
