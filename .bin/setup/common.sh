@@ -1036,21 +1036,77 @@ install_mold() {
     fi
 }
 
+# Cross-check the bn that install.sh just placed against what is actually published.
+#
+# bn follows a strict release rule: every merge to its main passes CI and is then built into a
+# versioned GitHub Release for every platform, and `install.sh` only ever DOWNLOADS that release
+# — it has no compile-from-source fallback. This machine therefore never needs a Rust toolchain
+# to run bn, and that is the property worth checking, because the ways it silently breaks all
+# look like success: a `gh` that is not logged in (the repo is private, so an anonymous fetch
+# 404s), an older hand-built binary still sitting first on PATH, or a release whose build for
+# this platform failed so the newest assets are for someone else's.
+#
+# Advisory by design. It reports drift, it does not fail the setup: install.sh already errored
+# loudly if the download itself failed, and a machine that is one release behind still works.
+verify_bn_release() {
+    local bn="$APP_BIN_DIR/bn" version installed_sha tag release_sha
+
+    if [[ ! -x "$bn" ]]; then
+        track_failure "bn" "no bn binary at $bn after install.sh"
+        return 1
+    fi
+    if ! version=$("$bn" --version 2>/dev/null); then
+        # Nearly always a GNU/Linux box whose glibc is older than the one the release was linked
+        # against. The binary exists and is executable; it just cannot run here.
+        track_failure "bn" "installed bn will not run: $bn --version failed"
+        return 1
+    fi
+    echo "[bn] installed: $version"
+
+    if ! command -v gh &> /dev/null; then
+        echo "[bn] gh not installed — skipping the published-release cross-check"
+        return 0
+    fi
+
+    if ! tag=$(gh release view -R eduuh/bn --json tagName -q .tagName 2>/dev/null) || [[ -z "$tag" ]]; then
+        echo "[bn] could not read the latest release (gh not authenticated?) — skipping the cross-check"
+        return 0
+    fi
+    release_sha=$(gh release view -R eduuh/bn --json targetCommitish -q .targetCommitish 2>/dev/null)
+
+    # `bn 0.5.1 (git de967f24a5ca, built …)` → `de967f24a5ca`
+    installed_sha="${version#*\(git }"
+    installed_sha="${installed_sha%%,*}"
+
+    # Compare on the shorter abbreviation: the release records a full sha, `bn --version` a
+    # 12-character one, and one is a prefix of the other whenever they are the same commit.
+    if [[ -n "$release_sha" && -n "$installed_sha" && "$release_sha" == "$installed_sha"* ]]; then
+        echo "[bn] matches the published release $tag"
+    else
+        echo "[bn] NOTE: installed bn is not the latest release ($tag, ${release_sha:0:12})."
+        echo "[bn]       Re-run with an authenticated gh, or check that $tag has an asset for this platform:"
+        echo "[bn]       gh release view $tag -R eduuh/bn"
+    fi
+}
+
 setup_bn() {
     # bn ships the branch-notes CLI + bn-mcp server and (full install) owns the tmux
     # config: ~/.tmux.conf → workflow/tmux.conf plus ~/.config/bn/{repo,bn}. It used to
     # be a submodule built by dotfiles; now it's an external setup repo — clone it and
     # run its own install.sh (see setup_repo). install.sh registers bn-mcp for Claude
-    # Code + Copilot and pulls the prebuilt release via authenticated `gh`, building from
-    # source (rust step runs first) only as a fallback. Cut a new bn release (tag vX.Y.Z)
-    # to advance the deployed binary. BN_BIN_DIR keeps the install off ~/.bin (stow-
-    # managed) → ~/.local/bin, first on PATH. Codespaces get --core (no tmux layer).
+    # Code + Copilot and DOWNLOADS the prebuilt release via authenticated `gh` — there is
+    # no build-from-source fallback, so this machine never needs a Rust toolchain to run
+    # bn. Releases are cut automatically: every merge to bn's main that passes CI is built
+    # for every platform and published as vX.Y.Z, so there is no tag to cut by hand.
+    # BN_BIN_DIR keeps the install off ~/.bin (stow-managed) → ~/.local/bin, first on
+    # PATH. Codespaces get --core (no tmux layer).
     export BN_BIN_DIR="$APP_BIN_DIR"
     if [[ "$CODESPACES" == "true" ]]; then
-        setup_repo "https://github.com/eduuh/bn.git" --core
+        setup_repo "https://github.com/eduuh/bn.git" --core || return 1
     else
-        setup_repo "git@github.com:eduuh/bn.git"
+        setup_repo "git@github.com:eduuh/bn.git" || return 1
     fi
+    verify_bn_release
 }
 
 install_playwright() {
