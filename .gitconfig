@@ -24,3 +24,10 @@
 # private notes repo, and git silently ignores the include when it is absent.
 [include]
 	path = ~/.gitconfig-local
+
+# Azure DevOps credential helper, GENERATED per machine by setup
+# (setup_ado_credential_helper) because it points at the Windows-side Git Credential
+# Manager, whose path depends on how Windows git was installed. Separate from
+# .gitconfig-local so setup never writes over a stow target. Absent off WSL.
+[include]
+	path = ~/.gitconfig-ado
