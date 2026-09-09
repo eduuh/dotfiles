@@ -175,6 +175,12 @@ main() {
         step_always work-tools core all install_work_tools
     fi
 
+    # Before the clone below, not after: the work repo list includes Azure DevOps
+    # repos, and without this they stop at a `Username for ...` prompt no detached
+    # clone can answer. step_always so a machine that installs Windows git later
+    # picks it up on the next run instead of staying blocked behind a done-marker.
+    step_always ado-auth core wsl setup_ado_credential_helper
+
     # tmux comes from the platform packages above (bn's install.sh, in the bn step, builds a
     # newer one when the distro's is below its floor); fire the clone into a detached session
     # now so it runs alongside the remaining tool steps and keeps going after setup exits.
