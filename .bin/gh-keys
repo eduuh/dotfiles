@@ -235,6 +235,39 @@ print_warning() {
 #   GH_KEY_ACCOUNT=<login> ./gh-keys   # upload to this account, not just the active one
 GH_KEY_ACCOUNT="${GH_KEY_ACCOUNT:-}"
 
+# The account the rest of the install cannot proceed without: it owns personal-notes,
+# which holds the stow tree, the work/personal repo lists and the work-tools installer.
+# `gh auth status` succeeding is NOT enough — on a work machine gh is typically signed
+# in as the WORK account, which passes that check and then cannot see a single private
+# personal repo. Set by prep.sh; empty means "any account will do".
+GH_REQUIRED_ACCOUNT="${GH_REQUIRED_ACCOUNT:-}"
+
+# Sign $GH_REQUIRED_ACCOUNT in if it is missing. gh holds several accounts at once, so
+# this ADDS one rather than replacing whatever is already there — the work account stays
+# logged in and usable. Interactive on purpose: prep is the attended phase, and doing it
+# here is what keeps the whole install to a single command.
+ensure_required_account() {
+  [ -n "$GH_REQUIRED_ACCOUNT" ] || return 0
+  if _gh_accounts | grep -qxF "$GH_REQUIRED_ACCOUNT"; then
+    print_status "GitHub account '$GH_REQUIRED_ACCOUNT' is signed in."
+    return 0
+  fi
+  print_warning "GitHub account '$GH_REQUIRED_ACCOUNT' is NOT signed in."
+  print_warning "Everything private hangs off it (personal-notes → stow tree, repo lists,"
+  print_warning "work-tools installer). Without it the install completes with those missing."
+  print_status "Signing in as '$GH_REQUIRED_ACCOUNT' now — pick that account in the browser."
+  set +e
+  gh auth login --hostname github.com --git-protocol https --web -s admin:public_key
+  local rc=$?
+  set -e
+  if [ $rc -ne 0 ] || ! _gh_accounts | grep -qxF "$GH_REQUIRED_ACCOUNT"; then
+    print_warning "Still not signed in as '$GH_REQUIRED_ACCOUNT'."
+    print_warning "Re-run later with:  gh auth login   (choose $GH_REQUIRED_ACCOUNT)"
+    return 1
+  fi
+  print_success "Signed in as '$GH_REQUIRED_ACCOUNT'."
+}
+
 # Logins gh is currently authenticated as, one per line.
 _gh_accounts() {
   gh auth status 2>/dev/null | sed -n 's/.*Logged in to github.com account \([^ ]*\).*/\1/p'
@@ -252,6 +285,10 @@ setup_github() {
   else
     print_status "Already authenticated with GitHub"
   fi
+
+  # Being authenticated as SOMEONE is not the same as being authenticated as the
+  # account the install needs. Check that before going anywhere near the SSH key.
+  ensure_required_account || track_required_account_failure
 
   local active_account restore_account="" accounts
   active_account=$(gh api user -q .login 2>/dev/null)
@@ -322,6 +359,12 @@ setup_github() {
   fi
 }
 
+# ensure_required_account returning non-zero is a warning, not a reason to abort the
+# whole script (`set -e` + the ERR trap would otherwise kill it): the SSH key setup
+# below is still worth doing, and prep.sh reports the failure summary at the end.
+REQUIRED_ACCOUNT_MISSING=false
+track_required_account_failure() { REQUIRED_ACCOUNT_MISSING=true; }
+
 # Main script execution
 main() {
   print_status "Starting GitHub SSH setup script..."
@@ -329,6 +372,12 @@ main() {
   install_dependencies
   configure_ssh
   setup_github
+
+  if [ "$REQUIRED_ACCOUNT_MISSING" = "true" ]; then
+    print_warning "⚠ GitHub SSH key setup finished, but '$GH_REQUIRED_ACCOUNT' is not signed in."
+    print_warning "  Private repos owned by it will not clone until it is."
+    exit 1
+  fi
 
   print_success "✅ GitHub SSH key setup completed successfully!"
   print_success "✅ You can now clone repositories using SSH"
