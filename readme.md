@@ -63,6 +63,8 @@ of chaining into setup). Flags other than `--profile` are passed straight throug
 | `--personal` | Also clone the personal-only repos (see [Private repo lists](#private-repo-lists)) |
 | `--profile <core\|dev\|desktop>` | Override the profile recorded by `prep.sh` |
 | `--force` | Re-run every step, ignoring the cached done-file |
+| `--windows-admin` | *(WSL)* Also run win-dot's elevated `run.ps1` — raises a UAC prompt (see [The Windows side](#the-windows-side)) |
+| `--windows-keyboard` | *(WSL)* Also install the Keyflow keyboard layout on Windows |
 | `reset` | Clear recorded step state and exit |
 
 Python setup (venv + pynvim/requests, and on Ubuntu the `python3.10` /
@@ -90,6 +92,44 @@ worktree layout (`~/projects/bare`, `~/projects/worktree`) so `wt` and `tat` pic
 them up automatically.
 
 On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
+
+### The Windows side
+
+On WSL, dotfiles configures Linux — but half the machine is Windows, and none of
+what a Windows application reads (PowerShell profile, Windows Terminal, GlazeWM,
+VS Code, and the `.wslconfig` that sizes the WSL VM) can live in the WSL
+filesystem. That half is [`eduuh/win-dot`](https://github.com/eduuh/win-dot), and
+`setup.sh` installs it for you:
+
+1. `clone_repos` clones win-dot **onto the Windows filesystem**, at
+   `/mnt/c/Users/<you>/projects/win-dot`, and symlinks `~/projects/win-dot` at it
+   so `wt`, `tat` and `bn` list it like any other repo. That routing comes from
+   naming it in **both** `REGULAR_CLONE_REPOS` and `WINDOWS_CLONE_REPOS` — either
+   list alone silently puts the clone inside WSL, where Windows tooling can't
+   reach it.
+2. The `windows-side` step hands
+   [`.bin/setup/windows-side.ps1`](.bin/setup/windows-side.ps1) to `powershell.exe`,
+   which installs Scoop and git if missing and then runs win-dot's own
+   `scripts/install.ps1` (packages + profile stubs) and `scripts/setup-git.ps1`
+   (checks the clone out over `$HOME`, wiring the `dot` command). Idempotent, so
+   it reconciles on every run.
+
+Restart PowerShell afterwards to pick up the profile.
+
+**What is *not* automatic.** win-dot's `scripts/run.ps1` — Developer Mode and the
+WSL/VirtualMachinePlatform Windows features — needs Administrator. It self-elevates
+through UAC and then asks its own Y/N question, so it can't run in setup's
+unattended phase, and reaching it from inside WSL means the features it enables are
+already on. Run it deliberately if you need it:
+
+```bash
+./setup.sh --windows-admin      # accept the UAC prompt, then answer Y
+```
+
+A win-dot clone on NTFS gets `core.filemode false` and `core.autocrlf true`, applied
+on every run rather than only at clone time. Without the second one, Windows tooling
+rewrites the checkout with CRLF, git reports every tracked file as modified, and
+`clone_repos`' "unsaved changes" guard then refuses to pull the repo ever again.
 
 ### personal-notes
 

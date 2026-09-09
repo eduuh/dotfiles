@@ -276,6 +276,11 @@ detect_distro() {
     fi
 }
 
+# Windows-side setup (WSL only). Sourced unconditionally — every function in it
+# guards on _is_wsl, so it costs nothing on Linux/mac and keeps the source list
+# from needing a platform test of its own.
+[[ -f "$_COMMON_DIR/windows.sh" ]] && source "$_COMMON_DIR/windows.sh"
+
 # Repos that get regular (non-bare) clones at ~/projects/reponame.
 # Single source of truth, shared with .bin/wt (see regular-repos.zsh).
 if [[ -f "$_COMMON_DIR/regular-repos.zsh" ]]; then
@@ -518,6 +523,22 @@ _regular_clone_target() {
     fi
 }
 
+# Git settings a clone on the Windows filesystem needs. Applied on every run, not
+# only at clone time: the settings are what keep the clone *updatable*, and a clone
+# made before they existed would otherwise stay broken forever.
+#
+#   core.filemode false — NTFS has no exec bit, so every file reads as "mode changed".
+#   core.autocrlf true  — Windows tooling (and Windows git, which defaults to true)
+#     rewrites the checkout with CRLF. Without this git calls every tracked file
+#     modified, and clone_repos' "Skipping: unsaved changes." guard then refuses to
+#     pull the repo ever again — which is how the win-dot clone sat 4 commits behind
+#     with a 28-file diff nobody had written.
+_apply_windows_clone_config() {
+    local dir="$1"
+    git -C "$dir" config core.filemode false
+    git -C "$dir" config core.autocrlf true
+}
+
 # Run a repo's own ./install.sh if it has one — the generic hook that lets any
 # cloned repo (bn, nvim, or a future addition) bootstrap its own tools/build step
 # without dotfiles needing repo-specific logic. Idempotent by convention: every
@@ -572,6 +593,9 @@ _clone_single_repo() {
         if [ -d "$CLONE_DIR" ] && [ ! -L "$CLONE_DIR" ]; then
             if [ -d "$CLONE_DIR/.git" ]; then
                 cd "$CLONE_DIR"
+                # Before the dirty check, not after: these settings are what decide
+                # whether the working tree *looks* dirty in the first place.
+                _is_windows_repo "$REPO_NAME" && _apply_windows_clone_config "$CLONE_DIR"
                 if ! git diff --quiet || ! git diff --cached --quiet; then
                     echo "[$REPO_NAME] Skipping: unsaved changes."
                 else
@@ -594,9 +618,8 @@ _clone_single_repo() {
                 track_failure "$REPO_NAME" "Failed to clone $REPO into $CLONE_DIR"
                 return 1
             fi
-            # Disable filemode tracking on /mnt/c (NTFS) to avoid spurious 'mode changed' diffs
             if _is_windows_repo "$REPO_NAME"; then
-                git -C "$CLONE_DIR" config core.filemode false
+                _apply_windows_clone_config "$CLONE_DIR"
             fi
         fi
 
