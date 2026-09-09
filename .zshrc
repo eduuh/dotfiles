@@ -227,3 +227,37 @@ fi
 if command -v mold >/dev/null 2>&1; then
   export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-fuse-ld=mold"
 fi
+
+# Windows-filesystem repos: run Windows git, not WSL git.
+#
+# WSL reaches /mnt/c through drvfs, and `git status` stats every tracked file, so
+# you pay the per-file translation cost on every command. Measured on Sydney
+# (69,832 files) at /mnt/c/Users/<you>/projects/Sydney, both warm:
+#
+#     git.exe status --porcelain     0.63s
+#     WSL git status --porcelain     >120s  (capped; 54s of it in the kernel)
+#
+# No amount of git config closes that: the cost is the filesystem boundary, not
+# git. Repos land on /mnt/c because they are BUILT from the Windows side (see
+# WINDOWS_CLONE_REPOS in .bin/setup/common.sh), so the fix is to use the git that
+# lives on the same side of the boundary as the files.
+#
+# ${PWD:A} resolves symlinks, which matters: these repos are reached through
+# ~/projects/<name>, a symlink whose target is the real /mnt/c path.
+#
+# Caveat: shell functions are not inherited by scripts, so this only redirects
+# INTERACTIVE git. That is deliberate — a script passing WSL paths (/home/...) to
+# git.exe would break, since git.exe cannot resolve them. Escape hatches: prefix
+# with `command git`, or set DOTFILES_NO_WIN_GIT=1.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  _WIN_GIT=$(command -v git.exe 2>/dev/null)
+  if [[ -n "$_WIN_GIT" ]]; then
+    git() {
+      if [[ -z "$DOTFILES_NO_WIN_GIT" && "${PWD:A}" == /mnt/* ]]; then
+        "$_WIN_GIT" "$@"
+      else
+        command git "$@"
+      fi
+    }
+  fi
+fi
