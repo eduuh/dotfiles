@@ -196,6 +196,10 @@ run_app_installer() {
 setup_repo() {
     local url="$1"; shift
     local name="${${url##*/}%.git}"
+    if _is_private_eduuh_repo "$url"; then
+        _use_gh_personal_credentials || return 1
+    fi
+    url=$(_resolve_repo_remote "$url")
     local wt_main="$HOME/projects/worktree/$name/main"
 
     if [[ ! -d "$wt_main" ]]; then
@@ -206,6 +210,14 @@ setup_repo() {
     fi
     if [[ ! -f "$wt_main/install.sh" ]]; then
         track_failure "$name" "no install.sh in $wt_main"; return 1
+    fi
+
+    # A private repo's installer fetches its OWN prebuilt release with `gh` (bn does),
+    # which would otherwise use the machine's ACTIVE account — the work one — 404, and
+    # silently fall back to a from-source build. Scoped to this call, so work `gh`
+    # usage elsewhere in setup (install_work_tools) keeps the active account.
+    if _is_private_eduuh_repo "$url"; then
+        local -x GH_TOKEN="$(gh auth token -u "$GH_PERSONAL_ACCOUNT" 2>/dev/null)"
     fi
 
     echo "[$name] running install.sh $*…"
@@ -277,6 +289,90 @@ fi
 # win-dot and keyflow are Windows applications — they are built and run from the
 # Windows side, so a clone inside the WSL filesystem would be unusable there.
 WINDOWS_CLONE_REPOS=(personal-notes notes win-dot keyflow)
+
+# The GitHub account that owns every private repo below. `gh auth status` alone is
+# NOT a sufficient check for it: a work machine IS logged in — as the work account —
+# so that check passes and the clone then dies with a bare "Repository not found".
+# That is what left a machine with no personal-notes, no bn and no atlas while the
+# summary blamed the clone rather than the identity.
+GH_PERSONAL_ACCOUNT="${GH_PERSONAL_ACCOUNT:-eduuh}"
+
+# Private repos under $GH_PERSONAL_ACCOUNT. An SSH clone of these uses whatever key
+# the machine has, and on a work machine that key belongs to the work account, which
+# cannot see them. So they are routed over HTTPS with a gh credential helper pinned
+# to $GH_PERSONAL_ACCOUNT — the trick PERSONAL_NOTES_REMOTE already used, now shared
+# by every private repo instead of that one.
+#
+# Names only; the owner is always $GH_PERSONAL_ACCOUNT and is matched separately.
+# `notes` is deliberately absent: nothing clones eduuh/notes, and the `notes` that
+# DOES get cloned on a work machine is the work account's own — see below.
+PRIVATE_EDUUH_REPOS=(personal-notes bn atlas)
+
+# Match on OWNER/NAME, never the bare repo name. A name-only match is a trap here:
+# personal-notes' setup-work-repos.sh clones edwinmuraya_microsoft/notes.git, and
+# matching just "notes" would hand a WORK repo the personal token and rewrite its
+# remote. Same hazard for any future work repo sharing a name with a personal one.
+_is_private_eduuh_repo() {
+    local url="$1" path
+    case "$url" in
+        git@github.com:*)     path="${url#git@github.com:}" ;;
+        https://github.com/*) path="${url#https://github.com/}" ;;
+        *)                    return 1 ;;   # file:// (tests), ADO, anything else
+    esac
+    path="${path%.git}"
+    [[ "$path" == "$GH_PERSONAL_ACCOUNT/"* ]] || return 1
+    local name="${path#*/}"
+    for r in "${PRIVATE_EDUUH_REPOS[@]}"; do
+        [[ "$name" == "$r" ]] && return 0
+    done
+    return 1
+}
+
+# Rewrite git@github.com:<owner>/<repo>.git → https://github.com/<owner>/<repo>.git
+# for the private repos above, so they pick up the credential helper. Every other URL
+# passes through untouched.
+_resolve_repo_remote() {
+    local url="$1"
+    if _is_private_eduuh_repo "$url" && [[ "$url" == git@github.com:* ]]; then
+        echo "https://github.com/${url#git@github.com:}"
+    else
+        echo "$url"
+    fi
+}
+
+# Export a git credential helper that hands out $GH_PERSONAL_ACCOUNT's token for
+# github.com over HTTPS. Pinned with `gh auth token -u`, so it works when gh holds
+# several accounts and the ACTIVE one is the work account — and without switching the
+# active account out from under the user's other gh usage.
+#
+# Exported (not `local -x`) so background `_clone_single_repo` jobs, and the `wt`
+# clones they shell out to, inherit it. Probed once per process and the verdict
+# cached: every private-repo entry point calls this, and without the cache a machine
+# missing the account would stack one identical failure per repo.
+_GH_PERSONAL_CREDS_STATE=""
+_use_gh_personal_credentials() {
+    case "$_GH_PERSONAL_CREDS_STATE" in
+        ok)   return 0 ;;
+        fail) return 1 ;;
+    esac
+    if ! command -v gh >/dev/null 2>&1; then
+        _GH_PERSONAL_CREDS_STATE=fail
+        track_failure "gh-auth" "gh not installed — cannot clone private $GH_PERSONAL_ACCOUNT repos (${PRIVATE_EDUUH_REPOS[*]})"
+        return 1
+    fi
+    if ! gh auth token -u "$GH_PERSONAL_ACCOUNT" >/dev/null 2>&1; then
+        _GH_PERSONAL_CREDS_STATE=fail
+        local active
+        active=$(gh api user --jq .login 2>/dev/null)
+        track_failure "gh-auth" "gh has no '$GH_PERSONAL_ACCOUNT' account (active: ${active:-none}) — run 'gh auth login' as $GH_PERSONAL_ACCOUNT, then re-run setup. Until then these stay missing: ${PRIVATE_EDUUH_REPOS[*]}"
+        return 1
+    fi
+    export GIT_CONFIG_COUNT=1
+    export GIT_CONFIG_KEY_0="credential.https://github.com.helper"
+    export GIT_CONFIG_VALUE_0="!f() { echo username=$GH_PERSONAL_ACCOUNT; echo password=\$(gh auth token -u $GH_PERSONAL_ACCOUNT); }; f"
+    export GIT_TERMINAL_PROMPT=0
+    _GH_PERSONAL_CREDS_STATE=ok
+}
 
 _is_regular_repo() {
     local name="$1"
@@ -360,6 +456,14 @@ _run_repo_install_script() {
 _clone_single_repo() {
     local REPO="$1"
     local REPO_NAME=$(basename "$REPO" .git)
+
+    # Private repos go over gh-authenticated HTTPS, never the machine's SSH key.
+    # Checked per repo rather than once up front because this is also reached from
+    # the work/personal hooks and from setup-projects.sh, which have no shared entry.
+    if _is_private_eduuh_repo "$REPO"; then
+        _use_gh_personal_credentials || return 1
+    fi
+    REPO=$(_resolve_repo_remote "$REPO")
 
     if _is_regular_repo "$REPO_NAME"; then
         local CLONE_DIR
@@ -593,18 +697,7 @@ ensure_personal_notes() {
 
     # A file:// remote (tests) needs no auth; anything on github.com does.
     if [[ "$PERSONAL_NOTES_REMOTE" == https://github.com/* ]]; then
-        if ! command -v gh >/dev/null 2>&1; then
-            track_failure "personal-notes" "gh not installed — cannot authenticate $PERSONAL_NOTES_REMOTE"
-            return 1
-        fi
-        if ! gh auth status >/dev/null 2>&1; then
-            track_failure "personal-notes" "gh is not logged in — run: gh auth login (as eduuh), then re-run setup"
-            return 1
-        fi
-        local -x GIT_CONFIG_COUNT=1
-        local -x GIT_CONFIG_KEY_0="credential.https://github.com.helper"
-        local -x GIT_CONFIG_VALUE_0="!$(command -v gh) auth git-credential"
-        local -x GIT_TERMINAL_PROMPT=0
+        _use_gh_personal_credentials || return 1
     fi
 
     if ! _clone_single_repo "$PERSONAL_NOTES_REMOTE"; then
