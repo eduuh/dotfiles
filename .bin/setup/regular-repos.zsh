@@ -16,6 +16,9 @@ REGULAR_CLONE_REPOS=(
     personal-notes
     eduuh
     notes
+    # bn's notes store. Flat, and never branch-developed: bn commits to its main
+    # from every machine, so a worktree layout would only get in the way.
+    branch-notes
     # Windows applications: built and run from the Windows side, so they are
     # cloned flat and — via WINDOWS_CLONE_REPOS — onto the Windows filesystem.
     # They must be listed HERE too: only a regular clone consults the Windows
