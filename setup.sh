@@ -151,6 +151,10 @@ main() {
     step rust               core wsl,linux,mac,termux install_rust
     step sccache            core wsl,linux,mac install_sccache
     step mold               core wsl,linux     install_mold
+    # Before the bn step, deliberately: bn creates ~/projects/branch-notes the moment
+    # it is installed, and a directory that already exists is not a clone. step_always
+    # because a machine that ran setup before this step existed must still pick it up.
+    step_always branch-notes core all  ensure_branch_notes
     step bn                 core all   setup_bn
     step_always "packages-$distro" core all install_platform_packages "$distro"
 

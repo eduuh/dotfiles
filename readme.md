@@ -163,6 +163,19 @@ If a file the stow tree owns already exists as a real file, it is moved aside to
 `<file>.bak-<timestamp>` and the stow is retried, instead of GNU Stow aborting
 the whole tree.
 
+### branch-notes
+
+`bn`'s notes store (`~/projects/branch-notes`) is a private repo, and it is cloned
+**before** the `bn` step for a reason that bit a fresh VM: installing bn starts
+`bn serve`, which creates that directory itself, and a directory that already
+exists is not a clone. Cloned late, the notes would sit in a plain local folder
+with no remote and never sync anywhere.
+
+If the directory is already there without a `.git` (a machine set up before this
+existed), setup adopts it: it clones alongside, moves the local files in — repo
+version winning, the local copy kept as `<name>.local-<timestamp>` — and swaps
+the clone into place.
+
 ### Private repo lists
 
 The split is by **visibility, not by category**: a repo GitHub already shows the

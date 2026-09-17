@@ -311,7 +311,7 @@ GH_PERSONAL_ACCOUNT="${GH_PERSONAL_ACCOUNT:-eduuh}"
 # Names only; the owner is always $GH_PERSONAL_ACCOUNT and is matched separately.
 # `notes` is deliberately absent: nothing clones eduuh/notes, and the `notes` that
 # DOES get cloned on a work machine is the work account's own — see below.
-PRIVATE_EDUUH_REPOS=(personal-notes bn atlas)
+PRIVATE_EDUUH_REPOS=(personal-notes bn atlas branch-notes)
 
 # Match on OWNER/NAME, never the bare repo name. A name-only match is a trap here:
 # personal-notes' setup-work-repos.sh clones edwinmuraya_microsoft/notes.git, and
@@ -598,6 +598,54 @@ _run_repo_install_script() {
     return 0
 }
 
+# ~/projects/<name> exists as a real directory that is NOT a repo — adopt it into a
+# fresh clone instead of giving up on it.
+#
+# This is not hypothetical: bn CREATES ~/projects/branch-notes (jobs/, a per-host
+# notes dir) the first time it runs, and its install.sh starts `bn serve`, so on a
+# fresh machine that directory is always there before the clone reaches it. The old
+# behaviour — track_failure "exists but is not a git repo" — left the notes store
+# permanently un-synced: bn happily wrote into a plain local directory that had no
+# remote and no history.
+#
+# Clone alongside, move the pre-existing local files in, and swap. The repo version
+# wins on a collision and the local copy is kept as <name>.local-<stamp>, matching
+# how _stow_with_backup resolves the same kind of conflict.
+_adopt_dir_into_clone() {
+    local repo="$1" dir="$2" name="$3"
+    local tmp="${dir}.adopt-$$"
+    local -a depth_args
+    depth_args=(${=$(_clone_depth_args "$name")})
+
+    echo "[$name] $dir exists but is not a git repo — adopting it into a fresh clone..."
+    if ! git clone --recurse-submodules "${depth_args[@]}" "$repo" "$tmp"; then
+        rm -rf "$tmp"
+        track_failure "$name" "Failed to clone $repo while adopting $dir"
+        return 1
+    fi
+
+    local stamp f base
+    stamp=$(date +%Y%m%d%H%M%S)
+    for f in "$dir"/*(ND) "$dir"/.*(ND); do
+        base="${f:t}"
+        [[ "$base" == "." || "$base" == ".." ]] && continue
+        if [[ -e "$tmp/$base" ]]; then
+            mv "$f" "$tmp/$base.local-$stamp" &&
+                echo "[$name]   $base also exists in the repo — local copy kept as $base.local-$stamp"
+        else
+            mv "$f" "$tmp/$base" && echo "[$name]   adopted $base"
+        fi
+    done
+
+    if ! rmdir "$dir" 2>/dev/null; then
+        rm -rf "$tmp"
+        track_failure "$name" "$dir still not empty after adopting — left untouched"
+        return 1
+    fi
+    mv "$tmp" "$dir" || { track_failure "$name" "Failed to move $tmp into place at $dir"; return 1; }
+    echo "[$name] adopted $dir into a clone of $repo"
+}
+
 _clone_single_repo() {
     local REPO="$1"
     local REPO_NAME=$(basename "$REPO" .git)
@@ -630,7 +678,7 @@ _clone_single_repo() {
                 fi
                 cd ~
             else
-                track_failure "$REPO_NAME" "$CLONE_DIR exists but is not a git repo — skipped"
+                _adopt_dir_into_clone "$REPO" "$CLONE_DIR" "$REPO_NAME" || return 1
             fi
         else
             if _is_windows_repo "$REPO_NAME"; then
@@ -858,6 +906,31 @@ ensure_personal_notes() {
         return 1
     fi
     setup_personal_notes_stow
+}
+
+# bn's notes store. Same HTTPS-through-gh reasoning as personal-notes above: it is
+# private to the eduuh account, so a work machine's SSH key cannot see it.
+BRANCH_NOTES_REMOTE="${BRANCH_NOTES_REMOTE:-https://github.com/eduuh/branch-notes.git}"
+
+# Clone (or update) branch-notes. Idempotent — safe for step_always.
+#
+# It runs BEFORE the bn step, and not from clone_repos, for the same reason
+# personal-notes does: bn writes into ~/projects/branch-notes as soon as it is
+# installed (install.sh starts `bn serve`), so a clone deferred to the background
+# projects step always arrives second and finds a non-repo directory sitting there.
+# Nothing cloned this repo at all before, which is how a fresh machine ended up
+# taking branch notes that were never committed anywhere.
+ensure_branch_notes() {
+    mkdir -p ~/projects
+
+    if [[ "$BRANCH_NOTES_REMOTE" == https://github.com/* ]]; then
+        _use_gh_personal_credentials || return 1
+    fi
+
+    if ! _clone_single_repo "$BRANCH_NOTES_REMOTE"; then
+        track_failure "branch-notes" "Failed to clone/update $BRANCH_NOTES_REMOTE"
+        return 1
+    fi
 }
 
 # A clone run has a SHAPE: plain, --personal, --work, or both. Each clones a
