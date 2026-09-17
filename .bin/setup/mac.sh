@@ -138,6 +138,7 @@ EOF
 setup_mac() {
     # Homebrew, brew bundle, and kanata are already called from setup.sh
     install_claude_code
+    install_copilot_cli
     install_playwright
     setup_mac_python
     # setup_symlinks is NOT called here any more: it is its own step_always in

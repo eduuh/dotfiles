@@ -1241,6 +1241,36 @@ install_claude_code() {
     fi
 }
 
+# GitHub Copilot CLI. Nothing installed it before, yet the rest of the setup assumes
+# it: .zshrc wraps `copilot` through bn, the stow tree owns ~/.copilot, and
+# `bn mcp init copilot` writes configs for it. A fresh machine got all of that
+# pointing at a binary that did not exist — `bn agent launch: exec copilot: No such
+# file or directory`.
+#
+# Homebrew has a cask; everywhere else it is the npm package, which needs the node
+# that install_nvm provides — so call this after it.
+install_copilot_cli() {
+    if command -v copilot &> /dev/null; then
+        echo "GitHub Copilot CLI is already installed."
+        return 0
+    fi
+
+    echo "Installing GitHub Copilot CLI..."
+    if [[ "$(uname)" == "Darwin" ]] && command -v brew &> /dev/null; then
+        brew install --cask copilot-cli || track_failure "copilot-cli" "Failed to install copilot-cli cask"
+        return 0
+    fi
+
+    if ! command -v npm &> /dev/null; then
+        track_failure "copilot-cli" "npm not on PATH — cannot install @github/copilot"
+        return 0
+    fi
+
+    if ! npm install -g @github/copilot; then
+        track_failure "copilot-cli" "Failed to install @github/copilot"
+    fi
+}
+
 install_rust() {
     if [[ $CODESPACES == "true" ]]; then
         echo "In a GitHub Codespace environment, skipping Rust installation."
