@@ -1599,9 +1599,18 @@ _stow_with_backup() {
     fi
     print -r -- "$out"
 
-    # "cannot stow <pkg file> over existing target <path> since …" → <path>, relative to $HOME
+    # Conflicting paths (relative to $HOME), in BOTH of stow's wordings. Only the
+    # 2.4.x one was matched before, so on Ubuntu 24.04 — which ships stow 2.3.1 —
+    # every conflict looked unrecoverable and the whole $HOME tree failed to stow
+    # over a stock /root/.bashrc.
+    #   2.4.x: "cannot stow <pkg file> over existing target <path> since …"
+    #   2.3.x: "  * existing target is neither a link nor a directory: <path>"
+    #          "  * existing target is not owned by stow: <path>"
     local -a conflicts
-    conflicts=(${(f)"$(print -r -- "$out" | sed -n 's/.*over existing target \(.*\) since.*/\1/p')"})
+    conflicts=(${(f)"$(print -r -- "$out" | sed -n \
+        -e 's/.*over existing target \(.*\) since.*/\1/p' \
+        -e 's/.*existing target is neither a link nor a directory: \(.*\)$/\1/p' \
+        -e 's/.*existing target is not owned by stow: \(.*\)$/\1/p')"})
     if (( ${#conflicts} == 0 )); then
         track_failure "$label" "stow failed for $package (no recoverable conflicts)"
         return 1
