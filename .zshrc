@@ -68,9 +68,13 @@ alias grep='grep --color=auto'
 alias ll='ls -alF'
 alias la='ls -A'
 alias l='ls -CF'
-yolo() { bn note >/dev/null 2>&1; command claude --dangerously-skip-permissions "$@"; }
-claude() { bn note >/dev/null 2>&1; command claude "$@"; }
-copilot() { bn note >/dev/null 2>&1; git rev-parse --is-inside-work-tree >/dev/null 2>&1 && bn mcp init copilot >/dev/null 2>&1; command copilot --yolo "$@"; }
+yolo() { claude --dangerously-skip-permissions "$@"; }
+# bn owns the claude/copilot wrappers now (agent-launch routing, @agent sigils,
+# `agency`, and the BN_SHELL_WRAPPERS marker `bn doctor` checks for). Hand-rolled
+# copies here only ever drifted behind it. ~9ms, so no lazy-load needed.
+if command -v bn >/dev/null 2>&1; then
+  source <(bn shell-init zsh)
+fi
 alias po="$HOME/.bin/pkg-open.sh"
 alias nvimd='nvim -c "DiffviewOpen origin/main"'
 alias n8n-up='(cd ~/projects/n8n && make up)'
