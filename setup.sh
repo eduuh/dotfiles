@@ -109,7 +109,7 @@ _projects_launch() {
 install_platform_packages() {
     local distro="$1"
     case "$distro" in
-        ubuntu|debian) source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; update_system; install_common_packages; install_ubuntu_specific_packages ;;
+        ubuntu|debian) source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; update_system; install_common_packages; install_ubuntu_specific_packages; setup_openssh_server ;;
         arch)          source "$SCRIPT_DIR/.bin/setup/arch.sh";   install_yay; install_common_packages_arch; install_arch_specific_packages ;;
         fedora)        source "$SCRIPT_DIR/.bin/setup/fedora.sh"; install_fedora_packages ;;
         codespace)     source "$SCRIPT_DIR/.bin/setup/ubuntu.sh"; update_system; install_common_packages ;;

@@ -74,6 +74,44 @@ install_ubuntu_specific_packages() {
     fi
 }
 
+# bn's Dev Tunnel SSH jobs (bn run tunnel-host / tunnel-connect) need the sshd
+# binary, but run their own key-only sshd on 127.0.0.1:2222 behind the tunnel.
+# The system ssh service stays disabled: under WSL mirrored networking a port-22
+# listener would be exposed on the Windows host's network.
+setup_openssh_server() {
+    if ! command -v apt-get >/dev/null 2>&1 || ! command -v systemctl >/dev/null 2>&1 \
+        || [[ "$(ps -p 1 -o comm=)" != "systemd" ]]; then
+        echo "Skipping openssh-server — needs apt and systemd."
+        return 0
+    fi
+
+    local -a units=(ssh.service)
+    systemctl cat ssh.socket &> /dev/null && units+=(ssh.socket)
+
+    if dpkg -s openssh-server &> /dev/null \
+        && ! systemctl is-enabled --quiet "${units[@]}" 2>/dev/null \
+        && ! systemctl is-active --quiet "${units[@]}" 2>/dev/null; then
+        echo "openssh-server is installed and the ssh service is off."
+        return 0
+    fi
+
+    if ! dpkg -s openssh-server &> /dev/null; then
+        echo "Installing openssh-server..."
+        if ! sudo apt-get install -y openssh-server; then
+            track_failure "apt" "Failed to install: openssh-server"
+            return 1
+        fi
+        # The package enables ssh on install; re-read which units now exist.
+        units=(ssh.service)
+        systemctl cat ssh.socket &> /dev/null && units+=(ssh.socket)
+    fi
+
+    echo "Disabling the system ssh service (${units[*]})..."
+    if ! sudo systemctl disable --now "${units[@]}"; then
+        track_failure "ssh" "Failed to disable: ${units[*]}"
+    fi
+}
+
 clean_unneeded_software() {
     echo "Cleaning up unneeded software..."
     sudo apt autoremove -y || track_failure "apt" "Failed to autoremove packages"
