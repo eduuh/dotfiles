@@ -19,6 +19,12 @@
 	helper =
 	helper = !gh auth git-credential
 
+# bn tunnels (tunnel-host / tunnel-connect) trust the SSH keys on this GitHub account: a host
+# authorizes github.com/<user>.keys and a client adds its key there. Set here so every machine
+# agrees without relying on whichever account gh happens to be signed in as.
+[bn]
+	tunnelGithubUser = eduuh
+
 # Machine- and work-specific config: other credential helpers, internal hosts,
 # per-machine paths. Kept out of this public repo — the file is stowed from the
 # private notes repo, and git silently ignores the include when it is absent.
