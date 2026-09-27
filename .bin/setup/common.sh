@@ -530,6 +530,26 @@ _regular_clone_target() {
 # name lands in public dotfiles.
 typeset -gA SHALLOW_CLONE_DEPTH
 
+# Repos to clone PARTIAL, as name -> filter (e.g. blob:none). A blobless clone fetches every
+# commit and tree but no file contents; git downloads a file's contents the first time something
+# needs them (a checkout, a diff). For a huge monorepo that turns an hours-long first clone of the
+# whole history into minutes, and later fetches stay small. Empty here; the private repo lists
+# append to it, like SHALLOW_CLONE_DEPTH, so no work repo name lands in public dotfiles.
+typeset -gA PARTIAL_CLONE_FILTER
+
+# Bare repos whose remote.origin.fetch should not be every branch, as name -> refspec
+# (e.g. '+refs/heads/main:refs/remotes/origin/main'). A repo with tens of thousands of branches
+# spends minutes negotiating all of them on every fetch; fetch other branches on demand instead.
+# Empty here; set from the private repo lists. Default (unset): all branches.
+typeset -gA FETCH_REFSPEC
+
+# Clone flag for $1's partial-clone filter, empty for a full clone.
+_clone_filter_args() {
+    local filter="${PARTIAL_CLONE_FILTER[$1]:-}"
+    [[ -z "$filter" ]] && return 0
+    echo "--filter=$filter"
+}
+
 # Clone flags for $1, empty for a normal full clone.
 #
 # --depth implies --single-branch, and that is LEFT IN PLACE deliberately. Adding
@@ -688,6 +708,7 @@ _clone_single_repo() {
             fi
             local -a depth_args
             depth_args=(${=$(_clone_depth_args "$REPO_NAME")})
+            depth_args+=(${=$(_clone_filter_args "$REPO_NAME")})
             if (( ${#depth_args} )); then
                 echo "[$REPO_NAME] Cloning (regular, shallow ${depth_args[2]}) → $CLONE_DIR..."
             else
@@ -730,7 +751,9 @@ _clone_single_repo() {
             # implementation of "bare clone + default-branch worktree". wt uses
             # the same regular-repos.zsh classification, so it agrees this is bare.
             echo "[$REPO_NAME] Cloning (bare) via wt..."
-            "$_COMMON_DIR/../wt" clone "$REPO" || track_failure "$REPO_NAME" "wt clone failed for $REPO"
+            WT_CLONE_FILTER="${PARTIAL_CLONE_FILTER[$REPO_NAME]:-}" \
+            WT_FETCH_REFSPEC="${FETCH_REFSPEC[$REPO_NAME]:-}" \
+                "$_COMMON_DIR/../wt" clone "$REPO" || track_failure "$REPO_NAME" "wt clone failed for $REPO"
             # wt clone always checks out the default branch into its own dir under
             # $WT_BASE; there's exactly one at this point, so just glob for it.
             ACTIVE_WORKTREE=$(find "$WT_BASE" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)

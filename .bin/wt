@@ -36,10 +36,14 @@ mkdir -p "$root/bare" "$root/worktree"
 
 if [[ ! -d "$bare_dir" ]]; then
     echo "[wt bootstrap] bare clone $repo → $bare_dir"
-    git clone --bare "$repo" "$bare_dir"
+    # WT_CLONE_FILTER (e.g. blob:none) makes it a partial clone; set per repo by dotfiles'
+    # PARTIAL_CLONE_FILTER. git records the filter and the promisor remote itself.
+    git clone --bare ${WT_CLONE_FILTER:+--filter=$WT_CLONE_FILTER} "$repo" "$bare_dir"
 fi
 
-git --git-dir="$bare_dir" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+# WT_FETCH_REFSPEC narrows what a plain `git fetch` updates (dotfiles' FETCH_REFSPEC); the
+# default fetches every branch into refs/remotes/origin/*.
+git --git-dir="$bare_dir" config remote.origin.fetch "${WT_FETCH_REFSPEC:-+refs/heads/*:refs/remotes/origin/*}"
 git --git-dir="$bare_dir" fetch origin
 
 default_branch="$(git --git-dir="$bare_dir" symbolic-ref --short HEAD 2>/dev/null || echo main)"
