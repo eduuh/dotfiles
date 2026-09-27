@@ -1090,11 +1090,27 @@ _run_personal_setup_from_personal_notes() {
 _run_work_setup_from_personal_notes() {
     local work_script="${WORK_SETUP_SCRIPT:-$HOME/projects/personal-notes/scripts/setup-work-repos.sh}"
     if [[ ! -f "$work_script" ]]; then
+        # --work was asked for: a missing script is a failure, not a quiet skip. Without it the
+        # machine gets no work repos and no branch-notes-work, and nothing said so (2026-09-27).
+        track_failure "work-repos" "--work: $work_script not found (is personal-notes cloned? gh auth login, then re-run setup.sh --work)"
         return 0
     fi
     echo "Sourcing work setup script: $work_script"
     source "$work_script"
+    _check_work_notes_repo "$work_script"
     echo "Work repo setup finished."
+}
+
+# A work machine needs branch-notes-work: bn's private jobs (1JS build.sh, the build-node
+# setup, pool schedules) live there. The work script clones it; say so loudly when it did not
+# end up a git repo, with the command that fixes it.
+_check_work_notes_repo() {
+    local work_script="$1" link="$HOME/projects/branch-notes-work"
+    if git -C "$link" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "✓ [branch-notes-work] $(git -C "$link" log --oneline -1 2>/dev/null | cut -c1-60)"
+    else
+        track_failure "branch-notes-work" "not cloned at $link. The work script clones it with the work gh account; check \`gh auth status\` lists that account, then re-run setup.sh --work (see $work_script)"
+    fi
 }
 
 # Work-machine tool installs. Runs only via `setup.sh --work`.
