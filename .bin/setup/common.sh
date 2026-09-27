@@ -465,9 +465,12 @@ setup_ado_credential_helper() {
     # A path with a space would need quoting git does not do for helper paths, so
     # spell the exe as a shell command in that case. Bare path otherwise, which is
     # what git documents and what shows up unmangled in `git config --get-all`.
+    # Single quotes, not double: git's config parser strips unescaped double quotes
+    # from a value, so !"/mnt/c/Program Files/..." reached the shell unquoted and
+    # split at the space ("/mnt/c/Program: not found", 2026-09-27, CPC-edwin-ANBKW).
     local helper_value="$gcm"
     case "$gcm" in
-        *" "*) helper_value="!\"$gcm\"" ;;
+        *" "*) helper_value="!'$gcm'" ;;
     esac
 
     local dest="$HOME/.gitconfig-ado"
