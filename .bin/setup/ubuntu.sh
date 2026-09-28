@@ -196,6 +196,7 @@ setup_ubuntu() {
     fi
     install_lazygit
     install_claude_code
+    install_copilot_cli
     install_playwright
     setup_python
     # setup_symlinks is NOT called here any more: it is its own step_always in
@@ -205,6 +206,7 @@ setup_ubuntu() {
 setup_codespace() {
     install_fzf
     install_claude_code
+    install_copilot_cli
     setup_python
     # setup_symlinks is NOT called here any more: it is its own step_always in
     # setup.sh, so a failure in this function can no longer cost every symlink.
