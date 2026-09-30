@@ -38,6 +38,9 @@ install_ubuntu_specific_packages() {
         # every yank unless a provider exists; under WSLg wl-copy/wl-paste sync
         # both ways with the Windows clipboard. xclip is the X11 fallback.
         wl-clipboard xclip
+        # libicu for .NET tools. The Dev Tunnels CLI (bn's tunnel mesh) dies at start with
+        # "Couldn't find a valid ICU package" without it; libicu-dev pulls the right libicuNN.
+        libicu-dev
     )
 
     for pkg in "${ubuntu_packages[@]}"; do
