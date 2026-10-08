@@ -37,3 +37,7 @@
 # .gitconfig-local so setup never writes over a stow target. Absent off WSL.
 [include]
 	path = ~/.gitconfig-ado
+[format]
+	pretty = oneline
+[log]
+	abbrevCommit = true
