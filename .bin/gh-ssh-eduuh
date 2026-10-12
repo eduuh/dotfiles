@@ -1,0 +1,65 @@
+#!/bin/zsh
+# gh-ssh-eduuh - give the personal GitHub account (eduuh) its own SSH key.
+#
+# A GitHub SSH key belongs to exactly one account, and ~/.ssh/id_ed25519 may already
+# sit on the work account. So eduuh gets a second key, reached through the host alias
+# `github-eduuh`; git rewrites https://github.com/eduuh/ to it. No gh token or keyring
+# is involved, so it works with a locked keyring and in parallel agents.
+#
+# Idempotent. Writes only per-machine files: ~/.ssh/config and ~/.config/bn/gitconfig-ssh
+# (which ~/.gitconfig includes; git ignores it when absent).
+set -eu
+
+ACCOUNT="eduuh"
+ALIAS="github-eduuh"
+KEY="$HOME/.ssh/id_ed25519_eduuh"
+SSH_CONFIG="$HOME/.ssh/config"
+GIT_INCLUDE="$HOME/.config/bn/gitconfig-ssh"
+MARK_BEGIN="# >>> github-eduuh >>>"
+MARK_END="# <<< github-eduuh <<<"
+
+mkdir -p "$HOME/.ssh" "$HOME/.config/bn"
+chmod 700 "$HOME/.ssh"
+
+if [ ! -f "$KEY" ]; then
+  ssh-keygen -t ed25519 -C "31909722+eduuh@users.noreply.github.com" -f "$KEY" -N "" >/dev/null
+  echo "generated $KEY"
+fi
+
+touch "$SSH_CONFIG"; chmod 600 "$SSH_CONFIG"
+if ! grep -qF "$MARK_BEGIN" "$SSH_CONFIG"; then
+  # Match the Host block must come before broader ones; ssh uses first match per option.
+  tmp=$(mktemp)
+  {
+    echo "$MARK_BEGIN"
+    echo "Host $ALIAS"
+    echo "  HostName github.com"
+    echo "  User git"
+    echo "  IdentityFile $KEY"
+    echo "  IdentitiesOnly yes"
+    echo "$MARK_END"
+    echo
+    cat "$SSH_CONFIG"
+  } > "$tmp"
+  cat "$tmp" > "$SSH_CONFIG"; rm -f "$tmp"
+  echo "added Host $ALIAS to $SSH_CONFIG"
+fi
+
+who=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T "git@$ALIAS" 2>&1 \
+        | sed -n 's/^Hi \([^!]*\)!.*/\1/p' || true)
+if [ "$who" = "$ACCOUNT" ]; then
+  # Written only once the key works, so an unregistered key never breaks https git.
+  cat > "$GIT_INCLUDE" <<EOF
+[url "git@$ALIAS:$ACCOUNT/"]
+	insteadOf = https://github.com/$ACCOUNT/
+	insteadOf = git@github.com:$ACCOUNT/
+EOF
+  echo "OK: $ALIAS authenticates as $ACCOUNT"
+else
+  rm -f "$GIT_INCLUDE"
+  echo "Key not on $ACCOUNT yet (ssh says: '${who:-no greeting}'). Add this public key at"
+  echo "  https://github.com/settings/ssh/new   (signed in as $ACCOUNT), then re-run:"
+  echo
+  cat "$KEY.pub"
+  exit 1
+fi

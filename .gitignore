@@ -32,3 +32,6 @@
 .copilot/*
 !.copilot/hooks/
 !.copilot/hooks/**
+
+# gh holds plaintext OAuth tokens here; never track it.
+.config/gh/hosts.yml
