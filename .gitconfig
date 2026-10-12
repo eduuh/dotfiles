@@ -31,6 +31,11 @@
 [include]
 	path = ~/.gitconfig-local
 
+# Personal repos go over SSH with an eduuh-only key. .bin/gh-ssh-eduuh writes this
+# per-machine file once the key authenticates; git ignores the include when absent.
+[include]
+	path = ~/.config/bn/gitconfig-ssh
+
 # Azure DevOps credential helper, GENERATED per machine by setup
 # (setup_ado_credential_helper) because it points at the Windows-side Git Credential
 # Manager, whose path depends on how Windows git was installed. Separate from
