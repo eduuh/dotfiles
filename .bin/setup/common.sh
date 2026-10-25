@@ -1674,18 +1674,21 @@ setup_python() {
 }
 
 install_nvm() {
-    if [ -d "$HOME/.nvm" ]; then
+    if [ -s "$HOME/.nvm/nvm.sh" ]; then
         echo "NVM is already installed."
         return 0
     fi
 
     echo "Installing NVM..."
+    # The installer defaults to $XDG_CONFIG_HOME/nvm when that is set, but
+    # .zshrc and the sourcing below expect ~/.nvm. It needs the dir to exist.
+    export NVM_DIR="$HOME/.nvm"
+    mkdir -p "$NVM_DIR"
     if ! curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION:-v0.40.1}/install.sh" | bash -s -- --no-use --silent; then
         track_failure "nvm" "Failed to install NVM"
         return 0
     fi
 
-    export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
     [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 
