@@ -1,5 +1,13 @@
 #!/bin/zsh
 
-# Fixed path using $HOME
-sudo kanata --cfg "$HOME/.config/keyboard/colemak.kbd"
+# Run kanata in the foreground with the dotfiles layout. macOS needs root for the
+# input devices; on Linux the input/uinput groups (setup_kanata_linux) cover it.
 
+# ~/.bin precedes /usr/bin on Linux — drop it so `kanata` is the real binary, not this.
+path=(${path:#$HOME/.bin})
+
+if [[ "$(uname)" == "Darwin" ]]; then
+    sudo kanata --cfg "$HOME/.config/keyboard/colemak.kbd"
+else
+    kanata --cfg "$HOME/.config/keyboard/colemak.kbd"
+fi
