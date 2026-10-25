@@ -268,6 +268,17 @@ detect_distro() {
         echo "termux"
     elif [ -f /etc/os-release ]; then
         . /etc/os-release
+        # Derivatives (Omarchy, EndeavourOS, Pop!_OS, …) report their own ID but
+        # name their base in ID_LIKE — fold them onto the base we have setup for.
+        case "$ID" in
+            ubuntu|debian|arch|fedora) echo "$ID"; return ;;
+        esac
+        local base
+        for base in ${=ID_LIKE:-}; do
+            case "$base" in
+                ubuntu|debian|arch|fedora) echo "$base"; return ;;
+            esac
+        done
         echo "$ID"
     elif [ "$(uname)" = "Darwin" ]; then
         echo "darwin"
