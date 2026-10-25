@@ -1507,8 +1507,22 @@ setup_bn() {
         setup_repo "https://github.com/eduuh/bn.git" --core || return 1
     else
         setup_repo "git@github.com:eduuh/bn.git" || return 1
+        reload_tmux_config
     fi
     verify_bn_release
+}
+
+# A tmux server started before install.sh linked ~/.tmux.conf keeps whatever it loaded at
+# start (Omarchy's ~/.config/tmux/tmux.conf on a fresh machine), so none of bn's bindings
+# apply until it restarts. Load the new config into it now.
+reload_tmux_config() {
+    tmux info &> /dev/null || return 0   # no server running: the next one reads it itself
+    [[ -e "$HOME/.tmux.conf" ]] || return 0
+    if tmux source-file "$HOME/.tmux.conf"; then
+        echo "[tmux] reloaded ~/.tmux.conf into the running server"
+    else
+        track_failure "tmux" "Failed to reload ~/.tmux.conf into the running tmux server"
+    fi
 }
 
 install_playwright() {
