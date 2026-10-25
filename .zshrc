@@ -13,6 +13,9 @@ elif [ -f "/usr/local/bin/brew" ]; then
     eval "$(/usr/local/bin/brew shellenv)"
     # Add GNU coreutils to PATH
     export PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+elif [[ -f "$HOME/.config/systemd/user/kanata.service" ]]; then
+    alias kanata-restart="systemctl --user restart kanata.service"
+    alias kanata-log="journalctl --user -u kanata.service -e"
 fi
 
 # Generated completions live here and are AUTOLOADED — zsh reads a `_name` file
