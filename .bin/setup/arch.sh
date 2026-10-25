@@ -114,7 +114,15 @@ install_arch_specific_packages() {
     for pkg in "${arch_packages[@]}"; do
         if ! yay -Qi "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
-            if ! yay -S --noconfirm "$pkg"; then
+            if yay -S --noconfirm "$pkg"; then
+                continue
+            fi
+            # Omarchy pins pacman to a snapshot mirror that can drop files its
+            # database still lists (d2 404'd). mise fetches upstream releases.
+            if command -v mise &> /dev/null && mise registry "$pkg" &> /dev/null \
+                && mise use -g "$pkg@latest"; then
+                echo "Installed $pkg via mise instead."
+            else
                 track_failure "yay" "Failed to install: $pkg"
             fi
         else
