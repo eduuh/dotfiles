@@ -107,7 +107,8 @@ install_arch_specific_packages() {
     echo "Installing Arch-specific packages..."
 
     local arch_packages=(
-        man-db man-pages libsecret acpi d2 bat lua curl kanata 1password
+        man-db man-pages libsecret acpi d2 bat lua curl kanata 1password gcc python
+        bubblewrap socat strace shfmt
         wl-clipboard xclip   # clipboard provider for nvim's unnamedplus
     )
 

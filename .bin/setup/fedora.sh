@@ -56,7 +56,8 @@ fedora_pkg_install() {
 # layered here — install_neovim/install_fzf fetch newer builds into ~/.local/bin.
 install_fedora_packages() {
     local fedora_extras=(
-        gcc bison pkgconf-pkg-config
+        gcc bison pkgconf-pkg-config python3
+        bubblewrap socat strace shfmt
         libevent-devel ncurses-devel
         man-db man-pages
         libsecret curl fd-find bat

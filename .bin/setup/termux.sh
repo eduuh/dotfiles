@@ -31,7 +31,7 @@ install_common_packages() {
 
 install_termux_specific_packages() {
     echo "Installing Termux-specific packages..."
-    local packages=(fzf zoxide starship neovim lazygit)
+    local packages=(fzf zoxide starship neovim lazygit clang nodejs-lts python)
     for p in "${packages[@]}"; do
         if ! pkg list-installed 2>/dev/null | grep -q "^$p/"; then
             echo "Installing $p..."
