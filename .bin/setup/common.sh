@@ -834,7 +834,13 @@ setup_nvim() {
         fi
         cd "$wt_main" || return 1
         # Mason starts at VimEnter; running bootstrap earlier blocks that event.
-        nvim --headless -c 'autocmd VimEnter * ++once luafile bootstrap.lua' || return 1
+        if ! nvim --headless -c 'autocmd VimEnter * ++once luafile bootstrap.lua'; then
+            local magenta="${XDG_DATA_HOME:-$HOME/.local/share}/nvim/lazy/magenta.nvim"
+            [[ -f "$magenta/package.json" && ! -f "$magenta/dist/magenta.mjs" ]] || return 1
+            # Repair an upstream lockfile mismatch only when its bundle is missing.
+            ( cd "$magenta" && npm install --omit=dev --no-audit --no-fund && npm run build ) || return 1
+            nvim --headless -c 'autocmd VimEnter * ++once luafile bootstrap.lua' || return 1
+        fi
         nvim --headless -c "lua if vim.v.errmsg ~= '' then print(vim.v.errmsg); vim.cmd('cquit 1') end" -c 'qall!'
     )
 }
