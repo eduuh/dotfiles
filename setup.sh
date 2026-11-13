@@ -172,6 +172,9 @@ main() {
 
     step "platform-$distro" core all   run_platform_setup "$distro"
 
+    # Editor setup cannot depend on the detached, cached project-clone step.
+    step_always nvim-config core all setup_nvim
+
     # personal-notes always, and synchronously: the detached project clone below is
     # skipped once its marker is recorded, and the work/personal repo setup scripts it
     # runs live inside personal-notes — so this must land first, on every run.

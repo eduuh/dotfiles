@@ -598,25 +598,17 @@ _apply_windows_clone_config() {
     git -C "$dir" config core.autocrlf true
 }
 
-# Run a repo's own ./install.sh if it has one — the generic hook that lets any
-# cloned repo (bn, nvim, or a future addition) bootstrap its own tools/build step
-# without dotfiles needing repo-specific logic. Idempotent by convention: every
-# install.sh here is written to be safe to re-run (incremental cargo builds,
-# skip-if-present checks, etc.), so this always runs after a clone/update rather
-# than trying to detect "already installed".
-# Conventional names for a repo's own dependency installer, tried in order. This
-# used to look for install.sh ONLY, so nvim — which ships install-deps.sh — was
-# cloned without ever installing its dependencies, silently. Nothing failed; the
-# hook just no-opped, and the comment in _setup_nvim_config below confidently
-# claimed the opposite.
-#
-# Run non-interactively: clone_repos calls this from a background job with no tty,
-# so an installer that needs sudo will fail fast rather than hang waiting for a
-# password nobody can type. Re-run it by hand on a fresh machine if that happens.
+# Conventional dependency installers, tried in order after a clone/update.
+# These must be idempotent and non-interactive: project clones run in background.
 _REPO_INSTALL_SCRIPTS=(install.sh install-deps.sh)
 
 _run_repo_install_script() {
     local repo_path="$1" repo_name="$2" script
+    if [[ "$repo_name" == "nvim" ]]; then
+        # Its shell installer only supports apt/Homebrew; bootstrap.lua is portable.
+        setup_nvim
+        return $?
+    fi
     for script in "${_REPO_INSTALL_SCRIPTS[@]}"; do
         [ -f "$repo_path/$script" ] || continue
         echo "[$repo_name] Running $script..."
@@ -773,29 +765,84 @@ _clone_single_repo() {
             ACTIVE_WORKTREE=$(find "$WT_BASE" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)
         fi
 
-        # nvim is a bare+worktree repo: point ~/.config/nvim at its main worktree
-        # *before* running its installer, since some ecosystem installers assume
-        # the config dir is already in place.
         if [ -n "$ACTIVE_WORKTREE" ]; then
-            [[ "$REPO_NAME" == "nvim" ]] && _setup_nvim_config
             _run_repo_install_script "$ACTIVE_WORKTREE" "$REPO_NAME"
         fi
     fi
 }
 
-# Link ~/.config/nvim → the nvim main worktree. Safe to call repeatedly; no-ops if
-# the worktree isn't present yet. Ecosystem deps (tree-sitter, vectorcode, mcp-hub)
-# are installed by nvim's own install-deps.sh, run generically by
-# _run_repo_install_script right after the clone.
 _setup_nvim_config() {
-    local wt_main=~/projects/worktree/nvim/main
+    local wt_main="$HOME/projects/worktree/nvim/main"
+    local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+    local config_path="$config_home/nvim"
     if [ ! -d "$wt_main" ]; then
-        echo "[nvim] main worktree not found at $wt_main — skipping config link."
-        return 0
+        echo "[nvim] main worktree not found at $wt_main." >&2
+        return 1
     fi
-    mkdir -p ~/.config
-    ln -sfn "$wt_main" ~/.config/nvim
-    echo "[nvim] Linked ~/.config/nvim → $wt_main"
+    [[ -L "$config_path" && "$config_path" -ef "$wt_main" ]] && return 0
+    mkdir -p "$config_home" || return 1
+    if [[ -e "$config_path" || -L "$config_path" ]]; then
+        local backup="${config_path}.backup-$(date +%Y%m%d-%H%M%S)-$$"
+        [[ ! -e "$backup" && ! -L "$backup" ]] || return 1
+        mv "$config_path" "$backup" || return 1
+        echo "[nvim] Previous config saved at $backup"
+    fi
+    ln -s "$wt_main" "$config_path" || return 1
+    echo "[nvim] Linked $config_path → $wt_main"
+}
+
+setup_nvim() {
+    local wt_main="$HOME/projects/worktree/nvim/main"
+    if [[ ! -d "$wt_main" ]]; then
+        bn wt clone https://github.com/eduuh/nvim.git || return 1
+    fi
+    if [[ ! -f "$wt_main/init.lua" || ! -f "$wt_main/bootstrap.lua" ]]; then
+        echo "[nvim] Config or bootstrap.lua missing in $wt_main." >&2
+        return 1
+    fi
+    _setup_nvim_config || return 1
+
+    (
+        path=("$APP_BIN_DIR" "$HOME/.cargo/bin" $path)
+        [[ -s "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+        [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]] && source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+        if ! command -v nvim >/dev/null 2>&1 ||
+            ! nvim --headless -u NONE -c "lua if vim.fn.has('nvim-0.12') == 0 then vim.cmd('cquit 1') end" -c 'qall!'; then
+            case "$(detect_distro)" in
+                darwin) brew install neovim ;;
+                termux) pkg install -y neovim ;;
+                *) install_neovim ;;
+            esac || return 1
+        fi
+        local bin
+        for bin in nvim git cc make node npm; do
+            command -v "$bin" >/dev/null 2>&1 || {
+                echo "[nvim] Required command missing: $bin" >&2
+                return 1
+            }
+        done
+        nvim --headless -u NONE -c "lua if vim.fn.has('nvim-0.12') == 0 then vim.cmd('cquit 1') end" -c 'qall!' || {
+            echo "[nvim] Neovim 0.12 or newer is required." >&2
+            return 1
+        }
+        if ! command -v tree-sitter >/dev/null 2>&1; then
+            if [[ "${TARGET:-}" == "termux" ]]; then
+                cargo install --locked --root "$HOME/.local" tree-sitter-cli || return 1
+            else
+                npm install --global --prefix "$HOME/.local" tree-sitter-cli || return 1
+            fi
+        fi
+        cd "$wt_main" || return 1
+        # Mason starts at VimEnter; running bootstrap earlier blocks that event.
+        if ! nvim --headless -c 'autocmd VimEnter * ++once luafile bootstrap.lua'; then
+            local magenta="${XDG_DATA_HOME:-$HOME/.local/share}/nvim/lazy/magenta.nvim"
+            [[ -f "$magenta/package.json" && ! -f "$magenta/dist/magenta.mjs" ]] || return 1
+            # Repair an upstream lockfile mismatch only when its bundle is missing.
+            ( cd "$magenta" && npm install --omit=dev --no-audit --no-fund && npm run build ) || return 1
+            nvim --headless -c 'autocmd VimEnter * ++once luafile bootstrap.lua' || return 1
+        fi
+        nvim --headless -c "lua if vim.v.errmsg ~= '' then print(vim.v.errmsg); vim.cmd('cquit 1') end" -c 'qall!'
+    )
 }
 
 # Provision one branch-notes-style repo on Windows + symlink under ~/projects/.
@@ -990,8 +1037,8 @@ _projects_mark_done() {
 }
 
 # Clone the long-tail project repos. personal-notes is deliberately NOT in this
-# list: ensure_personal_notes clones it up front and synchronously, because the
-# work/personal setup scripts below live inside it.
+# list: ensure_personal_notes clones it synchronously for the hooks below.
+# Neovim is also synchronous, through setup_nvim in setup.sh.
 clone_repos() {
     cd ~
     mkdir -p ~/projects ~/projects/bare ~/projects/worktree
@@ -1005,7 +1052,6 @@ clone_repos() {
         # Toolchain — what every machine needs to be usable, work or personal.
         REPOSITORIES=(
             "git@github.com:eduuh/dotfiles.git"
-            "git@github.com:eduuh/nvim.git"
             "git@github.com:eduuh/eduuh.git"
             "git@github.com:eduuh/bn.git"
             "git@github.com:eduuh/atlas.git"

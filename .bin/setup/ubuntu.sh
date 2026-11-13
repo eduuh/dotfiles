@@ -16,7 +16,8 @@ update_system() {
 install_common_packages() {
     echo "Installing common packages..."
 
-    for pkg in "${common_software[@]}"; do
+    local packages=("${common_software[@]}" build-essential python3-venv bubblewrap socat strace shfmt)
+    for pkg in "${packages[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
             if ! sudo apt-get install -y "$pkg"; then
