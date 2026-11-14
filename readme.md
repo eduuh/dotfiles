@@ -99,6 +99,22 @@ them up automatically.
 
 On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
+### Password managers and VPN on Arch
+
+Arch setup keeps 1Password installed and also installs `nordpass-bin` and
+`surfshark-client` from the AUR. The NordPass CLI (`np`) comes from
+[NordPass's official installer](https://downloads.npass.app/cli/install.sh) and
+lives in `~/.local/bin`.
+
+Every setup run checks for the CLI and enables and starts `surfsharkd2.service`
+if needed, even when the platform setup step was already completed. Setup
+doesn't sign you in or configure a VPN connection.
+
+Open NordPass and Surfshark to sign in. For CLI access, run `np signin` followed
+by `np unlock`. Import 1Password items through NordPass settings and verify
+them before removing 1Password. Export files are unencrypted; delete them after
+the import. VPN connection, auto-connect and kill switch choices stay manual.
+
 ### The Windows side
 
 On WSL, dotfiles configures Linux — but half the machine is Windows, and none of
