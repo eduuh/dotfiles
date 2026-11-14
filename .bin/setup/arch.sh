@@ -103,11 +103,49 @@ install_common_packages_arch() {
     done
 }
 
+install_nordpass_cli() {
+    local install_dir="$HOME/.local/bin"
+    if [[ -x "$install_dir/np" ]]; then
+        echo "NordPass CLI is already installed."
+        return 0
+    fi
+
+    local installer
+    installer=$(mktemp) || {
+        track_failure "nordpass-cli" "Failed to create installer download"
+        return 0
+    }
+
+    # The official installer verifies its signed manifest and binary checksum.
+    if ! { curl --proto '=https' --tlsv1.2 -fsSL https://downloads.npass.app/cli/install.sh -o "$installer" &&
+        NORDPASS_CLI_INSTALL_DIR="$install_dir" bash "$installer"; }; then
+        track_failure "nordpass-cli" "Failed to install NordPass CLI"
+    fi
+    rm -f -- "$installer"
+}
+
+setup_surfshark_linux() {
+    if ! command -v surfshark &> /dev/null; then
+        track_failure "surfshark" "Surfshark binary not found — is the AUR package installed?"
+        return 0
+    fi
+
+    if systemctl is-enabled --quiet surfsharkd2.service &&
+        systemctl is-active --quiet surfsharkd2.service; then
+        return 0
+    fi
+
+    if ! { sudo systemctl daemon-reload &&
+        sudo systemctl enable --now surfsharkd2.service; }; then
+        track_failure "surfshark" "Failed to enable the Surfshark service"
+    fi
+}
+
 install_arch_specific_packages() {
     echo "Installing Arch-specific packages..."
 
     local arch_packages=(
-        man-db man-pages libsecret acpi d2 bat lua curl kanata 1password gcc python
+        man-db man-pages libsecret acpi d2 bat lua curl kanata 1password nordpass-bin surfshark-client gcc python
         bubblewrap socat strace shfmt
         kdenlive obs-studio
         wl-clipboard xclip   # clipboard provider for nvim's unnamedplus
@@ -131,6 +169,9 @@ install_arch_specific_packages() {
             echo "$pkg is already installed."
         fi
     done
+
+    install_nordpass_cli
+    setup_surfshark_linux
 }
 
 setup_arch() {
