@@ -1809,10 +1809,11 @@ _prevent_stow_folding() {
 # local file up instead and let the tracked version win.
 _stow_with_backup() {
     local stow_dir="$1" package="$2" label="$3"
+    shift 3
     cd "$stow_dir" || { track_failure "$label" "no such directory: $stow_dir"; return 1; }
 
     local out
-    if out=$(stow -vt "$HOME" "$package" 2>&1); then
+    if out=$(stow -vt "$HOME" "$@" "$package" 2>&1); then
         [[ -n "$out" ]] && print -r -- "$out"
         return 0
     fi
@@ -1844,8 +1845,39 @@ _stow_with_backup() {
         fi
     done
 
-    if ! stow -vt "$HOME" "$package"; then
+    if ! stow -vt "$HOME" "$@" "$package"; then
         track_failure "$label" "stow failed for $package after backing up conflicts"
+        return 1
+    fi
+}
+
+setup_hyprland() {
+    local dotfiles_dir="$1" hypr_dir="$HOME/.config/hypr"
+    command -v omarchy &> /dev/null || return 0
+
+    mkdir -p "$hypr_dir" || return 1
+    _stow_with_backup "$dotfiles_dir/config/stow" hypr "hyprland" || return 1
+
+    # Omarchy refresh writes through symlinks. Keep its known entry point a
+    # generated regular file so a reset cannot overwrite the tracked loader.
+    local entry="$hypr_dir/hyprland.lua"
+    local loader='dofile(os.getenv("HOME") .. "/.config/hypr/dotfiles.lua")'
+    if [[ -f "$entry" && ! -L "$entry" && "$(< "$entry")" == "$loader" ]]; then
+        return 0
+    fi
+
+    local tmp
+    tmp=$(mktemp "$hypr_dir/hyprland.lua.XXXXXX") || return 1
+    if [[ -e "$entry" || -L "$entry" ]]; then
+        if ! cp -L -- "$entry" "$entry.bak-$(date +%Y%m%d%H%M%S%N)"; then
+            rm -f -- "$tmp"
+            track_failure "hyprland" "Failed to back up $entry"
+            return 1
+        fi
+    fi
+    if ! { print -r -- "$loader" > "$tmp" && chmod 644 "$tmp" && mv -- "$tmp" "$entry"; }; then
+        rm -f -- "$tmp"
+        track_failure "hyprland" "Failed to install $entry"
         return 1
     fi
 }
@@ -1859,7 +1891,10 @@ setup_symlinks() {
 
     echo "Stowing dotfiles from $dotfiles_dir..."
     _prevent_stow_folding
-    _stow_with_backup "$dotfiles_dir" . "symlinks"
+    _stow_with_backup "$dotfiles_dir" . "symlinks" --ignore='^config($|/)' || return 1
+
+    setup_hyprland "$dotfiles_dir" || return 1
+    cd "$dotfiles_dir" || return 1
 }
 
 # stow is all-or-nothing: one target that already exists as a real file aborts the

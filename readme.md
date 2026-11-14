@@ -10,6 +10,18 @@
 
 </div>
 
+I keep my shell, terminal and machine setup here so I don't have to rebuild them
+by hand on each Linux or macOS machine. Zsh and tmux configs sit alongside a
+three-phase installer: bootstrap, interactive prep, then unattended setup.
+
+The installer selects a package backend, filters steps by profile and records
+completed tool installs so a failed run can resume. GNU Stow manages symlinks,
+with the main worktree as their source.
+
+Start with [Setup](#setup). These are personal configs, not a general-purpose
+installer: setup changes your machine and expects access to private companion
+repos. The [private repo notes](#personal-notes) explain that dependency.
+
 ## Setup
 
 **One command.** Fresh machine to finished install:
@@ -114,6 +126,41 @@ Open NordPass and Surfshark to sign in. For CLI access, run `np signin` followed
 by `np unlock`. Import 1Password items through NordPass settings and verify
 them before removing 1Password. Export files are unencrypted; delete them after
 the import. VPN connection, auto-connect and kill switch choices stay manual.
+
+### Hyprland overrides on Omarchy
+
+Personal settings live in
+[`config/stow/hypr/.config/hypr/overrides.lua`](config/stow/hypr/.config/hypr/overrides.lua).
+The dotfiles-owned entry point loads Omarchy's defaults, existing user files,
+theme and saved toggles first, then loads this file last on every reload.
+Settings you put here take precedence over Omarchy.
+
+On Omarchy, re-running `./setup.sh` stows this package from the main worktree.
+Existing files are backed up before replacement. Other platforms skip it.
+Monitor settings remain local in `~/.config/hypr/monitors.lua`; they aren't
+copied into this repository.
+
+Omarchy's `hyprland.lua` is a generated regular file pointing to our
+`dotfiles.lua` loader. Neither tracked file uses a name that Omarchy refreshes,
+so a reset can't write through a symlink into the repository.
+
+Window rules open Surfshark on workspace 5, Spotify on workspace 4, and Kdenlive
+and OBS Studio on workspace 2 without switching focus. Arch setup also ensures
+Kdenlive and OBS Studio are installed. Existing shortcuts and appearance stay
+unchanged. Add only the differences you want, for example:
+
+```lua
+hl.config({ general = { gaps_in = 6 } })
+```
+
+Use `o.rebind(...)`, not another `o.bind(...)`, when replacing an Omarchy
+shortcut. Don't copy upstream defaults into the override file. A setting
+pinned here also takes precedence over the corresponding saved Omarchy toggle
+on reload.
+
+Apply with `hyprctl reload` and check `hyprctl configerrors`. Avoid
+`omarchy refresh hyprland` for routine changes: it's a reset, not a reload.
+If you deliberately reset, re-run setup to restore the dotfiles-owned files.
 
 ### The Windows side
 
