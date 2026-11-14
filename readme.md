@@ -128,9 +128,10 @@ Omarchy's `hyprland.lua` is a generated regular file pointing to our
 `dotfiles.lua` loader. Neither tracked file uses a name that Omarchy refreshes,
 so a reset can't write through a symlink into the repository.
 
-The initial rule opens Surfshark on workspace 5 without switching focus.
-Existing shortcuts and appearance stay unchanged. Add only the differences
-you want, for example:
+Window rules open Surfshark on workspace 5, Spotify on workspace 4, and Kdenlive
+and OBS Studio on workspace 2 without switching focus. Arch setup also ensures
+Kdenlive and OBS Studio are installed. Existing shortcuts and appearance stay
+unchanged. Add only the differences you want, for example:
 
 ```lua
 hl.config({ general = { gaps_in = 6 } })
