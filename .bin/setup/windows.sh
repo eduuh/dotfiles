@@ -135,8 +135,8 @@ setup_windows_side() {
     # process on the box, and one in a config file outlives the run.
     #
     # It is spent by windows-askpass.cmd, via GIT_ASKPASS. The obvious alternative,
-    # resetting credential.helper with an empty GIT_CONFIG_VALUE_0 the way
-    # setup-work-repos.sh does in WSL, CANNOT work here: Windows cannot hold an
+    # resetting credential.helper with an empty GIT_CONFIG_VALUE_0,
+    # CANNOT work here: Windows cannot hold an
     # empty environment variable at all — PowerShell deletes the variable instead of
     # emptying it — so git saw GIT_CONFIG_COUNT=2 with a missing value and refused
     # the whole config with "fatal: unable to parse command-line config".

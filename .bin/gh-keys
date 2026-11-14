@@ -236,7 +236,7 @@ print_warning() {
 GH_KEY_ACCOUNT="${GH_KEY_ACCOUNT:-}"
 
 # The account the rest of the install cannot proceed without: it owns personal-notes,
-# which holds the stow tree, the work/personal repo lists and the work-tools installer.
+# which holds the stow tree and the personal repo list.
 # `gh auth status` succeeding is NOT enough — on a work machine gh is typically signed
 # in as the WORK account, which passes that check and then cannot see a single private
 # personal repo. Set by prep.sh; empty means "any account will do".
@@ -253,8 +253,8 @@ ensure_required_account() {
     return 0
   fi
   print_warning "GitHub account '$GH_REQUIRED_ACCOUNT' is NOT signed in."
-  print_warning "Everything private hangs off it (personal-notes → stow tree, repo lists,"
-  print_warning "work-tools installer). Without it the install completes with those missing."
+  print_warning "Everything private hangs off it (personal-notes → stow tree, personal repo list)."
+  print_warning "Without it the install completes with those missing."
   print_status "Signing in as '$GH_REQUIRED_ACCOUNT' now — pick that account in the browser."
   set +e
   gh auth login --hostname github.com --git-protocol https --web -s admin:public_key

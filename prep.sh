@@ -5,9 +5,9 @@
 # profile selection — so the long install (Phase 2) can run fully unattended.
 # After prep writes its "ready" marker, you can walk away from setup.sh.
 #
-#   ./prep.sh [--profile core|dev|desktop] [--work] [--personal]
+#   ./prep.sh [--profile core|dev|desktop] [--personal]
 #
-# --work / --personal are not used by prep itself; they are forwarded verbatim to
+# --personal is not used by prep itself; it is forwarded verbatim to
 # setup.sh so the whole install is ONE command from bootstrap.sh onward.
 #
 # Not `set -e`: this phase collects failures (like setup.sh) rather than aborting.
@@ -41,21 +41,19 @@ default_profile() {
 
 main() {
   local target profile="" arg_profile="" run_setup=true
-  # Flags prep does not act on itself but must hand to setup.sh. Without this they
-  # were parsed by nothing and dropped on the floor, so the one-command bootstrap
-  # could never provision a work machine — you had to re-run setup.sh --work by hand.
+  # Forward setup-only flags so the one-command bootstrap preserves them.
   local -a setup_args=()
 
   # --- parse args ---
   #   --profile <tier>  override the profile (core|dev|desktop)
   #   --prep-only       stop after prep; don't chain into setup.sh
-  #   --work/--personal forwarded to setup.sh untouched
+  #   --personal        forwarded to setup.sh untouched
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --profile)   arg_profile="$2"; shift 2 ;;
       --profile=*) arg_profile="${1#*=}"; shift ;;
       --prep-only) run_setup=false; shift ;;
-      --work|--personal) setup_args+=("$1"); shift ;;
+      --personal)  setup_args+=("$1"); shift ;;
       *)           shift ;;
     esac
   done
