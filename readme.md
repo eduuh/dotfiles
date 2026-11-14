@@ -10,6 +10,18 @@
 
 </div>
 
+I keep my shell, terminal and machine setup here so I don't have to rebuild them
+by hand on each Linux or macOS machine. Zsh and tmux configs sit alongside a
+three-phase installer: bootstrap, interactive prep, then unattended setup.
+
+The installer selects a package backend, filters steps by profile and records
+completed tool installs so a failed run can resume. GNU Stow manages symlinks,
+with the main worktree as their source.
+
+Start with [Setup](#setup). These are personal configs, not a general-purpose
+installer: setup changes your machine and expects access to private companion
+repos. The [private repo notes](#personal-notes) explain that dependency.
+
 ## Setup
 
 **One command.** Fresh machine to finished install:
