@@ -99,6 +99,40 @@ them up automatically.
 
 On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
+### Hyprland overrides on Omarchy
+
+Personal settings live in
+[`config/stow/hypr/.config/hypr/overrides.lua`](config/stow/hypr/.config/hypr/overrides.lua).
+The dotfiles-owned entry point loads Omarchy's defaults, existing user files,
+theme and saved toggles first, then loads this file last on every reload.
+Settings you put here take precedence over Omarchy.
+
+On Omarchy, re-running `./setup.sh` stows this package from the main worktree.
+Existing files are backed up before replacement. Other platforms skip it.
+Monitor settings remain local in `~/.config/hypr/monitors.lua`; they aren't
+copied into this repository.
+
+Omarchy's `hyprland.lua` is a generated regular file pointing to our
+`dotfiles.lua` loader. Neither tracked file uses a name that Omarchy refreshes,
+so a reset can't write through a symlink into the repository.
+
+The initial rule opens Surfshark on workspace 5 without switching focus.
+Existing shortcuts and appearance stay unchanged. Add only the differences
+you want, for example:
+
+```lua
+hl.config({ general = { gaps_in = 6 } })
+```
+
+Use `o.rebind(...)`, not another `o.bind(...)`, when replacing an Omarchy
+shortcut. Don't copy upstream defaults into the override file. A setting
+pinned here also takes precedence over the corresponding saved Omarchy toggle
+on reload.
+
+Apply with `hyprctl reload` and check `hyprctl configerrors`. Avoid
+`omarchy refresh hyprland` for routine changes: it's a reset, not a reload.
+If you deliberately reset, re-run setup to restore the dotfiles-owned files.
+
 ### The Windows side
 
 On WSL, dotfiles configures Linux — but half the machine is Windows, and none of
