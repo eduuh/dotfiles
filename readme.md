@@ -127,6 +127,18 @@ by `np unlock`. Import 1Password items through NordPass settings and verify
 them before removing 1Password. Export files are unencrypted; delete them after
 the import. VPN connection, auto-connect and kill switch choices stay manual.
 
+### Email notifications on Linux
+
+Arch setup installs Thunderbird. When it's installed, symlink setup adds a
+desktop autostart entry so it checks mail after login. On Omarchy, its windows
+open on workspace 4 without switching focus.
+
+Add Gmail and Outlook in Thunderbird using Google's and Microsoft's sign-in
+pages. New-mail alerts use desktop notifications; keep Thunderbird running to
+receive them. Closing its last window stops mail checks. Work or school
+Microsoft accounts may require administrator approval. Account settings and
+credentials stay local and aren't stowed.
+
 ### Hyprland overrides on Omarchy
 
 Personal settings live in

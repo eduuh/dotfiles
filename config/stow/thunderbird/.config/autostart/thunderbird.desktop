@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Thunderbird
+Exec=thunderbird
+TryExec=thunderbird
+Terminal=false

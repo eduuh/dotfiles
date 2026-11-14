@@ -147,7 +147,7 @@ install_arch_specific_packages() {
     local arch_packages=(
         man-db man-pages libsecret acpi d2 bat lua curl kanata 1password nordpass-bin surfshark-client gcc python
         bubblewrap socat strace shfmt
-        kdenlive obs-studio
+        kdenlive obs-studio thunderbird
         wl-clipboard xclip   # clipboard provider for nvim's unnamedplus
     )
 
