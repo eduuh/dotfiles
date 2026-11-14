@@ -220,6 +220,7 @@ main() {
         step zoxide       core all   install_zoxide
         step starship     core all   install_starship
         step pnpm         dev  all   install_pnpm
+        step_always dotnet11 dev wsl,linux,mac,codespace install_dotnet11
         step talosctl     dev  all   install_talosctl
         step git-hooks    core all   setup_git_hooks
         step shell-zsh    core all   change_shell_to_zsh

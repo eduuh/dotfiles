@@ -16,7 +16,11 @@ update_system() {
 install_common_packages() {
     echo "Installing common packages..."
 
-    local packages=("${common_software[@]}" build-essential python3-venv bubblewrap socat strace shfmt)
+    local packages=(
+        "${common_software[@]}" build-essential python3-venv bubblewrap socat strace shfmt
+        podman uidmap slirp4netns fuse-overlayfs
+        libicu-dev libkrb5-3 libssl-dev zlib1g
+    )
     for pkg in "${packages[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
             echo "Installing $pkg..."
