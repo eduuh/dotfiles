@@ -111,6 +111,18 @@ them up automatically.
 
 On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
+### Helium browser on Arch
+
+Arch setup installs `helium-browser-bin` and selects Helium as the default browser
+on every run. Omarchy's browser keybindings and link routing follow that default.
+Brave remains installed so bookmarks and settings can be imported before removing it.
+
+Launch settings are stowed from
+[`config/stow/helium/.config/helium-browser-flags.conf`](config/stow/helium/.config/helium-browser-flags.conf):
+native Wayland rendering, the system secret store, touchpad history gestures
+and overlay scrollbars. Edit that file to persist launch flags across machines.
+Browser profiles, cookies, passwords and history remain local and are not stowed.
+
 ### Password managers and VPN on Arch
 
 Arch setup keeps 1Password installed and also installs `nordpass-bin` and
