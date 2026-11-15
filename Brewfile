@@ -57,6 +57,7 @@ brew "gh"
 # Casks
 cask "aerospace"
 cask "alacritty"
+cask "claude"
 cask "copilot-cli"
 cask "docker"
 cask "font-fira-code-nerd-font"
