@@ -58,6 +58,7 @@ install_fedora_packages() {
     local fedora_extras=(
         gcc bison pkgconf-pkg-config python3
         bubblewrap socat strace shfmt
+        podman libicu krb5-libs openssl-libs zlib
         libevent-devel ncurses-devel
         man-db man-pages
         libsecret curl fd-find bat

@@ -1674,6 +1674,27 @@ install_pnpm() {
     fi
 }
 
+install_dotnet11() {
+    local install_dir="$HOME/.local/share/dotnet11"
+    local installer result=0
+
+    if ! [[ -x "$install_dir/dotnet" ]] ||
+        ! "$install_dir/dotnet" --list-sdks | grep -qF "$DOTNET11_VERSION ["; then
+        installer=$(mktemp) || return 1
+        if ! { curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$installer" &&
+            bash "$installer" --version "$DOTNET11_VERSION" \
+                --install-dir "$install_dir" --no-path; }; then
+            result=1
+        fi
+        rm -f -- "$installer"
+        (( result == 0 )) || return "$result"
+    fi
+
+    mkdir -p "$APP_BIN_DIR" || return 1
+    ln -sfn "$install_dir/dotnet" "$APP_BIN_DIR/dotnet11" || return 1
+    "$APP_BIN_DIR/dotnet11" --version
+}
+
 install_talosctl() {
     # Skip on WSL - talosctl should be installed on Windows host
     if grep -qi microsoft /proc/version 2>/dev/null; then

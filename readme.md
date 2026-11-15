@@ -111,6 +111,17 @@ them up automatically.
 
 On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
+### .NET 11 and Podman
+
+The `dev` and `desktop` profiles install the .NET 11 prerelease SDK pinned in
+[`versions.lock`](versions.lock) on Linux, WSL, macOS and Codespaces. Use
+`dotnet11`; it lives in `~/.local/share/dotnet11` and leaves any existing
+`dotnet` installation unchanged. Re-running setup checks the pinned SDK even
+when earlier tool steps are cached.
+
+Platform package setup also installs Podman, without replacing Docker. On macOS,
+run `podman machine init` once, then `podman machine start` before using containers.
+
 ### Password managers and VPN on Arch
 
 Arch setup keeps 1Password installed and also installs `nordpass-bin` and

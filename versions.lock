@@ -12,6 +12,7 @@ LAZYGIT_VERSION=0.62.2      # lazygit — no leading v
 NVM_VERSION=v0.40.1         # nvm — install.sh tag
 PNPM_VERSION=11.8.0         # pnpm — honoured by the get.pnpm.io installer via $PNPM_VERSION
 RUST_TOOLCHAIN=1.96.0       # rust — rustup --default-toolchain
+DOTNET11_VERSION=11.0.100-rc.3.26522.148 # .NET 11 prerelease SDK, isolated from system dotnet
 
 # --- reference only (vendor installer owns the version; not yet pinnable) ---
 ZOXIDE_VERSION=0.9.9        # zoxide install.sh tracks upstream
