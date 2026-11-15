@@ -101,6 +101,12 @@ them up automatically.
 
 On macOS, all Homebrew packages are managed via a [`Brewfile`](Brewfile).
 
+### Claude Desktop
+
+Arch setup installs `claude-desktop`; macOS installs the `claude` Homebrew cask.
+Re-run setup to install it on an existing machine, then open Claude from the app
+launcher and sign in. Account credentials and application data stay local.
+
 ### .NET 11 and Podman
 
 The `dev` and `desktop` profiles install the .NET 11 prerelease SDK pinned in

@@ -148,7 +148,7 @@ install_arch_specific_packages() {
         man-db man-pages libsecret acpi d2 bat lua curl kanata 1password nordpass-bin surfshark-client gcc python
         bubblewrap socat strace shfmt
         podman icu krb5 openssl zlib
-        kdenlive obs-studio thunderbird
+        kdenlive obs-studio thunderbird claude-desktop
         wl-clipboard xclip   # clipboard provider for nvim's unnamedplus
     )
 
