@@ -12,7 +12,6 @@ _COMMON_DIR="${${(%):-%x}:A:h}"
 : "${TERMUX_VERSION:=}"
 : "${WINDOWS_PROJECTS_DIR:=}"
 : "${SETUP_FAILURES_FILE:=}"
-: "${SETUP_WORK:=false}"
 : "${SETUP_PERSONAL:=false}"
 
 # Failure tracking - collect errors instead of exiting
@@ -214,8 +213,8 @@ setup_repo() {
 
     # A private repo's installer fetches its OWN prebuilt release with `gh` (bn does),
     # which would otherwise use the machine's ACTIVE account — the work one — 404, and
-    # silently fall back to a from-source build. Scoped to this call, so work `gh`
-    # usage elsewhere in setup (install_work_tools) keeps the active account.
+    # silently fall back to a from-source build. Scoped to this call so other `gh`
+    # usage keeps the active account.
     if _is_private_eduuh_repo "$url"; then
         local -x GH_TOKEN="$(gh auth token -u "$GH_PERSONAL_ACCOUNT" 2>/dev/null)"
     fi
@@ -320,20 +319,16 @@ GH_PERSONAL_ACCOUNT="${GH_PERSONAL_ACCOUNT:-eduuh}"
 # by every private repo instead of that one.
 #
 # Names only; the owner is always $GH_PERSONAL_ACCOUNT and is matched separately.
-# `notes` is deliberately absent: nothing clones eduuh/notes, and the `notes` that
-# DOES get cloned on a work machine is the work account's own — see below.
+# `notes` is deliberately absent: nothing here clones eduuh/notes.
 PRIVATE_EDUUH_REPOS=(personal-notes bn atlas branch-notes)
 
-# Match on OWNER/NAME, never the bare repo name. A name-only match is a trap here:
-# personal-notes' setup-work-repos.sh clones edwinmuraya_microsoft/notes.git, and
-# matching just "notes" would hand a WORK repo the personal token and rewrite its
-# remote. Same hazard for any future work repo sharing a name with a personal one.
+# Match on OWNER/NAME so another owner's repo never receives the personal token.
 _is_private_eduuh_repo() {
     local url="$1" path
     case "$url" in
         git@github.com:*)     path="${url#git@github.com:}" ;;
         https://github.com/*) path="${url#https://github.com/}" ;;
-        *)                    return 1 ;;   # file:// (tests), ADO, anything else
+        *)                    return 1 ;;   # file:// (tests) and other hosts
     esac
     path="${path%.git}"
     [[ "$path" == "$GH_PERSONAL_ACCOUNT/"* ]] || return 1
@@ -426,96 +421,6 @@ _windows_projects_dir() {
         WINDOWS_PROJECTS_DIR="$profile/projects"
     fi
     echo "$WINDOWS_PROJECTS_DIR"
-}
-
-# Azure DevOps auth for WSL, borrowed from the Windows side.
-#
-# WSL has no Git Credential Manager of its own and ~/.gitconfig routes only
-# github.com (through `gh`), so an ADO clone dies at a `Username for
-# 'https://office.visualstudio.com'` prompt that nothing can answer — the failure
-# that left a machine with no 1JS and no Sydney. Windows already has a GCM that
-# holds a working ADO login, so point WSL git at that exe rather than installing
-# and separately authenticating a second credential manager.
-#
-# Writes ~/.gitconfig-ado, included from the stowed .gitconfig. NOT ~/.gitconfig-local:
-# that one is stowed from the private notes repo, and generating a file on top of a
-# stow target is how you get a stow conflict on the next run.
-_WINDOWS_GCM_CANDIDATES=(
-    "scoop/apps/git/current/mingw64/bin/git-credential-manager.exe"
-    "AppData/Local/Programs/Git/mingw64/bin/git-credential-manager.exe"
-)
-_WINDOWS_GCM_ABS_CANDIDATES=(
-    "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe"
-    "/mnt/c/Program Files (x86)/Git/mingw64/bin/git-credential-manager.exe"
-    "/mnt/c/Program Files/Git Credential Manager/git-credential-manager.exe"
-)
-
-_find_windows_gcm() {
-    local profile candidate
-    profile=$(_windows_user_profile) || return 1
-    for candidate in "${_WINDOWS_GCM_CANDIDATES[@]}"; do
-        [ -x "$profile/$candidate" ] && { echo "$profile/$candidate"; return 0; }
-    done
-    for candidate in "${_WINDOWS_GCM_ABS_CANDIDATES[@]}"; do
-        [ -x "$candidate" ] && { echo "$candidate"; return 0; }
-    done
-    return 1
-}
-
-setup_ado_credential_helper() {
-    _is_wsl || return 0
-
-    local gcm
-    if ! gcm=$(_find_windows_gcm); then
-        # Not a failure: a WSL box with no Windows git simply has no ADO repos to
-        # clone. Say so once so the later "Username for ..." hang has an explanation.
-        echo "· [ado-auth] no Windows Git Credential Manager found — ADO clones will prompt"
-        return 0
-    fi
-
-    # A path with a space would need quoting git does not do for helper paths, so
-    # spell the exe as a shell command in that case. Bare path otherwise, which is
-    # what git documents and what shows up unmangled in `git config --get-all`.
-    # Single quotes, not double: git's config parser strips unescaped double quotes
-    # from a value, so !"/mnt/c/Program Files/..." reached the shell unquoted and
-    # split at the space ("/mnt/c/Program: not found", 2026-09-27, CPC-edwin-ANBKW).
-    local helper_value="$gcm"
-    case "$gcm" in
-        *" "*) helper_value="!'$gcm'" ;;
-    esac
-
-    local dest="$HOME/.gitconfig-ado"
-    local tmp="$dest.tmp.$$"
-    cat > "$tmp" <<EOF
-# GENERATED by dotfiles setup (setup_ado_credential_helper) — edits are overwritten.
-#
-# Azure DevOps authenticates through the WINDOWS-side Git Credential Manager, whose
-# path depends on how Windows git was installed, so it cannot be a static line in the
-# stowed .gitconfig. Included from there; git ignores the include when this is absent.
-#
-# The empty \`helper =\` first resets any inherited list, so only GCM answers for these
-# hosts and the github.com \`gh\` helper is not consulted for an ADO login it does not
-# have. useHttpPath is required for dev.azure.com: GCM keys ADO credentials by
-# organisation, which on that host is the first path segment rather than the hostname.
-[credential "https://dev.azure.com"]
-	helper =
-	helper = $helper_value
-	useHttpPath = true
-[credential "https://office.visualstudio.com"]
-	helper =
-	helper = $helper_value
-[credential "https://msasg.visualstudio.com"]
-	helper =
-	helper = $helper_value
-EOF
-
-    if [ -f "$dest" ] && cmp -s "$tmp" "$dest"; then
-        rm -f "$tmp"
-        echo "✓ [ado-auth] $dest already points at $gcm"
-        return 0
-    fi
-    mv "$tmp" "$dest" || { track_failure "ado-auth" "could not write $dest"; return 1; }
-    echo "✓ [ado-auth] $dest → $gcm"
 }
 
 _is_windows_repo() {
@@ -846,8 +751,6 @@ setup_nvim() {
 }
 
 # Provision one branch-notes-style repo on Windows + symlink under ~/projects/.
-# Used for both the personal `branch-notes` repo and the `branch-notes-work` repo
-# for work-classified projects (allowlist in ~/.config/bn/work-repos).
 #
 # Usage: _setup_one_branch_notes_repo <name> [remote_url]
 # If a remote URL is provided and the target has no .git yet, the repo is
@@ -894,12 +797,8 @@ _setup_one_branch_notes_repo() {
 # keeps the data on the Windows side (symlinked into ~/projects) so Windows-side
 # editors can reach it, native Linux/macOS clones straight into ~/projects/<name>.
 #
-# The NAME AND REMOTE ARE THE CALLER'S to supply, and both callers are private
-# setup scripts in personal-notes: setup-personal-repos.sh provisions the personal
-# notes repo under --personal, setup-work-repos.sh the work one under --work. So a
-# work machine never clones personal notes and vice versa, and neither private
-# repo's name sits in this public repo. bn routes writes to the right one per repo
-# via $HOME/.config/bn/work-repos (allowlist, gitignored).
+# The private setup-personal-repos.sh supplies the name and remote under --personal,
+# keeping private repo names out of this public repo.
 #
 # Usage: setup_branch_notes_repo <name> <remote_url>
 setup_branch_notes_repo() {
@@ -961,9 +860,9 @@ _setup_branch_notes_native() {
 }
 
 # personal-notes is the private repo the rest of the setup hangs off: the stow
-# tree (setup_personal_notes_stow), the work/personal repo setup scripts, the
-# work-tools installer all read from it. So it is cloned on EVERY setup run
-# rather than only inside clone_repos — that step runs detached and is skipped
+# tree (setup_personal_notes_stow) and personal repo setup script read from it.
+# So it is cloned on EVERY setup run rather than only inside clone_repos —
+# that step runs detached and is skipped
 # once its `projects` marker is recorded, which would leave a machine that
 # missed it once permanently without personal-notes.
 #
@@ -1017,13 +916,12 @@ ensure_branch_notes() {
     fi
 }
 
-# A clone run has a SHAPE: plain, --personal, --work, or both. Each clones a
+# A clone run has a SHAPE: plain or --personal. Each clones a
 # different set, so they cannot share one "projects" marker — a machine set up
 # plain would then skip the clone forever and never pick up the repos a flag adds.
 _projects_step_name() {
     local name=projects
     [[ "$SETUP_PERSONAL" == "true" ]] && name="$name-personal"
-    [[ "$SETUP_WORK" == "true" ]] && name="$name-work"
     echo "$name"
 }
 
@@ -1031,8 +929,6 @@ _projects_step_name() {
 _projects_mark_done() {
     _step_mark_done projects
     [[ "$SETUP_PERSONAL" == "true" ]] && _step_mark_done projects-personal
-    [[ "$SETUP_WORK" == "true" ]] && _step_mark_done projects-work
-    [[ "$SETUP_PERSONAL" == "true" && "$SETUP_WORK" == "true" ]] && _step_mark_done projects-personal-work
     return 0
 }
 
@@ -1049,7 +945,7 @@ clone_repos() {
             "https://github.com/eduuh/dotfiles.git"
         )
     else
-        # Toolchain — what every machine needs to be usable, work or personal.
+        # Toolchain — what every machine needs to be usable.
         REPOSITORIES=(
             "git@github.com:eduuh/dotfiles.git"
             "git@github.com:eduuh/eduuh.git"
@@ -1059,7 +955,7 @@ clone_repos() {
 
         # Windows-side applications. WSL only — they are meaningless on a native
         # Linux or mac box — but NOT behind --personal: this is the Windows half
-        # of the machine's own config, wanted on a work machine too.
+        # of the machine's own config.
         if _is_wsl; then
             REPOSITORIES+=(
                 "https://github.com/eduuh/win-dot.git"
@@ -1068,9 +964,8 @@ clone_repos() {
         fi
 
         # Personal PROJECT repos that are themselves public — nothing to hide, so
-        # the names stay here. A work machine still shouldn't pull them, so they
-        # sit behind --personal like the private ones. Repos that are actually
-        # PRIVATE live in personal-notes' scripts/setup-personal-repos.sh instead,
+        # the names stay here. They sit behind --personal like the private ones.
+        # Private repos live in personal-notes' scripts/setup-personal-repos.sh instead,
         # so their names and URLs never appear in a public repo.
         if [[ "$SETUP_PERSONAL" == "true" ]]; then
             REPOSITORIES+=(
@@ -1081,7 +976,7 @@ clone_repos() {
     fi
 
     # Collect failures from every background job for the WHOLE function, the sourced
-    # work/personal hooks included — they run their own parallel `_clone_single_repo`
+    # personal hook included — it can run its own parallel `_clone_single_repo`
     # loops, so closing the window right after the loop below lost theirs: a run in
     # which six repos failed to clone reported only the two that happened to fail in
     # this loop, and the summary called the rest a success.
@@ -1096,22 +991,8 @@ clone_repos() {
     wait
     echo "All repository clones finished."
 
-    # Branch-notes repos are NOT provisioned here. They are private and they are
-    # per-side: the private hooks below call setup_branch_notes_repo themselves, so
-    # --personal gets the personal notes repo and --work the work one. Doing it
-    # unconditionally here meant a work machine tried to clone personal notes on
-    # every run — and failed, because a work SSH key cannot read that repo.
-    #
-    # Work repos are opt-in (--work) and always come AFTER personal-notes, which
-    # holds the script that lists them. ensure_personal_notes has already run —
-    # synchronously, from setup.sh or from setup-projects.sh — before we get here.
-    if [[ "${SETUP_WORK:-false}" == "true" ]]; then
-        _run_work_setup_from_personal_notes
-    else
-        echo "· work repos skipped (no --work)"
-    fi
-    # Personal repos are opt-in too (--personal), for the same reason as work:
-    # a work machine should never pull them, and the list is private.
+    # ensure_personal_notes runs synchronously before this function. Its private
+    # repo hook is opt-in and can provision notes through setup_branch_notes_repo.
     if [[ "$SETUP_PERSONAL" == "true" ]]; then
         _run_personal_setup_from_personal_notes
     else
@@ -1124,8 +1005,7 @@ clone_repos() {
 }
 
 # After personal repos are cloned, source a personal-only-repo setup script from
-# personal-notes if it exists. Mirrors _run_work_setup_from_personal_notes but for
-# repos that must NEVER land on a work machine: the script defines its own repo
+# personal-notes if it exists. The script defines its own repo
 # list and calls _clone_single_repo / bn wt clone for each, so those repo names
 # and URLs stay private instead of sitting in this public dotfiles repo. No-op if
 # personal-notes isn't cloned or the script is absent.
@@ -1137,53 +1017,6 @@ _run_personal_setup_from_personal_notes() {
     echo "Sourcing personal setup script: $personal_script"
     source "$personal_script"
     echo "Personal repo setup finished."
-}
-
-# After personal repos are cloned, source a work-repo setup script from
-# personal-notes if it exists. The script defines a WORK_REPOS array, calls
-# _clone_single_repo, and/or calls _setup_one_branch_notes_repo with a remote
-# URL — so the list of work repos and their URLs stay in the private
-# personal-notes repo instead of this public dotfiles repo.
-_run_work_setup_from_personal_notes() {
-    local work_script="${WORK_SETUP_SCRIPT:-$HOME/projects/personal-notes/scripts/setup-work-repos.sh}"
-    if [[ ! -f "$work_script" ]]; then
-        # --work was asked for: a missing script is a failure, not a quiet skip. Without it the
-        # machine gets no work repos and no branch-notes-work, and nothing said so (2026-09-27).
-        track_failure "work-repos" "--work: $work_script not found (is personal-notes cloned? gh auth login, then re-run setup.sh --work)"
-        return 0
-    fi
-    echo "Sourcing work setup script: $work_script"
-    source "$work_script"
-    _check_work_notes_repo "$work_script"
-    echo "Work repo setup finished."
-}
-
-# A work machine needs branch-notes-work: bn's private jobs (1JS build.sh, the build-node
-# setup, pool schedules) live there. The work script clones it; say so loudly when it did not
-# end up a git repo, with the command that fixes it.
-_check_work_notes_repo() {
-    local work_script="$1" link="$HOME/projects/branch-notes-work"
-    if git -C "$link" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        echo "✓ [branch-notes-work] $(git -C "$link" log --oneline -1 2>/dev/null | cut -c1-60)"
-    else
-        track_failure "branch-notes-work" "not cloned at $link. The work script clones it with the work gh account; check \`gh auth status\` lists that account, then re-run setup.sh --work (see $work_script)"
-    fi
-}
-
-# Work-machine tool installs. Runs only via `setup.sh --work`.
-# Delegates to a script in the private personal-notes repo so internal MS
-# endpoints stay out of public dotfiles. No-op if the script is absent.
-install_work_tools() {
-    local work_tools="${WORK_TOOLS_SCRIPT:-$HOME/projects/personal-notes/scripts/setup-work-tools.sh}"
-    if [[ ! -f "$work_tools" ]]; then
-        # Non-zero on purpose: --work was asked for and could not be honored.
-        # Silently returning 0 here would let `step` record work-tools as done and
-        # skip it forever, even once personal-notes finally lands.
-        track_failure "work-tools" "no work-tools script at $work_tools (is personal-notes cloned?)"
-        return 1
-    fi
-    echo "Sourcing work tools script: $work_tools"
-    source "$work_tools"
 }
 
 # TPM removed: bn vendors its tmux plugins (tmux-resurrect + tmux-continuum) in-repo and

@@ -2,11 +2,10 @@
 # Standalone script to clone project repositories (parallel).
 # Run this after setup.sh has configured the machine.
 #
-#   ./setup-projects.sh [--work] [--personal]
+#   ./setup-projects.sh [--personal]
 #
-# --work     also clones the work repos     (personal-notes/scripts/setup-work-repos.sh)
 # --personal also clones the personal repos (personal-notes/scripts/setup-personal-repos.sh)
-# setup.sh passes both through when it was itself invoked with them.
+# setup.sh passes it through when it was itself invoked with it.
 
 # ${0:A:h}, not ${BASH_SOURCE[0]}: these are zsh scripts and BASH_SOURCE is a bash-ism
 # that expands to nothing under zsh, so SCRIPT_DIR silently became the CALLER's cwd —
@@ -14,17 +13,15 @@
 SCRIPT_DIR="${0:A:h}"
 source "$SCRIPT_DIR/.bin/setup/common.sh"
 
-SETUP_WORK=false
 SETUP_PERSONAL=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --work)     SETUP_WORK=true; shift ;;
         --personal) SETUP_PERSONAL=true; shift ;;
         *)          shift ;;
     esac
 done
 
-# personal-notes FIRST and on its own: every work/personal repo list, and the stow
+# personal-notes FIRST and on its own: the personal repo list, and the stow
 # tree below, lives inside it. Running it here as well as in setup.sh keeps this
 # script standalone — it's a no-op pull when setup.sh already did it.
 ensure_personal_notes

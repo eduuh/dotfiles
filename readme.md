@@ -27,27 +27,18 @@ repos. The [private repo notes](#personal-notes) explain that dependency.
 **One command.** Fresh machine to finished install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/eduuh/dotfiles/main/bootstrap.sh | bash -s -- --work
+curl -fsSL https://raw.githubusercontent.com/eduuh/dotfiles/main/bootstrap.sh | bash
 ```
 
-Choosing the flag is the only decision you make. Everything after it is automatic.
-
-| Machine | Flag |
-|---|---|
-| Work laptop | `--work` |
-| Personal machine | `--personal` |
-| Both sides on one box | `--work --personal` |
-| Toolchain only | *(omit; run `\| bash` with no `-s --`)* |
-
-The flag is forwarded through all three phases, so there is nothing to re-run
-afterwards with a different flag:
+Add `-s -- --personal` after `bash` to also clone personal project repos.
+The flag is forwarded through all three phases:
 
 0. **bootstrap** — installs `git`/`zsh`, clones dotfiles into the bare + worktree
    layout (`~/projects/bare/dotfiles.git` + `~/projects/worktree/dotfiles/main`)
 1. **prep** *(attended — the only part that talks to you)* — sudo, GitHub sign-in
    + SSH key, profile
 2. **setup** *(unattended — walk away)* — packages, tools, stow, and every repo
-   clone, including the work/personal lists
+   clone, including the optional personal list
 
 Symlinks are always stowed from the `main` worktree, so you can `wt add feature/x`
 and edit dotfiles in multiple worktrees without disturbing them.
@@ -61,17 +52,16 @@ Already cloned? Same flags, run the phases directly from the main worktree:
 
 ```bash
 cd ~/projects/worktree/dotfiles/main
-./prep.sh --work            # chains into setup.sh, forwarding the flag
+./prep.sh                   # chains into setup.sh
 ```
 
-`prep.sh` takes `--profile`, `--work`, `--personal`, and `--prep-only` (stop instead
+`prep.sh` takes `--profile`, `--personal`, and `--prep-only` (stop instead
 of chaining into setup). Flags other than `--profile` are passed straight through.
 
 `setup.sh` flags — you only need these when re-running a phase by hand:
 
 | Flag | Effect |
 |------|--------|
-| `--work` | Also install work-machine tools and clone the work repos (see [Private repo lists](#private-repo-lists)) |
 | `--personal` | Also clone the personal-only repos (see [Private repo lists](#private-repo-lists)) |
 | `--profile <core\|dev\|desktop>` | Override the profile recorded by `prep.sh` |
 | `--force` | Re-run every step, ignoring the cached done-file |
@@ -100,7 +90,7 @@ This step runs on every install, independently of the background project clones.
 to run after it. These stay available for retrying a phase on its own:
 
 ```bash
-./setup-projects.sh --work   # re-run just the repo clones (parallel); flags as above
+./setup-projects.sh          # re-run just the repo clones (parallel); --personal is optional
 ./setup-rust.sh              # install the Rust toolchain
 ```
 
@@ -226,8 +216,8 @@ rewrites the checkout with CRLF, git reports every tracked file as modified, and
 ### personal-notes
 
 `personal-notes` is private and everything else hangs off it — the stow tree it
-overlays onto `$HOME`, the work/personal repo lists, and the work-tools
-installer. So **every** `setup.sh` run clones or pulls it, up front and
+overlays onto `$HOME` and the personal repo list. So **every** `setup.sh` run
+clones or pulls it, up front and
 synchronously, before anything that reads from it. It is not part of the
 deferred background clone, which is skipped once its step is recorded.
 
@@ -236,8 +226,8 @@ the only SSH key is usually the work GitHub account's, which cannot see the repo
 an SSH clone fails with a misleading `Repository not found`. The same applies to every
 private repo in `PRIVATE_EDUUH_REPOS` (`.bin/setup/common.sh`): each is rewritten to
 HTTPS and cloned with a credential helper pinned to the owning account via
-`gh auth token -u <account>`. Pinned, not switched — the work account stays gh-active
-and usable, and work repos are matched by **owner/name** so they are never rerouted.
+`gh auth token -u <account>`. Pinned, not switched — the active account stays
+usable, and repos are matched by **owner/name** so other owners are never rerouted.
 
 Prep signs that account in for you, so normally there is nothing to do. To do it by
 hand:
@@ -275,44 +265,32 @@ world is named here, a private one never is. So this repo's clone list holds the
 toolchain plus the public personal projects, while private repo names, URLs and
 the per-machine rules for them live in `personal-notes`.
 
-Personal and work repos are both opt-in regardless of where they're listed — a
-work machine shouldn't pull your side projects even when their names are public:
+Personal project repos are opt-in regardless of where they're listed:
 
 Pass them to the one-command install and they reach every phase. These forms are for
 re-running a phase by hand:
 
 ```bash
-./setup.sh --work                # work tools + work repos
 ./setup.sh --personal            # personal-only repos
-./setup.sh --work --personal     # both
-./setup-projects.sh --work       # repos only (standalone; setup.sh forwards the flags)
+./setup-projects.sh --personal   # repos only (standalone; setup.sh forwards the flag)
 ```
 
-Each flag enables private hooks in `personal-notes/scripts/`, every one a no-op
-when the file is absent:
+The flag enables `personal-notes/scripts/setup-personal-repos.sh` after
+personal-notes is on disk; a missing script is a no-op. The clone step records
+separate `projects` and `projects-personal` markers, so a machine set up plain
+still runs the clone the first time you add `--personal`.
 
-| Script | Sourced by | Runs |
-|---|---|---|
-| `setup-work-tools.sh` | `install_work_tools` | `--work` |
-| `setup-work-repos.sh` | `clone_repos` | `--work` |
-| `setup-personal-repos.sh` | `clone_repos` | `--personal` |
-
-Both run only after personal-notes is on disk, since that's where they live. The
-clone step records a marker per **shape** (`projects`, `projects-personal`,
-`projects-work`, `projects-personal-work`), so a machine set up plain still runs
-the clone the first time you add a flag — rather than skipping it as already done.
-
-The scripts are sourced, so they have `_clone_single_repo`, `_is_wsl`,
+The script is sourced, so it has `_clone_single_repo`, `_is_wsl`,
 `detect_distro`, and the `REGULAR_CLONE_REPOS` / `WINDOWS_CLONE_REPOS` lists in
 scope:
 
 ```bash
-# ~/projects/personal-notes/scripts/setup-work-repos.sh
-WORK_REPOS=(
-    "git@github.com:my-org/repo-a.git"
-    "git@github.com:my-org/repo-b.git"
+# ~/projects/personal-notes/scripts/setup-personal-repos.sh
+PERSONAL_REPOS=(
+    "git@github.com:my-user/repo-a.git"
+    "git@github.com:my-user/repo-b.git"
 )
-for r in "${WORK_REPOS[@]}"; do
+for r in "${PERSONAL_REPOS[@]}"; do
     _clone_single_repo "$r" &
 done
 wait

@@ -7,13 +7,11 @@ source "$SCRIPT_DIR/.bin/setup/common.sh"
 # --- flags ---
 #   --force          re-run every step
 #   --profile <tier> override the profile from the prep marker (core|dev|desktop)
-#   --work           also install work-machine tools + clone work repos
 #   --personal       also clone the personal-only repos (listed in personal-notes)
 #   --windows-admin  (WSL) also run win-dot's elevated run.ps1 — prompts for UAC
 #   --windows-keyboard (WSL) also install the Keyflow keyboard layout on Windows
 #   reset            clear recorded step state and exit
 SETUP_PROFILE_OVERRIDE=""
-SETUP_WORK=false
 SETUP_PERSONAL=false
 SETUP_WINDOWS_ADMIN=false
 SETUP_WINDOWS_KEYBOARD=false
@@ -22,7 +20,6 @@ while [[ $# -gt 0 ]]; do
         --force)            SETUP_FORCE=true; shift ;;
         --profile)          SETUP_PROFILE_OVERRIDE="$2"; shift 2 ;;
         --profile=*)        SETUP_PROFILE_OVERRIDE="${1#*=}"; shift ;;
-        --work)             SETUP_WORK=true; shift ;;
         --personal)         SETUP_PERSONAL=true; shift ;;
         --windows-admin)    SETUP_WINDOWS_ADMIN=true; shift ;;
         --windows-keyboard) SETUP_WINDOWS_KEYBOARD=true; shift ;;
@@ -55,7 +52,7 @@ if [[ "$TARGET" != "codespace" && "${EUID:-$(id -u)}" != "0" ]]; then
     SUDO_PID=$!
 fi
 
-# Project cloning is the slowest part of setup (a large work repo can take hours), and
+# Project cloning is the slowest part of setup, and
 # nothing else depends on it — so never wait on it. Inside tmux the clone opens as a WINDOW
 # in the session setup.sh was launched from; outside tmux it detaches with nohup rather than
 # conjuring a session to hold it. The runner (setup-projects.sh) records the `projects` step
@@ -64,10 +61,7 @@ _PROJECTS_LOG="${SETUP_STATE_DIR:-$HOME/.local/state/dotfiles}/projects-clone.lo
 _PROJECTS_WINDOW="bn-clone"
 
 _projects_launch() {
-    # The marker is per-SHAPE, not just per-step: plain, --personal and --work runs
-    # clone different sets. Recording one flat `projects` meant a machine set up
-    # without a flag would skip the clone forever, so adding --work later installed
-    # the work TOOLS but never cloned the work REPOS. See _projects_step_name.
+    # Plain and --personal runs clone different sets and need separate markers.
     local step_name
     step_name=$(_projects_step_name)
     if [[ "$SETUP_FORCE" != "true" ]] && _step_is_done "$step_name"; then
@@ -76,7 +70,6 @@ _projects_launch() {
     fi
     local runner="$SCRIPT_DIR/setup-projects.sh"
     local -a runner_cmd=("$runner")
-    [[ "$SETUP_WORK" == "true" ]] && runner_cmd+=(--work)
     [[ "$SETUP_PERSONAL" == "true" ]] && runner_cmd+=(--personal)
 
     # No tmux, or setup.sh isn't running inside one: detach with nohup so the clone
@@ -176,23 +169,9 @@ main() {
     step_always nvim-config core all setup_nvim
 
     # personal-notes always, and synchronously: the detached project clone below is
-    # skipped once its marker is recorded, and the work/personal repo setup scripts it
-    # runs live inside personal-notes — so this must land first, on every run.
+    # skipped once its marker is recorded, and the personal repo setup script it
+    # runs lives inside personal-notes — so this must land first, on every run.
     step_always personal-notes core all ensure_personal_notes
-
-    # Work-machine tools — only with --work, and only AFTER
-    # personal-notes, since the installer script lives inside it. step_always, not
-    # step: a run that happened before personal-notes existed must not record itself
-    # as done and then skip forever.
-    if [[ "$SETUP_WORK" == "true" ]]; then
-        step_always work-tools core all install_work_tools
-    fi
-
-    # Before the clone below, not after: the work repo list includes Azure DevOps
-    # repos, and without this they stop at a `Username for ...` prompt no detached
-    # clone can answer. step_always so a machine that installs Windows git later
-    # picks it up on the next run instead of staying blocked behind a done-marker.
-    step_always ado-auth core wsl setup_ado_credential_helper
 
     # tmux comes from the platform packages above (bn's install.sh, in the bn step, builds a
     # newer one when the distro's is below its floor); fire the clone into a detached session
