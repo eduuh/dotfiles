@@ -1,13 +1,11 @@
 #!/bin/zsh
 
-# Run kanata in the foreground with the dotfiles layout. macOS needs root for the
-# input devices; on Linux the input/uinput groups (setup_kanata_linux) cover it.
-
-# ~/.bin precedes /usr/bin on Linux — drop it so `kanata` is the real binary, not this.
-path=(${path:#$HOME/.bin})
-
-if [[ "$(uname)" == "Darwin" ]]; then
-    sudo kanata --cfg "$HOME/.config/keyboard/colemak.kbd"
-else
-    kanata --cfg "$HOME/.config/keyboard/colemak.kbd"
+# Kanata remains the macOS remapper until Keyflow has a macOS runtime.
+if [[ "$(uname)" != "Darwin" ]]; then
+    print -u2 "Linux uses Keyflow. Use 'keyflow status' or 'keyflow restart'."
+    exit 1
 fi
+
+# Resolve the real binary rather than this wrapper.
+path=(${path:#$HOME/.bin})
+sudo kanata --cfg "$HOME/.config/keyboard/colemak.kbd"
