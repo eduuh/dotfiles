@@ -5,6 +5,7 @@ o.window("^[Ss]potify$", { workspace = "4 silent" })
 o.window("^(org\\.mozilla\\.)?[Tt]hunderbird$", { workspace = "4 silent" })
 o.window("^(org\\.kde\\.kdenlive|kdenlive)$", { workspace = "2 silent" })
 o.window("^(com\\.obsproject\\.Studio|obs)$", { workspace = "2 silent" })
+o.window("^[Bb]lender$", { workspace = "2 silent" })
 
 o.rebind("SUPER + SPACE", "Apps", "omarchy-shell omarchy.dock apps")
 o.rebind("SUPER + N", "Focus on left window", hl.dsp.focus({ direction = "l" }))

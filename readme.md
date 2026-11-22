@@ -107,6 +107,32 @@ Arch setup installs `claude-desktop`; macOS installs the `claude` Homebrew cask.
 Re-run setup to install it on an existing machine, then open Claude from the app
 launcher and sign in. Account credentials and application data stay local.
 
+### Blender and its MCP server
+
+Arch setup installs `blender` and `uv`; macOS installs the Blender Homebrew cask
+and `uv`. The desktop profile also installs the pinned
+[official Blender Lab MCP server](https://www.blender.org/lab/mcp-server/)
+and its add-on. Blender 5.1 or newer is required.
+
+Re-run `./setup.sh --profile desktop`, or run just the MCP setup after installing
+Blender and uv:
+
+```bash
+bash .bin/setup/blender.sh
+```
+
+Setup preserves other MCP servers and registers Blender in Copilot CLI,
+Claude Code (user scope), and Claude Desktop. Existing configs and Blender
+preferences are backed up before changes. Restart those clients after setup.
+Server files stay in `~/.local/share/blender-mcp`; preferences and generated
+client configs stay local rather than being stowed.
+
+Keep Blender open while using MCP. Setup enables Blender's online-access
+preference, which the official add-on requires even for localhost, and starts
+the bridge automatically on `127.0.0.1:9876`. MCP tools can execute Python
+inside Blender; approve only requests you trust. On Omarchy, Blender opens
+on workspace 2 without switching focus.
+
 ### .NET 11 and Podman
 
 The `dev` and `desktop` profiles install the .NET 11 prerelease SDK pinned in

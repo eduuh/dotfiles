@@ -13,6 +13,9 @@ NVM_VERSION=v0.40.1         # nvm — install.sh tag
 PNPM_VERSION=11.8.0         # pnpm — honoured by the get.pnpm.io installer via $PNPM_VERSION
 RUST_TOOLCHAIN=1.96.0       # rust — rustup --default-toolchain
 DOTNET11_VERSION=11.0.100-rc.3.26522.148 # .NET 11 prerelease SDK, isolated from system dotnet
+BLENDER_MCP_VERSION=1.0.3
+BLENDER_MCP_BUNDLE_SHA256=d6fe04dd17767f7c7fb452142f1f0e6787db575db49f3976a166142683b5b97e
+BLENDER_MCP_ADDON_SHA256=a7a9da816192502e5a0a202a396444e266b47d8fc4f74ad4698048bd43040707
 
 # --- reference only (vendor installer owns the version; not yet pinnable) ---
 ZOXIDE_VERSION=0.9.9        # zoxide install.sh tracks upstream

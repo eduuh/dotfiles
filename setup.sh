@@ -165,6 +165,10 @@ main() {
 
     step "platform-$distro" core all   run_platform_setup "$distro"
 
+    if [[ "$distro" == "arch" || "$distro" == "darwin" ]]; then
+        step_always blender-mcp desktop linux,mac bash "$SCRIPT_DIR/.bin/setup/blender.sh"
+    fi
+
     # Editor setup cannot depend on the detached, cached project-clone step.
     step_always nvim-config core all setup_nvim
 
