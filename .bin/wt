@@ -1,14 +1,18 @@
 #!/usr/bin/env zsh
-# wt — thin shim delegating to `bn wt` (the Rust port; see github.com/eduuh/bn).
-# The worktree manager moved into bn. This preserves the `wt …` entrypoint and the zsh
+# wt — thin shim delegating to `workspan wt` (see github.com/eduuh/workspan).
+# The worktree manager lives in Workspan. This preserves the `wt …` entrypoint and the zsh
 # wt()/wtw() wrappers untouched: `wt go` prints a path for the wrapper to cd into, and
-# `wtw` sets WT_ROOT then execs this shim — `bn wt` honors WT_ROOT.
+# `wtw` sets WT_ROOT then execs this shim — `workspan wt` honors WT_ROOT.
 #
-# During machine bootstrap `bn` may not exist yet, but setup still needs `wt clone` to
+# During machine bootstrap Workspan may not exist yet, but setup still needs `wt clone` to
 # create bare repos + their default-branch worktrees. Keep a tiny bootstrap fallback for
-# that one subcommand; everything else stays delegated to bn once it's installed.
+# that one subcommand; everything else delegates to Workspan, with bn as a legacy fallback.
 
 set -e
+
+if command -v workspan >/dev/null 2>&1; then
+    exec workspan wt "$@"
+fi
 
 if command -v bn >/dev/null 2>&1; then
     exec bn wt "$@"
@@ -16,7 +20,7 @@ fi
 
 cmd="${1:-}"
 if [[ "$cmd" != "clone" ]]; then
-    echo "wt: bn is not installed yet; only 'wt clone <repo>' is available during bootstrap." >&2
+    echo "wt: Workspan is not installed yet; only 'wt clone <repo>' is available during bootstrap." >&2
     exit 127
 fi
 shift
