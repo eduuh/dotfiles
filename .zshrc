@@ -72,10 +72,12 @@ alias ll='ls -alF'
 alias la='ls -A'
 alias l='ls -CF'
 yolo() { claude --dangerously-skip-permissions "$@"; }
-# bn owns the claude/copilot wrappers now (agent-launch routing, @agent sigils,
-# `agency`, and the BN_SHELL_WRAPPERS marker `bn doctor` checks for). Hand-rolled
+# Workspan owns the claude/copilot wrappers (agent-launch routing, @agent sigils,
+# `agency`, and the BN_SHELL_WRAPPERS marker `workspan doctor` checks for). Hand-rolled
 # copies here only ever drifted behind it. ~9ms, so no lazy-load needed.
-if command -v bn >/dev/null 2>&1; then
+if command -v workspan >/dev/null 2>&1; then
+  source <(workspan shell-init zsh)
+elif command -v bn >/dev/null 2>&1; then
   source <(bn shell-init zsh)
 fi
 alias po="$HOME/.bin/pkg-open.sh"
@@ -179,12 +181,21 @@ c() { "$HOME/.bin/bn" add collab "$*" }
 a() { "$HOME/.bin/bn" add ask "$*" }
 
 
-# bn tab completion. NOT sourced: the generated script is 655KB and takes ~479ms
+# Workspan and legacy bn completions. NOT sourced: the generated script is 655KB and takes ~479ms
 # to PARSE, so caching it to a file saved nothing — the cost was never the binary
 # spawn. It begins with `#compdef bn`, which is exactly what zsh autoloads from
 # $fpath, so writing it as _bn there defers the whole 479ms until the first time
 # you actually tab-complete bn. Regenerated only when the binary is newer.
 _zsh_completion_file bn bn bn completion zsh
+_zsh_completion_file workspan workspan workspan completion zsh
+if command -v workspan >/dev/null 2>&1; then
+  autoload -Uz _workspan
+  compdef _workspan workspan
+  if command -v ws >/dev/null 2>&1 \
+      && [[ "$(readlink "$(command -v ws)")" == workspan ]]; then
+    compdef _workspan ws
+  fi
+fi
 
 
 export KUBECONFIG=/Users/edd/projects/kube/kubeconfig.local

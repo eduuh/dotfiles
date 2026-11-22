@@ -58,7 +58,7 @@ fi
 # conjuring a session to hold it. The runner (setup-projects.sh) records the `projects` step
 # on completion, so a later run skips it.
 _PROJECTS_LOG="${SETUP_STATE_DIR:-$HOME/.local/state/dotfiles}/projects-clone.log"
-_PROJECTS_WINDOW="bn-clone"
+_PROJECTS_WINDOW="workspan-clone"
 
 _projects_launch() {
     # Plain and --personal runs clone different sets and need separate markers.
@@ -87,7 +87,7 @@ _projects_launch() {
     target=$(tmux display-message -p '#S')
 
     # Don't open a second clone window if one is already running in that session.
-    if tmux list-windows -t "$target" -F '#W' 2>/dev/null | grep -qx "$_PROJECTS_WINDOW"; then
+    if tmux list-windows -t "$target" -F '#W' 2>/dev/null | grep -qxE "$_PROJECTS_WINDOW|bn-clone"; then
         echo "↻ [projects] clone window '$_PROJECTS_WINDOW' already open in '$target' — leaving it"
         return 0
     fi
@@ -148,7 +148,7 @@ main() {
     # it is installed, and a directory that already exists is not a clone. step_always
     # because a machine that ran setup before this step existed must still pick it up.
     step_always branch-notes core all  ensure_branch_notes
-    step bn                 core all   setup_bn
+    step workspan           core all   setup_workspan
     step_always "packages-$distro" core all install_platform_packages "$distro"
 
     # Stow is its own step, and it runs BEFORE platform setup. It used to be the last

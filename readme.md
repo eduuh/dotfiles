@@ -81,10 +81,14 @@ Auto-detects the platform (macOS, Ubuntu, Arch, Fedora, Codespaces) and runs the
 Re-runs are safe. `setup.sh` is resumable — completed tool-install steps are cached (`~/.local/state/dotfiles/done`) and skipped, while package installation always re-runs, so adding a package to the list and re-running `./setup.sh` installs it without redoing everything. Use `./setup.sh --force` to re-run every step from scratch, or `./setup.sh reset` to clear the recorded state.
 
 Every install also sets up [`eduuh/nvim`](https://github.com/eduuh/nvim), including
-Codespaces and the core profile. It clones through `bn wt`, links
+Codespaces and the core profile. It clones through `workspan wt`, links
 `~/.config/nvim` to the main worktree, and waits for plugins, parsers, and Mason
 tools to finish. An existing config is backed up before the link replaces it.
 This step runs on every install, independently of the background project clones.
+
+Setup installs [Workspan](https://github.com/eduuh/workspan) as `workspan`, with `ws` as its
+short alias and `bn` retained for compatibility. New clones use `bare/workspan.git` and
+`worktree/workspan/main`; existing `bn` worktrees are reused without moving them.
 
 `setup.sh` already launches the project clone in the background, so there is nothing
 to run after it. These stay available for retrying a phase on its own:
