@@ -326,7 +326,12 @@ Setup auto-detects Codespaces (`$CODESPACES=true`) and adjusts:
 | Tmux | Sessions, plugins (resurrect + continuum) |
 | Terminals | Kitty, Alacritty |
 | macOS | AeroSpace, SketchyBar, Kanata (Colemak), skhd |
-| Keyboard | Karabiner, Kanata |
+| Keyboard | Keyflow (Linux/Windows), Kanata and Karabiner (macOS) |
+
+Linux uses a separately provisioned `keyflow.service` with an explicitly selected
+keyboard. Dotfiles setup no longer installs or reactivates Kanata on Linux.
+The `keyflow` wrapper manages an existing service; it does not install one or
+grant broad input-device access. macOS keeps its Kanata layout and setup.
 
 ## Related
 
