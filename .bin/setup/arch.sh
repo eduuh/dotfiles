@@ -82,6 +82,13 @@ setup_surfshark_linux() {
     fi
 }
 
+setup_helium_browser() {
+    command -v helium-browser &> /dev/null || return 1
+    # Omarchy's desktop-specific handlers route through its browser launcher.
+    # Set the underlying browser without replacing those routing entries.
+    env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser helium.desktop
+}
+
 install_arch_specific_packages() {
     echo "Installing Arch-specific packages..."
 
@@ -89,7 +96,7 @@ install_arch_specific_packages() {
         man-db man-pages libsecret acpi d2 bat lua curl 1password nordpass-bin surfshark-client gcc python
         bubblewrap socat strace shfmt
         podman icu krb5 openssl zlib
-        kdenlive obs-studio thunderbird claude-desktop
+        kdenlive obs-studio thunderbird claude-desktop helium-browser-bin
         wl-clipboard xclip   # clipboard provider for nvim's unnamedplus
     )
 
@@ -114,6 +121,7 @@ install_arch_specific_packages() {
 
     install_nordpass_cli
     setup_surfshark_linux
+    run_or_track "helium" setup_helium_browser
 }
 
 setup_arch() {

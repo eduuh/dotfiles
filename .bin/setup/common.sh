@@ -1748,6 +1748,9 @@ setup_symlinks() {
     _stow_with_backup "$dotfiles_dir" . "symlinks" --ignore='^config($|/)' || return 1
 
     setup_hyprland "$dotfiles_dir" || return 1
+    if command -v helium-browser &> /dev/null; then
+        _stow_with_backup "$dotfiles_dir/config/stow" helium "helium" || return 1
+    fi
     if command -v thunderbird &> /dev/null; then
         mkdir -p "$HOME/.config/autostart" || return 1
         _stow_with_backup "$dotfiles_dir/config/stow" thunderbird "thunderbird" || return 1
