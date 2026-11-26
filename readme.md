@@ -87,7 +87,7 @@ tools to finish. An existing config is backed up before the link replaces it.
 This step runs on every install, independently of the background project clones.
 
 Setup installs [Workspan](https://github.com/eduuh/workspan) as `workspan`, with `ws` as its
-short alias and `bn` retained for compatibility. New clones use `bare/workspan.git` and
+short alias. The old `bn` binary is retired. New clones use `bare/workspan.git` and
 `worktree/workspan/main`; existing `bn` worktrees are reused without moving them.
 
 `setup.sh` already launches the project clone in the background, so there is nothing
@@ -233,7 +233,7 @@ filesystem. That half is [`eduuh/win-dot`](https://github.com/eduuh/win-dot), an
 
 1. `clone_repos` clones win-dot **onto the Windows filesystem**, at
    `/mnt/c/Users/<you>/projects/win-dot`, and symlinks `~/projects/win-dot` at it
-   so `wt`, `tat` and `bn` list it like any other repo. That routing comes from
+   so `wt`, `tat` and `workspan` list it like any other repo. That routing comes from
    naming it in **both** `REGULAR_CLONE_REPOS` and `WINDOWS_CLONE_REPOS` — either
    list alone silently puts the clone inside WSL, where Windows tooling can't
    reach it.
@@ -295,9 +295,9 @@ the whole tree.
 
 ### branch-notes
 
-`bn`'s notes store (`~/projects/branch-notes`) is a private repo, and it is cloned
-**before** the `bn` step for a reason that bit a fresh VM: installing bn starts
-`bn serve`, which creates that directory itself, and a directory that already
+Workspan's notes store (`~/projects/branch-notes`) is a private repo, and it is cloned
+**before** the `workspan` step for a reason that bit a fresh VM: installing Workspan
+runs it, and it creates that directory itself, and a directory that already
 exists is not a clone. Cloned late, the notes would sit in a plain local folder
 with no remote and never sync anywhere.
 
@@ -346,11 +346,11 @@ wait
 
 ## Key Tools
 
-- **`tat`** — Tmux session picker (provided by the [`bn`](https://github.com/eduuh/bn) repo, installed via its `install.sh`)
+- **`tat`** — Tmux session picker (provided by the [`workspan`](https://github.com/eduuh/workspan) repo, installed via its `install.sh`)
 - **`wt`** — Git worktree manager for bare repos (`wt clone`, `wt add`, `wt list`, `wt remove`)
-- **`bn`** — Branch notes manager for per-branch task tracking; also owns the tmux config (an external setup repo, no longer a submodule)
+- **`workspan`** (`ws`) — Task, worktree and agent manager; also owns the tmux config (an external setup repo, no longer a submodule)
 - **`ssh-export`** — Copy SSH key setup script to clipboard for bootstrapping new environments
-- **Tmux** (`Ctrl+Space` prefix) — keybinding reference now lives in the bn repo: [`config/workflow/docs/tmux.md`](https://github.com/eduuh/bn/blob/main/config/workflow/docs/tmux.md)
+- **Tmux** (`Ctrl+Space` prefix) — keybinding reference now lives in the workspan repo: [`config/workflow/docs/tmux.md`](https://github.com/eduuh/workspan/blob/main/config/workflow/docs/tmux.md)
 
 ## Codespaces
 
