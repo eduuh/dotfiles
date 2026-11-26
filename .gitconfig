@@ -19,7 +19,7 @@
 	helper =
 	helper = !gh auth git-credential
 
-# bn tunnels (tunnel-host / tunnel-connect) trust the SSH keys on this GitHub account: a host
+# workspan tunnels (tunnel-host / tunnel-connect) trust the SSH keys on this GitHub account: a host
 # authorizes github.com/<user>.keys and a client adds its key there. Set here so every machine
 # agrees without relying on whichever account gh happens to be signed in as.
 [bn]

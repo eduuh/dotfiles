@@ -144,8 +144,8 @@ main() {
     step rust               core wsl,linux,mac,termux install_rust
     step sccache            core wsl,linux,mac install_sccache
     step mold               core wsl,linux     install_mold
-    # Before the bn step, deliberately: bn creates ~/projects/branch-notes the moment
-    # it is installed, and a directory that already exists is not a clone. step_always
+    # Before the workspan step, deliberately: workspan creates ~/projects/branch-notes (its
+    # state dir) the moment it first runs, and a directory that already exists is not a clone. step_always
     # because a machine that ran setup before this step existed must still pick it up.
     step_always branch-notes core all  ensure_branch_notes
     step workspan           core all   setup_workspan
@@ -177,7 +177,7 @@ main() {
     # runs lives inside personal-notes — so this must land first, on every run.
     step_always personal-notes core all ensure_personal_notes
 
-    # tmux comes from the platform packages above (bn's install.sh, in the bn step, builds a
+    # tmux comes from the platform packages above (workspan's install.sh, in the workspan step, builds a
     # newer one when the distro's is below its floor); fire the clone into a detached session
     # now so it runs alongside the remaining tool steps and keeps going after setup exits.
     _projects_launch

@@ -170,7 +170,7 @@ install_package() {
 
 # --- App / setup-repo installers -------------------------------------------
 # Some setup repos ship their own install.sh that provisions their tools + config
-# (bn does). Those installers drop binaries + symlinks into a bin dir; point them
+# (workspan does). Those installers drop binaries + symlinks into a bin dir; point them
 # at an UNMANAGED dir that's already on PATH so they never overwrite stow-tracked
 # files in ~/.bin (itself a symlink into this repo). ~/.local/bin is first on PATH
 # (.zshenv/.zshrc).
@@ -214,7 +214,7 @@ setup_repo() {
         track_failure "$name" "no install.sh in $wt_main"; return 1
     fi
 
-    # A private repo's installer fetches its OWN prebuilt release with `gh` (bn does),
+    # A private repo's installer fetches its OWN prebuilt release with `gh` (workspan does),
     # which would otherwise use the machine's ACTIVE account — the work one — 404, and
     # silently fall back to a from-source build. Scoped to this call so other `gh`
     # usage keeps the active account.
@@ -535,11 +535,11 @@ _run_repo_install_script() {
 # ~/projects/<name> exists as a real directory that is NOT a repo — adopt it into a
 # fresh clone instead of giving up on it.
 #
-# This is not hypothetical: bn CREATES ~/projects/branch-notes (jobs/, a per-host
-# notes dir) the first time it runs, and its install.sh starts `bn serve`, so on a
+# This is not hypothetical: workspan CREATES ~/projects/branch-notes (jobs/, a per-host
+# state dir) the first time it runs, and its install.sh runs it, so on a
 # fresh machine that directory is always there before the clone reaches it. The old
 # behaviour — track_failure "exists but is not a git repo" — left the notes store
-# permanently un-synced: bn happily wrote into a plain local directory that had no
+# permanently un-synced: workspan happily wrote into a plain local directory that had no
 # remote and no history.
 #
 # Clone alongside, move the pre-existing local files in, and swap. The repo version
@@ -822,7 +822,7 @@ setup_branch_notes_repo() {
 }
 
 # Native (non-WSL) branch-notes provisioning: clone the repo into ~/projects/<name>.
-# bn may have already created that dir (it writes per-host note folders there before
+# workspan may have already created that dir (it writes per-host note folders there before
 # this runs); if so, adopt it in place — git init + remote + fetch — so the local
 # notes become tracked/pushable rather than failing on a non-empty clone target.
 _setup_branch_notes_native() {
@@ -898,15 +898,15 @@ ensure_personal_notes() {
     setup_personal_notes_stow
 }
 
-# bn's notes store. Same HTTPS-through-gh reasoning as personal-notes above: it is
+# workspan's notes store. Same HTTPS-through-gh reasoning as personal-notes above: it is
 # private to the eduuh account, so a work machine's SSH key cannot see it.
 BRANCH_NOTES_REMOTE="${BRANCH_NOTES_REMOTE:-https://github.com/eduuh/branch-notes.git}"
 
 # Clone (or update) branch-notes. Idempotent — safe for step_always.
 #
-# It runs BEFORE the bn step, and not from clone_repos, for the same reason
-# personal-notes does: bn writes into ~/projects/branch-notes as soon as it is
-# installed (install.sh starts `bn serve`), so a clone deferred to the background
+# It runs BEFORE the workspan step, and not from clone_repos, for the same reason
+# personal-notes does: workspan writes into ~/projects/branch-notes as soon as it is
+# installed (install.sh runs it), so a clone deferred to the background
 # projects step always arrives second and finds a non-repo directory sitting there.
 # Nothing cloned this repo at all before, which is how a fresh machine ended up
 # taking branch notes that were never committed anywhere.
@@ -1013,7 +1013,7 @@ clone_repos() {
 
 # After personal repos are cloned, source a personal-only-repo setup script from
 # personal-notes if it exists. The script defines its own repo
-# list and calls _clone_single_repo / bn wt clone for each, so those repo names
+# list and calls _clone_single_repo / workspan wt clone for each, so those repo names
 # and URLs stay private instead of sitting in this public dotfiles repo. No-op if
 # personal-notes isn't cloned or the script is absent.
 _run_personal_setup_from_personal_notes() {
@@ -1026,10 +1026,10 @@ _run_personal_setup_from_personal_notes() {
     echo "Personal repo setup finished."
 }
 
-# TPM removed: bn vendors its tmux plugins (tmux-resurrect + tmux-continuum) in-repo and
+# TPM removed: workspan vendors its tmux plugins (tmux-resurrect + tmux-continuum) in-repo and
 # sources them directly from its tmux.conf, so there is no plugin manager to bootstrap.
 install_tmux_plugins() {
-    echo "tmux plugins are bundled with bn — nothing to install."
+    echo "tmux plugins are bundled with workspan — nothing to install."
 }
 
 install_neovim() {
@@ -1181,9 +1181,9 @@ install_claude_code() {
 }
 
 # GitHub Copilot CLI. Nothing installed it before, yet the rest of the setup assumes
-# it: .zshrc wraps `copilot` through bn, the stow tree owns ~/.copilot, and
-# `bn mcp init copilot` writes configs for it. A fresh machine got all of that
-# pointing at a binary that did not exist — `bn agent launch: exec copilot: No such
+# it: .zshrc wraps `copilot` through workspan, the stow tree owns ~/.copilot, and
+# `workspan mcp init copilot` writes configs for it. A fresh machine got all of that
+# pointing at a binary that did not exist — `workspan agent launch: exec copilot: No such
 # file or directory`.
 #
 # Homebrew has a cask; everywhere else it is the npm package, which needs the node
@@ -1378,10 +1378,10 @@ verify_workspan_release() {
 }
 
 setup_workspan() {
-    # Workspan ships the workspace CLI + bn-mcp server and (full install) owns the tmux
-    # config: ~/.tmux.conf → workflow/tmux.conf plus ~/.config/bn/{repo,bn}. It used to
+    # Workspan ships the workspace CLI + workspan-mcp server and (full install) owns the tmux
+    # config: ~/.tmux.conf → workflow/tmux.conf plus ~/.config/bn/{repo,workspan}. It used to
     # be a submodule built by dotfiles; now it's an external setup repo — clone it and
-    # run its own install.sh (see setup_repo). install.sh registers bn-mcp for Claude
+    # run its own install.sh (see setup_repo). install.sh registers workspan-mcp for Claude
     # Code + Copilot and DOWNLOADS the prebuilt release via authenticated `gh` — there is
     # no build-from-source fallback, so this machine never needs a Rust toolchain to run
     # Workspan. Releases are cut automatically: every merge to Workspan's main that passes CI is built
@@ -1398,11 +1398,8 @@ setup_workspan() {
     verify_workspan_release
 }
 
-setup_bn() { setup_workspan "$@"; }
-verify_bn_release() { verify_workspan_release "$@"; }
-
 # A tmux server started before install.sh linked ~/.tmux.conf keeps whatever it loaded at
-# start (Omarchy's ~/.config/tmux/tmux.conf on a fresh machine), so none of bn's bindings
+# start (Omarchy's ~/.config/tmux/tmux.conf on a fresh machine), so none of workspan's bindings
 # apply until it restarts. Load the new config into it now.
 reload_tmux_config() {
     tmux info &> /dev/null || return 0   # no server running: the next one reads it itself
