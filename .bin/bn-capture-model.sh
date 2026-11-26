@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # UserPromptSubmit hook for Claude Code AND GitHub Copilot CLI — capture the live
-# model into the file bn's detect_model() reads, so the branch note's `models` list
-# records mid-session model switches (the model isn't in the env; harness hooks don't
+# model into the file workspan's detect_model() reads, so mid-session model switches
+# are recorded (the model isn't in the env; harness hooks don't
 # carry it). Reads the hook JSON on stdin. Always exits 0 — never block a prompt.
 #
 #   Claude Code: payload has .transcript_path + .session_id; the newest assistant
 #     message in the transcript carries .message.model. Keyed by session id
-#     (bn reads via $CLAUDE_CODE_SESSION_ID).
+#     (workspan reads via $CLAUDE_CODE_SESSION_ID).
 #   Copilot CLI: payload has .sessionId + .cwd; the newest assistant.message in
 #     ~/.copilot/session-state/<sessionId>/events.jsonl carries .data.model. Copilot
-#     exposes no session id to its tool env, so key by cwd (bn reads via its own cwd).
+#     exposes no session id to its tool env, so key by cwd (workspan reads via its own cwd).
 
 input=$(cat)
 command -v jq >/dev/null 2>&1 || exit 0
 
-# bn state dir: BN_STATE_DIR wins; else ask bn (resolves <personal_root>/<machine>/state).
+# workspan state dir: BN_STATE_DIR wins; else ask workspan (resolves <personal_root>/<machine>/state).
 if [ -n "${BN_STATE_DIR:-}" ]; then state="$BN_STATE_DIR"
-else state=$(bn --state-dir 2>/dev/null); fi
+else state=$(workspan --state-dir 2>/dev/null); fi
 [ -n "$state" ] || exit 0
 
 write_model() { # <basename> <model>

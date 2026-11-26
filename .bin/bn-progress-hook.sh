@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # Claude Code SessionEnd hook: write a one-line session summary into the
-# branch note's Progress section via `bn log-progress`.
+# governing task's context via `workspan log-progress`.
 #
 # Input: JSON on stdin (fields: session_id, transcript_path, cwd).
 # Silent if cwd is not inside a git worktree or no tool activity happened.
@@ -29,4 +29,4 @@ parts=()
 (( ${#parts[@]} == 0 )) && exit 0
 
 summary="claude session: ${(j:, :)parts}"
-(cd "$CWD" && "$HOME/.bin/bn" log-progress "$summary") 2>/dev/null || true
+(cd "$CWD" && workspan log-progress "$summary") 2>/dev/null || true
