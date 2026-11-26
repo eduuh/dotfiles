@@ -50,9 +50,9 @@ fedora_pkg_install() {
 
 # The shared common_software list uses names that all exist verbatim in Fedora
 # repos (git stow make cmake ripgrep tmux zsh unzip tree jq). Fedora-specific
-# extras cover man pages, secret storage, and the toolchain bn's install.sh needs
+# extras cover man pages, secret storage, and the toolchain workspan's install.sh needs
 # when it builds tmux from source (it owns the tmux version floor now; see
-# scripts/install-tmux.sh in the bn repo). neovim + fzf are intentionally NOT
+# scripts/install-tmux.sh in the workspan repo). neovim + fzf are intentionally NOT
 # layered here — install_neovim/install_fzf fetch newer builds into ~/.local/bin.
 install_fedora_packages() {
     local fedora_extras=(

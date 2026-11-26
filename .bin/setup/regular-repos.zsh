@@ -8,7 +8,7 @@
 # Rule of thumb: tools/config you don't branch-develop are flat; project repos
 # where you do feature-branch work are bare+worktree.
 
-# nvim, dotfiles, and bn are intentionally NOT here: they're branch-developed (feature
+# nvim, dotfiles, and workspan are intentionally NOT here: they're branch-developed (feature
 # branches, PRs), so they clone bare + worktree like project repos. dotfiles is stowed
 # from its main worktree (~/projects/worktree/dotfiles/main); nvim links ~/.config/nvim →
 # its main worktree. See _setup_nvim_config in common.sh.
@@ -16,7 +16,7 @@ REGULAR_CLONE_REPOS=(
     personal-notes
     eduuh
     notes
-    # bn's notes store. Flat, and never branch-developed: bn commits to its main
+    # workspan's notes store. Flat, and never branch-developed: workspan commits to its main
     # from every machine, so a worktree layout would only get in the way.
     branch-notes
     # Windows applications: built and run from the Windows side, so they are

@@ -43,7 +43,7 @@ install_ubuntu_specific_packages() {
         # every yank unless a provider exists; under WSLg wl-copy/wl-paste sync
         # both ways with the Windows clipboard. xclip is the X11 fallback.
         wl-clipboard xclip
-        # libicu for .NET tools. The Dev Tunnels CLI (bn's tunnel mesh) dies at start with
+        # libicu for .NET tools. The Dev Tunnels CLI (workspan's tunnel mesh) dies at start with
         # "Couldn't find a valid ICU package" without it; libicu-dev pulls the right libicuNN.
         libicu-dev
     )
@@ -82,7 +82,7 @@ install_ubuntu_specific_packages() {
     fi
 }
 
-# bn's Dev Tunnel SSH jobs (bn run tunnel-host / tunnel-connect) need the sshd
+# workspan's Dev Tunnel SSH jobs (workspan run tunnel-host / tunnel-connect) need the sshd
 # binary, but run their own key-only sshd on 127.0.0.1:2222 behind the tunnel.
 # The system ssh service stays disabled: under WSL mirrored networking a port-22
 # listener would be exposed on the Windows host's network.
