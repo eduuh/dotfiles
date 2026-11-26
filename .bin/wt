@@ -6,16 +6,12 @@
 #
 # During machine bootstrap Workspan may not exist yet, but setup still needs `wt clone` to
 # create bare repos + their default-branch worktrees. Keep a tiny bootstrap fallback for
-# that one subcommand; everything else delegates to Workspan, with bn as a legacy fallback.
+# that one subcommand; everything else delegates to Workspan.
 
 set -e
 
 if command -v workspan >/dev/null 2>&1; then
     exec workspan wt "$@"
-fi
-
-if command -v bn >/dev/null 2>&1; then
-    exec bn wt "$@"
 fi
 
 cmd="${1:-}"

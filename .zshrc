@@ -77,8 +77,6 @@ yolo() { claude --dangerously-skip-permissions "$@"; }
 # copies here only ever drifted behind it. ~9ms, so no lazy-load needed.
 if command -v workspan >/dev/null 2>&1; then
   source <(workspan shell-init zsh)
-elif command -v bn >/dev/null 2>&1; then
-  source <(bn shell-init zsh)
 fi
 alias po="$HOME/.bin/pkg-open.sh"
 alias nvimd='nvim -c "DiffviewOpen origin/main"'
@@ -173,20 +171,15 @@ wtw() {
     fi
 }
 
-# Branch note quick-add
-t() { "$HOME/.bin/bn" add todo "$*" }
-unalias r 2>/dev/null  # override zsh's default r=fc (repeat last command)
-r() { "$HOME/.bin/bn" add research "$*" }
-c() { "$HOME/.bin/bn" add collab "$*" }
-a() { "$HOME/.bin/bn" add ask "$*" }
+# Task quick-add
+t() { workspan task add "$*" }
 
 
-# Workspan and legacy bn completions. NOT sourced: the generated script is 655KB and takes ~479ms
+# Workspan completions. NOT sourced: the generated script is 655KB and takes ~479ms
 # to PARSE, so caching it to a file saved nothing — the cost was never the binary
-# spawn. It begins with `#compdef bn`, which is exactly what zsh autoloads from
-# $fpath, so writing it as _bn there defers the whole 479ms until the first time
-# you actually tab-complete bn. Regenerated only when the binary is newer.
-_zsh_completion_file bn bn bn completion zsh
+# spawn. It begins with `#compdef workspan`, which is exactly what zsh autoloads from
+# $fpath, so writing it as _workspan there defers the whole 479ms until the first time
+# you actually tab-complete workspan. Regenerated only when the binary is newer.
 _zsh_completion_file workspan workspan workspan completion zsh
 if command -v workspan >/dev/null 2>&1; then
   autoload -Uz _workspan
@@ -210,7 +203,7 @@ _zsh_cached_init starship starship starship init zsh
 
 # OSC 133 shell-integration marks — where each prompt starts (133;A) and where a command's output
 # begins (133;C). tmux reads these to implement copy-mode's `previous-prompt` / `next-prompt`,
-# bound to `[` and `]` in the bn tmux config: "jump to the start of the last command's output",
+# bound to `[` and `]` in the workspan tmux config: "jump to the start of the last command's output",
 # which is the difference between finding something in a 100k-line agent transcript and
 # half-paging through it. tmux has nothing to seek to without the marks and those keys silently do
 # nothing; starship does not emit them on its own.
