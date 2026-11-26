@@ -299,7 +299,7 @@ detect_distro() {
 if [[ -f "$_COMMON_DIR/regular-repos.zsh" ]]; then
     source "$_COMMON_DIR/regular-repos.zsh"
 else
-    REGULAR_CLONE_REPOS=(personal-notes eduuh notes)  # nvim, dotfiles, bn are bare+worktree (see regular-repos.zsh)
+    REGULAR_CLONE_REPOS=(personal-notes eduuh notes)  # nvim, dotfiles, workspan are bare+worktree (see regular-repos.zsh)
 fi
 
 # Repos that should live on the Windows filesystem when on WSL
@@ -843,7 +843,7 @@ _setup_branch_notes_native() {
         return 0
     fi
 
-    # Target exists but isn't a git repo (e.g. bn created it). Adopt it: init,
+    # Target exists but isn't a git repo (e.g. workspan created it). Adopt it: init,
     # wire the remote, and fetch/checkout the default branch without discarding
     # the local files already there.
     echo "[$name] $target exists but is not a git repo — adopting it (git init + remote)..."
