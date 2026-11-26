@@ -200,9 +200,6 @@ setup_repo() {
     fi
     url=$(_resolve_repo_remote "$url")
     local wt_main="$HOME/projects/worktree/$name/main"
-    if [[ "$name" == "workspan" && ! -d "$wt_main" && -d "$HOME/projects/worktree/bn/main" ]]; then
-        wt_main="$HOME/projects/worktree/bn/main"
-    fi
 
     if [[ ! -d "$wt_main" ]]; then
         echo "[$name] cloning setup repo ($url)…"
@@ -311,7 +308,7 @@ WINDOWS_CLONE_REPOS=(personal-notes notes win-dot keyflow)
 # The GitHub account that owns every private repo below. `gh auth status` alone is
 # NOT a sufficient check for it: a work machine IS logged in — as the work account —
 # so that check passes and the clone then dies with a bare "Repository not found".
-# That is what left a machine with no personal-notes, no bn and no atlas while the
+# That is what left a machine with no personal-notes and no atlas while the
 # summary blamed the clone rather than the identity.
 GH_PERSONAL_ACCOUNT="${GH_PERSONAL_ACCOUNT:-eduuh}"
 
@@ -323,7 +320,7 @@ GH_PERSONAL_ACCOUNT="${GH_PERSONAL_ACCOUNT:-eduuh}"
 #
 # Names only; the owner is always $GH_PERSONAL_ACCOUNT and is matched separately.
 # `notes` is deliberately absent: nothing here clones eduuh/notes.
-PRIVATE_EDUUH_REPOS=(personal-notes bn atlas branch-notes)
+PRIVATE_EDUUH_REPOS=(personal-notes atlas branch-notes)
 
 # Match on OWNER/NAME so another owner's repo never receives the personal token.
 _is_private_eduuh_repo() {
@@ -583,10 +580,6 @@ _adopt_dir_into_clone() {
 _clone_single_repo() {
     local REPO="$1"
     local REPO_NAME=$(basename "$REPO" .git)
-    if [[ "$REPO_NAME" == "workspan" && ! -d "$HOME/projects/bare/workspan.git" \
-        && -d "$HOME/projects/bare/bn.git" && -d "$HOME/projects/worktree/bn/main" ]]; then
-        REPO_NAME=bn
-    fi
 
     # Private repos go over gh-authenticated HTTPS, never the machine's SSH key.
     # Checked per repo rather than once up front because this is also reached from
