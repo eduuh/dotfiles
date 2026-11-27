@@ -38,6 +38,55 @@ if (( ! $+functions[compdef] )); then
   fi
 fi
 
+# History. zsh keeps 30 lines in memory and saves nothing unless told to, so every new shell and
+# every tmux pane started empty and Ctrl-R (fzf) had almost nothing to search. The file lives
+# under XDG state, outside this repo and outside anything stowed.
+HISTFILE="${XDG_STATE_HOME:-$HOME/.local/state}/zsh/history"
+[[ -d ${HISTFILE:h} ]] || mkdir -p "${HISTFILE:h}"
+HISTSIZE=100000
+SAVEHIST=100000
+setopt share_history          # one history across panes: a command run here is searchable there
+setopt extended_history       # record when each command ran and how long it took
+setopt hist_ignore_all_dups   # keep the newest copy of a repeated command
+setopt hist_ignore_space      # a leading space keeps a line (a token, a password) out of the file
+setopt hist_reduce_blanks
+setopt hist_verify            # `!!` and friends expand into the line for review, not straight to run
+
+# Moving around. A bare directory name changes into it, and every cd is remembered, so `cd -<Tab>`
+# lists where you have been.
+setopt auto_cd auto_pushd pushd_ignore_dups pushd_silent
+# `# comment` at the prompt is a comment, so a pasted snippet with comments runs as written.
+setopt interactive_comments
+# extended_glob is deliberately NOT set: it gives ^ # and ~ meaning in unquoted arguments, which
+# turns `git reset HEAD^` into "no matches found".
+
+# Completion: a menu you can move around in, case-insensitive matching (then partial words), and
+# results grouped under a heading for what they are.
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*'
+zstyle ':completion:*' group-name ''
+zstyle ':completion:*:descriptions' format '%F{blue}%d%f'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# Ctrl-X Ctrl-E opens the command line in $EDITOR: a long agent prompt or a multi-line command is
+# easier to write in nvim than at the prompt.
+autoload -Uz edit-command-line
+zle -N edit-command-line
+bindkey '^X^E' edit-command-line
+
+# Print timing for any command that used more than 10 seconds of CPU.
+REPORTTIME=10
+
+# Named directories: ~wt is the worktree root and every repo under it is ~<repo>, so
+# `cd ~workspan/main` works from anywhere and completes.
+if [[ -d $HOME/projects/worktree ]]; then
+  hash -d wt="$HOME/projects/worktree"
+  for _zsh_repo in "$HOME"/projects/worktree/*(N/); do
+    hash -d "${_zsh_repo:t}=$_zsh_repo"
+  done
+  unset _zsh_repo
+fi
+
 # Write a completion script into the autoload dir instead of sourcing it. zsh then
 # loads it lazily, on first use, rather than parsing it in every shell.
 _zsh_completion_file() {       # _zsh_completion_file <name> <binary> <command...>
@@ -210,9 +259,21 @@ _zsh_cached_init starship starship starship init zsh
 #
 # Must come after the starship init above — starship installs its own precmd hooks, and these
 # append to the same arrays.
+#
+# 133;D;<status> closes the command and carries its exit status. tmux 3.8 raises
+# `pane-command-finished` from it, which the workspan config uses to badge a watched window (prefix m)
+# done or failed the moment the command returns, instead of guessing from 12 seconds of silence.
+# Sent only when a command actually ran: an empty Enter redraws the prompt without one.
 autoload -Uz add-zsh-hook
-_osc133_precmd()  { print -n '\e]133;A\e\\' }
-_osc133_preexec() { print -n '\e]133;C\e\\' }
+_osc133_precmd() {
+  local st=$?
+  if [[ -n $_osc133_running ]]; then
+    print -n "\e]133;D;$st\e\\"
+    unset _osc133_running
+  fi
+  print -n '\e]133;A\e\\'
+}
+_osc133_preexec() { _osc133_running=1; print -n '\e]133;C\e\\' }
 add-zsh-hook precmd  _osc133_precmd
 add-zsh-hook preexec _osc133_preexec
 
@@ -272,3 +333,17 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     }
   fi
 fi
+
+# Fish-style suggestions from history as you type (accept with →) and command-line colouring.
+# Both are optional packages (zsh-autosuggestions, zsh-syntax-highlighting): absent, nothing
+# loads. Syntax highlighting wraps every widget defined before it, so it stays last in this file.
+for _zsh_plugin in zsh-autosuggestions zsh-syntax-highlighting; do
+  for _zsh_dir in /usr/share/zsh/plugins/$_zsh_plugin /usr/share/$_zsh_plugin \
+                  ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/share/$_zsh_plugin}; do
+    if [[ -r $_zsh_dir/$_zsh_plugin.zsh ]]; then
+      source "$_zsh_dir/$_zsh_plugin.zsh"
+      break
+    fi
+  done
+done
+unset _zsh_plugin _zsh_dir
