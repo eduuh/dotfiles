@@ -210,9 +210,21 @@ _zsh_cached_init starship starship starship init zsh
 #
 # Must come after the starship init above — starship installs its own precmd hooks, and these
 # append to the same arrays.
+#
+# 133;D;<status> closes the command and carries its exit status. tmux 3.8 raises
+# `pane-command-finished` from it, which the workspan config uses to badge a watched window (prefix m)
+# done or failed the moment the command returns, instead of guessing from 12 seconds of silence.
+# Sent only when a command actually ran: an empty Enter redraws the prompt without one.
 autoload -Uz add-zsh-hook
-_osc133_precmd()  { print -n '\e]133;A\e\\' }
-_osc133_preexec() { print -n '\e]133;C\e\\' }
+_osc133_precmd() {
+  local st=$?
+  if [[ -n $_osc133_running ]]; then
+    print -n "\e]133;D;$st\e\\"
+    unset _osc133_running
+  fi
+  print -n '\e]133;A\e\\'
+}
+_osc133_preexec() { _osc133_running=1; print -n '\e]133;C\e\\' }
 add-zsh-hook precmd  _osc133_precmd
 add-zsh-hook preexec _osc133_preexec
 
